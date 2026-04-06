@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Papa from "papaparse";
 import { supabase } from "@/lib/supabase";
+import { parseCSV, type ColumnMapping } from "@/lib/banking/parseCSV";
 
 // ── Datenbankfelder die gemappt werden können ────────────────────────────────
 const DB_FIELDS = [
@@ -14,7 +14,7 @@ const DB_FIELDS = [
 ] as const;
 
 type DbFieldKey = (typeof DB_FIELDS)[number]["key"];
-type Mapping = Partial<Record<DbFieldKey, string>>;
+type Mapping = Partial<ColumnMapping>;
 
 // ── Häufige Spaltennamen deutscher Banken für Auto-Mapping ────────────────────
 const AUTO_MAP: Record<DbFieldKey, string[]> = {
@@ -28,7 +28,7 @@ const AUTO_MAP: Record<DbFieldKey, string[]> = {
 type ParsedCsv = {
   headers: string[];
   previewRows: Record<string, string>[];
-  allRows: Record<string, string>[];
+  totalRows: number;
 };
 
 type ImportResult = {
@@ -60,6 +60,7 @@ export default function BankingImportPage() {
   const [step, setStep] = useState<Step>("upload");
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState("");
+  const [csvFile, setCsvFile] = useState<File | null>(null);
   const [parsed, setParsed] = useState<ParsedCsv | null>(null);
   const [mapping, setMapping] = useState<Mapping>({});
   const [propertyId, setPropertyId] = useState("");
@@ -83,7 +84,7 @@ export default function BankingImportPage() {
     void load();
   }, []);
 
-  // ── CSV verarbeiten ─────────────────────────────────────────────────────────
+  // ── Schritt 1: Datei einlesen — nur für Header + Vorschau (noch kein Mapping) ─
   const handleFile = (file: File) => {
     if (!file.name.toLowerCase().endsWith(".csv") && file.type !== "text/csv") {
       setParseError("Bitte eine CSV-Datei hochladen.");
@@ -91,26 +92,28 @@ export default function BankingImportPage() {
     }
     setParseError(null);
     setFileName(file.name);
+    setCsvFile(file);
 
-    Papa.parse<Record<string, string>>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (result) => {
-        if (!result.meta.fields?.length) {
-          setParseError("Die Datei konnte nicht gelesen werden oder enthält keine Spaltenüberschriften.");
-          return;
-        }
-        const headers = result.meta.fields;
-        const allRows = result.data;
-        const previewRows = allRows.slice(0, 5);
-        setParsed({ headers, previewRows, allRows });
-        setMapping(autoDetectMapping(headers));
-        setStep("mapping");
-      },
-      error: (err) => {
-        setParseError(`CSV konnte nicht gelesen werden: ${err.message}`);
-      },
-    });
+    // Nur papaparse für Vorschau — echtes Parsen passiert erst beim Import via parseCSV()
+    import("papaparse").then(({ default: Papa }) => {
+      Papa.parse<Record<string, string>>(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (result) => {
+          if (!result.meta.fields?.length) {
+            setParseError("Die Datei enthält keine Spaltenüberschriften.");
+            return;
+          }
+          const headers = result.meta.fields;
+          setParsed({ headers, previewRows: result.data.slice(0, 5), totalRows: result.data.length });
+          setMapping(autoDetectMapping(headers));
+          setStep("mapping");
+        },
+        error: (err: { message: string }) => {
+          setParseError(`CSV konnte nicht gelesen werden: ${err.message}`);
+        },
+      });
+    }).catch(() => setParseError("Interner Fehler beim Laden des CSV-Parsers."));
   };
 
   const onFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,19 +129,36 @@ export default function BankingImportPage() {
     if (file) handleFile(file);
   };
 
-  // ── Import absenden ─────────────────────────────────────────────────────────
+  // ── Schritt 3: Parsen + Import ──────────────────────────────────────────────
   const handleImport = async () => {
-    if (!parsed) return;
+    if (!csvFile || !mapping.date || !mapping.amount) return;
     setImportError(null);
     setStep("importing");
 
+    // parseCSV() läuft im Browser: wandelt Datum + Betrag um, filtert Fehlerzeilen
+    let parseResult;
+    try {
+      parseResult = await parseCSV(csvFile, mapping as ColumnMapping);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "CSV konnte nicht verarbeitet werden.");
+      setStep("mapping");
+      return;
+    }
+
+    if (parseResult.transactions.length === 0) {
+      setImportError("Keine gültigen Transaktionen gefunden. Bitte Spalten-Zuordnung prüfen.");
+      setStep("mapping");
+      return;
+    }
+
+    // API bekommt bereits aufbereitete Transaktionen — kein Parsen mehr server-seitig
     const res = await fetch("/api/transactions/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        rows: parsed.allRows,
-        mapping,
+        transactions: parseResult.transactions,
         propertyId: propertyId || null,
+        parseErrors: parseResult.errors,
       }),
     });
 
@@ -156,6 +176,7 @@ export default function BankingImportPage() {
 
   const reset = () => {
     setStep("upload");
+    setCsvFile(null);
     setParsed(null);
     setMapping({});
     setPropertyId("");
@@ -279,7 +300,7 @@ export default function BankingImportPage() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{fileName}</p>
                 <p className="text-xs text-zinc-400 dark:text-zinc-500">
-                  {parsed.allRows.length} Zeilen · {parsed.headers.length} Spalten
+                  {parsed.totalRows} Zeilen · {parsed.headers.length} Spalten
                 </p>
               </div>
               <button
@@ -404,10 +425,10 @@ export default function BankingImportPage() {
               {step === "importing" ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white dark:border-zinc-900/30 dark:border-t-zinc-900" />
-                  Importiere {parsed.allRows.length} Zeilen…
+                  Importiere {parsed.totalRows} Zeilen…
                 </span>
               ) : (
-                `${parsed.allRows.length} Transaktionen importieren`
+                `${parsed.totalRows} Transaktionen importieren`
               )}
             </button>
 
