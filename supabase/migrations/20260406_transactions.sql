@@ -107,22 +107,26 @@ END $$;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 
 -- Jeder Nutzer sieht und verwaltet nur seine eigenen Zeilen
-CREATE POLICY IF NOT EXISTS "Nutzer sehen eigene Transaktionen"
-  ON transactions FOR SELECT
-  USING (auth.uid() = user_id);
-
-CREATE POLICY IF NOT EXISTS "Nutzer können eigene Transaktionen einfügen"
-  ON transactions FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY IF NOT EXISTS "Nutzer können eigene Transaktionen bearbeiten"
-  ON transactions FOR UPDATE
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY IF NOT EXISTS "Nutzer können eigene Transaktionen löschen"
-  ON transactions FOR DELETE
-  USING (auth.uid() = user_id);
+-- (CREATE POLICY IF NOT EXISTS wird von Supabase nicht unterstützt → DO-Block)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'transactions' AND policyname = 'Nutzer sehen eigene Transaktionen') THEN
+    CREATE POLICY "Nutzer sehen eigene Transaktionen"
+      ON transactions FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'transactions' AND policyname = 'Nutzer können eigene Transaktionen einfügen') THEN
+    CREATE POLICY "Nutzer können eigene Transaktionen einfügen"
+      ON transactions FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'transactions' AND policyname = 'Nutzer können eigene Transaktionen bearbeiten') THEN
+    CREATE POLICY "Nutzer können eigene Transaktionen bearbeiten"
+      ON transactions FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'transactions' AND policyname = 'Nutzer können eigene Transaktionen löschen') THEN
+    CREATE POLICY "Nutzer können eigene Transaktionen löschen"
+      ON transactions FOR DELETE USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- -----------------------------------------------------------------------------
 -- 5. Indizes für häufige Abfragen
