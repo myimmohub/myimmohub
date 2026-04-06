@@ -152,7 +152,7 @@ export default function BankingImportPage() {
     }
 
     // API bekommt bereits aufbereitete Transaktionen — kein Parsen mehr server-seitig
-    const res = await fetch("/api/transactions/import", {
+    const res = await fetch("/api/banking/import-csv", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
