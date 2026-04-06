@@ -9,6 +9,28 @@ export type DocumentCategory =
   | "zinsen"
   | "sonstiges";
 
+/** Anzeigetexte für alle Kategorien — zentral definiert, von UI-Komponenten importiert. */
+export const CATEGORY_LABELS: Record<DocumentCategory, string> = {
+  miete: "Miete",
+  rechnung_handwerk: "Handwerkerrechnung",
+  rechnung_verwaltung: "Verwaltungsrechnung",
+  versicherung: "Versicherung",
+  nebenkostenabrechnung: "Nebenkostenabrechnung",
+  zinsen: "Zinsen",
+  sonstiges: "Sonstiges",
+};
+
+/** Geordnete Liste aller Kategorien für Dropdowns. */
+export const ALL_CATEGORIES: DocumentCategory[] = [
+  "miete",
+  "rechnung_handwerk",
+  "rechnung_verwaltung",
+  "versicherung",
+  "nebenkostenabrechnung",
+  "zinsen",
+  "sonstiges",
+];
+
 export type Property = {
   id: string;
   name: string;
@@ -19,7 +41,7 @@ export type Property = {
 export type ClassificationResult = {
   category: DocumentCategory;
   amount: number | null;
-  date: string | null;        // ISO-Format YYYY-MM-DD oder null
+  date: string | null; // ISO-Format YYYY-MM-DD oder null
   property_id: string | null;
   confidence: number;
 };
@@ -84,5 +106,9 @@ ${text}`,
     .map((block) => (block as { type: "text"; text: string }).text)
     .join("");
 
-  return JSON.parse(raw) as ClassificationResult;
+  try {
+    return JSON.parse(raw) as ClassificationResult;
+  } catch {
+    throw new Error(`classifyDocument: Ungültiges JSON in API-Antwort: ${raw.slice(0, 200)}`);
+  }
 }

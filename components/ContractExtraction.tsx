@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { ContractData } from "@/lib/ai/extractContract";
 import { calculateAfA } from "@/lib/calculateAfA";
@@ -27,6 +28,7 @@ type Props = {
 };
 
 export default function ContractExtraction({ propertyId, data }: Props) {
+  const router = useRouter();
   const [values, setValues] = useState<Record<keyof ContractData, string>>({
     kaufpreis: data.kaufpreis?.toString() ?? "",
     kaufdatum: data.kaufdatum ?? "",
@@ -83,9 +85,10 @@ export default function ContractExtraction({ propertyId, data }: Props) {
     setSaveError(null);
     setSavedSuccess(false);
 
-    const { error } = await supabase
-      .from("properties")
-      .update({
+    const res = await fetch(`/api/properties/${propertyId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         kaufpreis: values.kaufpreis ? Number(values.kaufpreis) : null,
         kaufdatum: values.kaufdatum || null,
         address: values.adresse || null,
@@ -96,17 +99,21 @@ export default function ContractExtraction({ propertyId, data }: Props) {
           : null,
         afa_satz: afaSatzAnzeige ? Number(afaSatzAnzeige) / 100 : null,
         afa_jahresbetrag: afaJahresbetrag,
-      })
-      .eq("id", propertyId);
+      }),
+    });
 
     setIsSaving(false);
 
-    if (error) {
-      setSaveError(error.message);
+    if (!res.ok) {
+      const body = (await res.json()) as { error?: string };
+      setSaveError(body.error ?? "Fehler beim Speichern.");
       return;
     }
 
     setSavedSuccess(true);
+    setTimeout(() => {
+      router.push(`/dashboard/properties/${propertyId}/overview`);
+    }, 800);
   };
 
   return (

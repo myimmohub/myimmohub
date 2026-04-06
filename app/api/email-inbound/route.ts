@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { classifyDocument, type Property } from "@/lib/ai/classifyDocument";
+import { extractText } from "@/lib/ai/extractText";
+import { sanitizeFileName } from "@/lib/constants";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -31,10 +34,6 @@ function extractUserIdFromTo(to: string): string | null {
   const localPart = email.split("@")[0];
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   return uuidRegex.test(localPart) ? localPart : null;
-}
-
-function sanitizeFileName(name: string): string {
-  return name.replace(/\s+/g, "_").replace(/[^\w.\-]/g, "");
 }
 
 export async function POST(request: Request) {
@@ -73,9 +72,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const results: { fileName: string; documentId: string }[] = [];
-  const errors: { fileName: string; error: string }[] = [];
-
   if (!attachments || attachments.length === 0) {
     return NextResponse.json({
       message: "E-Mail empfangen, aber keine Anhänge gefunden.",
@@ -84,15 +80,24 @@ export async function POST(request: Request) {
     });
   }
 
+  // Properties des Users für die Klassifikation vorab laden
+  const { data: propertiesData } = await supabase
+    .from("properties")
+    .select("id, name, address, type")
+    .eq("user_id", userId);
+
+  const properties: Property[] = propertiesData ?? [];
+
+  const results: { fileName: string; documentId: string }[] = [];
+  const errors: { fileName: string; error: string }[] = [];
+
   for (const attachment of attachments) {
     const originalFilename = attachment.Name;
     const safeName = sanitizeFileName(originalFilename);
     const storagePath = `${userId}/email/${Date.now()}_${safeName}`;
-
-    // Base64 → Buffer
     const fileBuffer = Buffer.from(attachment.Content, "base64");
 
-    // In Supabase Storage hochladen
+    // 1. In Supabase Storage hochladen
     const { error: uploadError } = await supabase.storage
       .from("documents")
       .upload(storagePath, fileBuffer, {
@@ -105,7 +110,7 @@ export async function POST(request: Request) {
       continue;
     }
 
-    // Eintrag in documents-Tabelle anlegen
+    // 2. Dokument-Eintrag anlegen
     const { data: doc, error: insertError } = await supabase
       .from("documents")
       .insert({
@@ -124,11 +129,46 @@ export async function POST(request: Request) {
       .single();
 
     if (insertError) {
+      // Storage-Eintrag existiert bereits — DB-Fehler melden
       errors.push({ fileName: originalFilename, error: insertError.message });
       continue;
     }
 
     results.push({ fileName: originalFilename, documentId: doc.id });
+
+    // 3. OCR: Text aus Datei extrahieren
+    const extractedText = await extractText(fileBuffer, attachment.ContentType);
+
+    // Fallback: E-Mail-Body als Text wenn OCR nicht möglich
+    const textForClassification = extractedText ?? textBody ?? "";
+    if (!textForClassification) continue;
+
+    // 4. Klassifikation
+    let classification;
+    try {
+      classification = await classifyDocument(textForClassification, properties);
+    } catch {
+      // Klassifikation fehlgeschlagen — Dokument bleibt ohne Kategorie im Eingang
+      continue;
+    }
+
+    // 5. Dokument aktualisieren mit OCR-Text + Klassifikationsergebnis
+    const { error: updateError } = await supabase
+      .from("documents")
+      .update({
+        extracted_text: extractedText ?? null,
+        category: classification.category,
+        amount: classification.amount,
+        document_date: classification.date,
+        suggested_property_id: classification.property_id,
+        ai_confidence: classification.confidence,
+        status: "pending_review",
+      })
+      .eq("id", doc.id);
+
+    if (updateError) {
+      errors.push({ fileName: originalFilename, error: `Update fehlgeschlagen: ${updateError.message}` });
+    }
   }
 
   return NextResponse.json({

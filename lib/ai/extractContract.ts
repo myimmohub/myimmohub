@@ -41,5 +41,9 @@ ${text}`,
     .map((block) => (block as { type: "text"; text: string }).text)
     .join("");
 
-  return JSON.parse(raw) as ContractData;
+  try {
+    return JSON.parse(raw) as ContractData;
+  } catch {
+    throw new Error(`extractContractData: Ungültiges JSON in API-Antwort: ${raw.slice(0, 200)}`);
+  }
 }

@@ -53,7 +53,7 @@ export default function UploadDocument({ propertyId, onUploaded }: UploadDocumen
       }
 
       const safeName = sanitizeFileName(file.name);
-      const filePath = `${user.id}/${propertyId}/${safeName}`;
+      const filePath = `${user.id}/${propertyId}/${Date.now()}_${safeName}`;
 
       const { error: uploadError } = await supabase.storage.from("documents").upload(filePath, file, {
         cacheControl: "3600",
