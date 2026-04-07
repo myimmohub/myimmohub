@@ -157,13 +157,13 @@ export function MonthlyPropertySummary({
   if (loading) return <SummarySkeleton />;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
 
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
+      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         <div>
-          <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">{propertyName}</h3>
-          <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">{monthLabel(month)}</p>
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100">{propertyName}</h3>
+          <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{monthLabel(month)}</p>
         </div>
 
         {/* Cashflow-Badge mit Vormonatsvergleich */}
@@ -192,24 +192,24 @@ export function MonthlyPropertySummary({
             </div>
           )}
           {hasPrev && cashflowSame && (
-            <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">= Vormonat</p>
+            <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">= Vormonat</p>
           )}
         </div>
       </div>
 
       {/* Body */}
-      <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+      <div className="divide-y divide-slate-100 dark:divide-slate-800">
 
         {/* Einnahmen-Block */}
         <div className="px-5 py-4">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
             Einnahmen
           </p>
           {current.einnahmen === 0 ? (
-            <p className="text-sm text-zinc-400 dark:text-zinc-500">Keine Einnahmen</p>
+            <p className="text-sm text-slate-400 dark:text-slate-500">Keine Einnahmen</p>
           ) : (
             <div className="flex items-center justify-between">
-              <span className="text-sm text-zinc-700 dark:text-zinc-300">Mieteinnahmen gesamt</span>
+              <span className="text-sm text-slate-700 dark:text-slate-300">Mieteinnahmen gesamt</span>
               <span className="tabular-nums font-semibold text-emerald-600 dark:text-emerald-400">
                 {fmt(current.einnahmen)}
               </span>
@@ -222,11 +222,11 @@ export function MonthlyPropertySummary({
 
         {/* Ausgaben-Block */}
         <div className="px-5 py-4">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
             Ausgaben
           </p>
           {ausgabenRows.length === 0 ? (
-            <p className="text-sm text-zinc-400 dark:text-zinc-500">Keine Ausgaben</p>
+            <p className="text-sm text-slate-400 dark:text-slate-500">Keine Ausgaben</p>
           ) : (
             <div className="space-y-2">
               {ausgabenRows.map(({ key, label }) => {
@@ -239,14 +239,14 @@ export function MonthlyPropertySummary({
                   <div key={key}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="truncate text-sm text-zinc-700 dark:text-zinc-300">{label}</span>
+                        <span className="truncate text-sm text-slate-700 dark:text-slate-300">{label}</span>
                         {zeile && isDeductible && (
                           <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-500 dark:bg-blue-950/40 dark:text-blue-400">
                             Z. {zeile}
                           </span>
                         )}
                         {!isDeductible && (
-                          <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">
+                          <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-400 dark:bg-slate-800 dark:text-slate-500">
                             nicht abs.
                           </span>
                         )}
@@ -263,8 +263,8 @@ export function MonthlyPropertySummary({
               })}
 
               {/* Ausgaben-Summe */}
-              <div className="flex items-center justify-between border-t border-zinc-100 pt-2 dark:border-zinc-800">
-                <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Gesamt Ausgaben</span>
+              <div className="flex items-center justify-between border-t border-slate-100 pt-2 dark:border-slate-800">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Gesamt Ausgaben</span>
                 <span className="tabular-nums text-sm font-bold text-red-600 dark:text-red-400">
                   {fmt(current.ausgabenTotal)}
                 </span>
@@ -276,8 +276,8 @@ export function MonthlyPropertySummary({
         {/* Cashflow-Zeile */}
         <div className="flex items-center justify-between px-5 py-4">
           <div>
-            <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Cashflow</p>
-            <p className="text-xs text-zinc-400 dark:text-zinc-500">Einnahmen − Ausgaben</p>
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Cashflow</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Einnahmen − Ausgaben</p>
           </div>
           <div className="text-right">
             <p className={`tabular-nums text-base font-bold ${
@@ -338,22 +338,22 @@ function PrevMonthDelta({
 
 function SummarySkeleton() {
   return (
-    <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         <div className="space-y-1.5">
-          <div className="h-4 w-32 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
-          <div className="h-3 w-20 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+          <div className="h-4 w-32 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+          <div className="h-3 w-20 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
         </div>
-        <div className="h-7 w-24 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+        <div className="h-7 w-24 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
       </div>
       {[1, 2, 3].map((i) => (
-        <div key={i} className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-          <div className="mb-3 h-3 w-20 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+        <div key={i} className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+          <div className="mb-3 h-3 w-20 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
           <div className="space-y-2">
             {Array.from({ length: i === 2 ? 4 : 1 }).map((_, j) => (
               <div key={j} className="flex justify-between">
-                <div className="h-4 w-36 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
-                <div className="h-4 w-16 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+                <div className="h-4 w-36 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+                <div className="h-4 w-16 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
               </div>
             ))}
           </div>

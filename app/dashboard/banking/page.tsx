@@ -49,7 +49,7 @@ function getCategoryVariant(cat: string | null): BadgeVariant {
 const BADGE: Record<BadgeVariant, string> = {
   einnahmen:       "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400",
   werbungskosten:  "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400",
-  nicht_absetzbar: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  nicht_absetzbar: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
   unbekannt:       "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400",
 };
 
@@ -172,23 +172,23 @@ export default function BankingPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <main className="min-h-screen bg-zinc-100 px-4 py-10 dark:bg-zinc-950">
+    <main className="min-h-screen bg-slate-50 px-4 py-10 dark:bg-slate-950">
       <section className="mx-auto w-full max-w-6xl space-y-6">
 
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
               Banking
             </h1>
-            <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
               Kategorisierte Transaktionen und Auswertung
             </p>
           </div>
           <div className="flex gap-2">
             <Link
               href="/dashboard/banking/review"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
             >
               {openReview > 0 && (
                 <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-500 px-1 text-xs font-bold text-white">
@@ -199,7 +199,7 @@ export default function BankingPage() {
             </Link>
             <Link
               href="/dashboard/banking/import"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
             >
               CSV importieren
             </Link>
@@ -255,7 +255,7 @@ export default function BankingPage() {
             label="Offen zum Review"
             sublabel="Alle Monate"
             value={String(openReview)}
-            valueClass={openReview > 0 ? "text-yellow-600 dark:text-yellow-400" : "text-zinc-400 dark:text-zinc-500"}
+            valueClass={openReview > 0 ? "text-yellow-600 dark:text-yellow-400" : "text-slate-400 dark:text-slate-500"}
             icon={
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -264,7 +264,7 @@ export default function BankingPage() {
             iconClass={
               openReview > 0
                 ? "bg-yellow-100 text-yellow-600 dark:bg-yellow-950/40 dark:text-yellow-400"
-                : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
+                : "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
             }
             loading={loading}
             linkHref={openReview > 0 ? "/dashboard/banking/review" : undefined}
@@ -275,7 +275,7 @@ export default function BankingPage() {
         <div className="flex flex-wrap gap-3">
           {/* Suche */}
           <div className="relative">
-            <svg xmlns="http://www.w3.org/2000/svg" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
             </svg>
             <input
@@ -283,13 +283,13 @@ export default function BankingPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Empfänger oder Beschreibung…"
-              className="w-64 rounded-lg border border-zinc-200 bg-white py-2 pl-9 pr-3 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+              className="w-64 rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                 aria-label="Suche löschen"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
@@ -302,7 +302,7 @@ export default function BankingPage() {
           <select
             value={filterMonth}
             onChange={(e) => setFilterMonth(e.target.value)}
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           >
             <option value="">Alle Monate</option>
             {availableMonths.map((m) => (
@@ -314,7 +314,7 @@ export default function BankingPage() {
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           >
             <option value="">Alle Kategorien</option>
             <optgroup label="Einnahmen">
@@ -341,7 +341,7 @@ export default function BankingPage() {
             <select
               value={filterProperty}
               onChange={(e) => setFilterProperty(e.target.value)}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             >
               <option value="">Alle Immobilien</option>
               {properties.map((p) => (
@@ -355,7 +355,7 @@ export default function BankingPage() {
             <button
               type="button"
               onClick={() => { setFilterCategory(""); setFilterProperty(""); setSearch(""); }}
-              className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-500 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -364,27 +364,27 @@ export default function BankingPage() {
             </button>
           )}
 
-          <div className="ml-auto flex items-center text-sm text-zinc-400 dark:text-zinc-500">
+          <div className="ml-auto flex items-center text-sm text-slate-400 dark:text-slate-500">
             {filtered.length} Transaktion{filtered.length !== 1 ? "en" : ""}
           </div>
         </div>
 
         {/* ── Tabelle ───────────────────────────────────────────────────────────── */}
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           {loading ? (
             <div className="flex items-center justify-center py-20">
-              <span className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-600 dark:border-zinc-700 dark:border-t-zinc-300" />
+              <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600 dark:border-slate-700 dark:border-t-slate-300" />
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
               <div>
-                <p className="font-medium text-zinc-700 dark:text-zinc-300">Keine kategorisierten Transaktionen</p>
-                <p className="mt-1 text-sm text-zinc-400 dark:text-zinc-500">
+                <p className="font-medium text-slate-700 dark:text-slate-300">Keine kategorisierten Transaktionen</p>
+                <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">
                   {openReview > 0
                     ? `${openReview} Transaktion${openReview !== 1 ? "en" : ""} warten auf Kategorisierung im Review`
                     : "Importiere einen Kontoauszug und kategorisiere die Transaktionen im Review"}
@@ -393,7 +393,7 @@ export default function BankingPage() {
               {openReview > 0 && (
                 <Link
                   href="/dashboard/banking/review"
-                  className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
                 >
                   Zum Review
                 </Link>
@@ -403,31 +403,31 @@ export default function BankingPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/60">
-                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                  <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
+                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                       Datum
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                    <th className="whitespace-nowrap px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                       Betrag
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                       Beschreibung
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                       Kategorie
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                       Immobilie
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {filtered.map((tx) => {
                     const variant = getCategoryVariant(tx.category);
                     return (
-                      <tr key={tx.id} className="transition hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
+                      <tr key={tx.id} className="transition hover:bg-slate-50 dark:hover:bg-slate-800/30">
                         {/* Datum */}
-                        <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400">
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
                           {fmtDate(tx.date)}
                         </td>
 
@@ -442,11 +442,11 @@ export default function BankingPage() {
 
                         {/* Beschreibung */}
                         <td className="max-w-[240px] px-4 py-3">
-                          <p className="truncate font-medium text-zinc-800 dark:text-zinc-200">
-                            {tx.counterpart ?? <span className="text-zinc-400">—</span>}
+                          <p className="truncate font-medium text-slate-800 dark:text-slate-200">
+                            {tx.counterpart ?? <span className="text-slate-400">—</span>}
                           </p>
                           {tx.description && (
-                            <p className="truncate text-xs text-zinc-400 dark:text-zinc-500">
+                            <p className="truncate text-xs text-slate-400 dark:text-slate-500">
                               {tx.description}
                             </p>
                           )}
@@ -460,21 +460,21 @@ export default function BankingPage() {
                                 {ANLAGE_V_CATEGORY_LABELS[tx.category as AnlageVCategory] ?? tx.category}
                               </span>
                               {tx.anlage_v_zeile && (
-                                <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500">
                                   Anlage V · Z. {tx.anlage_v_zeile}
                                 </span>
                               )}
                             </div>
                           ) : (
-                            <span className="text-xs text-zinc-300 dark:text-zinc-600">—</span>
+                            <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
                           )}
                         </td>
 
                         {/* Immobilie */}
                         <td className="px-4 py-3">
                           {tx.property?.name
-                            ? <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">{tx.property.name}</span>
-                            : <span className="text-xs text-zinc-300 dark:text-zinc-600">—</span>}
+                            ? <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400">{tx.property.name}</span>
+                            : <span className="text-xs text-slate-300 dark:text-slate-600">—</span>}
                         </td>
                       </tr>
                     );
@@ -484,8 +484,8 @@ export default function BankingPage() {
                 {/* Footer-Summe */}
                 {filtered.length > 0 && (
                   <tfoot>
-                    <tr className="border-t border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/60">
-                      <td className="px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                    <tr className="border-t border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60">
+                      <td className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400">
                         Summe
                       </td>
                       <td className={`px-4 py-3 text-right text-sm font-bold tabular-nums ${
@@ -531,18 +531,18 @@ function KpiCard({
   linkHref?: string;
 }) {
   const inner = (
-    <div className="flex h-full flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="flex h-full flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{label}</p>
-          <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-500">{sublabel}</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">{label}</p>
+          <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">{sublabel}</p>
         </div>
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${iconClass}`}>
           {icon}
         </span>
       </div>
       {loading ? (
-        <div className="h-7 w-24 animate-pulse rounded-md bg-zinc-100 dark:bg-zinc-800" />
+        <div className="h-7 w-24 animate-pulse rounded-md bg-slate-100 dark:bg-slate-800" />
       ) : (
         <p className={`text-xl font-bold tabular-nums leading-none ${valueClass}`}>{value}</p>
       )}

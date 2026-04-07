@@ -23,7 +23,7 @@ const CATEGORY_COLORS: Record<DocumentCategory, string> = {
   versicherung: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300",
   nebenkostenabrechnung: "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300",
   zinsen: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300",
-  sonstiges: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300",
+  sonstiges: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
 };
 
 type PropertyRef = { id: string; name: string };
@@ -52,7 +52,7 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   confirmed: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
   pending_review: "bg-yellow-50 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-300",
-  pending_analysis: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  pending_analysis: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
 };
 
 export default function DocumentsPage() {
@@ -187,30 +187,30 @@ export default function DocumentsPage() {
 
   if (isLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-950">
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Lade Dokumente...</p>
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <p className="text-sm text-slate-500 dark:text-slate-400">Lade Dokumente...</p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-zinc-100 px-4 py-10 dark:bg-zinc-950">
+    <main className="min-h-screen bg-slate-50 px-4 py-10 dark:bg-slate-950">
       <section className="mx-auto w-full max-w-6xl">
 
         {/* Header */}
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
               Dokumente
             </h1>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               Alle Dokumente
             </p>
           </div>
           <button
             type="button"
             onClick={openModal}
-            className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
@@ -226,12 +226,12 @@ export default function DocumentsPage() {
             placeholder="Suche in Dateiname oder Text…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 shadow-sm outline-none focus:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500 sm:w-72"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-500 sm:w-72"
           />
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value as DocumentCategory | "")}
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
           >
             <option value="">Alle Kategorien</option>
             {(Object.keys(CATEGORY_LABELS) as DocumentCategory[]).map((cat) => (
@@ -241,7 +241,7 @@ export default function DocumentsPage() {
           <select
             value={filterProperty}
             onChange={(e) => setFilterProperty(e.target.value)}
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
           >
             <option value="">Alle Immobilien</option>
             {allProperties.map((p) => (
@@ -252,7 +252,7 @@ export default function DocumentsPage() {
             <button
               type="button"
               onClick={() => { setSearch(""); setFilterCategory(""); setFilterProperty(""); }}
-              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-500 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
             >
               Filter zurücksetzen
             </button>
@@ -266,46 +266,46 @@ export default function DocumentsPage() {
         ) : null}
 
         {/* Tabelle */}
-        <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           {filtered.length === 0 ? (
-            <p className="px-5 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
               {documents.length === 0 ? "Noch keine Dokumente vorhanden." : "Keine Dokumente gefunden."}
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/60">
-                    <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">Datum</th>
-                    <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">Dateiname</th>
-                    <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">Absender</th>
-                    <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">Kategorie</th>
-                    <th className="px-4 py-3 text-right font-medium text-zinc-500 dark:text-zinc-400">Betrag</th>
-                    <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">Immobilie</th>
-                    <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">Status</th>
+                  <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
+                    <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Datum</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Dateiname</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Absender</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Kategorie</th>
+                    <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">Betrag</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Immobilie</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {filtered.map((doc) => (
                     <tr
                       key={doc.id}
                       onClick={() => router.push(`/dashboard/documents/${doc.id}`)}
-                      className="cursor-pointer transition hover:bg-zinc-50 dark:hover:bg-zinc-800/40"
+                      className="cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800/40"
                     >
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-500 dark:text-zinc-400">
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-500 dark:text-slate-400">
                         {formatDate(doc.document_date ?? doc.created_at)}
                       </td>
                       <td className="max-w-xs px-4 py-3">
-                        <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">
+                        <p className="truncate font-medium text-slate-900 dark:text-slate-100">
                           {doc.original_filename ?? doc.file_name}
                         </p>
                         {doc.extracted_text && search && doc.extracted_text.toLowerCase().includes(search.toLowerCase()) ? (
-                          <p className="mt-0.5 truncate text-xs text-zinc-400 dark:text-zinc-500">
+                          <p className="mt-0.5 truncate text-xs text-slate-400 dark:text-slate-500">
                             …{getSnippet(doc.extracted_text, search)}…
                           </p>
                         ) : null}
                       </td>
-                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 truncate max-w-[160px]">
+                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300 truncate max-w-[160px]">
                         {doc.counterpart ?? "—"}
                       </td>
                       <td className="px-4 py-3">
@@ -314,22 +314,22 @@ export default function DocumentsPage() {
                             {CATEGORY_LABELS[doc.category]}
                           </span>
                         ) : (
-                          <span className="text-zinc-400">—</span>
+                          <span className="text-slate-400">—</span>
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-900 dark:text-zinc-100">
+                      <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-slate-900 dark:text-slate-100">
                         {formatAmount(doc.amount)}
                       </td>
-                      <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">
+                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
                         {doc.properties?.name ?? "—"}
                       </td>
                       <td className="px-4 py-3">
                         {doc.status ? (
-                          <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[doc.status] ?? "bg-zinc-100 text-zinc-500"}`}>
+                          <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[doc.status] ?? "bg-slate-100 text-slate-500"}`}>
                             {STATUS_LABELS[doc.status] ?? doc.status}
                           </span>
                         ) : (
-                          <span className="text-zinc-400">—</span>
+                          <span className="text-slate-400">—</span>
                         )}
                       </td>
                     </tr>
@@ -341,7 +341,7 @@ export default function DocumentsPage() {
         </div>
 
         {filtered.length > 0 && (
-          <p className="mt-3 text-xs text-zinc-400 dark:text-zinc-500">
+          <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
             {filtered.length} Dokument{filtered.length !== 1 ? "e" : ""}
             {filtered.length !== documents.length ? ` von ${documents.length}` : ""}
           </p>
@@ -351,16 +351,16 @@ export default function DocumentsPage() {
       {/* Upload-Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                 Beleg hochladen
               </h2>
               {!busy && (
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="rounded-lg p-1 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800"
+                  className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -369,14 +369,14 @@ export default function DocumentsPage() {
               )}
             </div>
 
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               PDF, JPG oder PNG — die KI klassifiziert den Beleg automatisch.
             </p>
 
             {/* Dropzone */}
             {uploadStep === "idle" || uploadStep === "error" ? (
               <div
-                className="mt-5 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50 py-10 transition hover:border-zinc-400 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/50 dark:hover:border-zinc-500"
+                className="mt-5 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 py-10 transition hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:border-slate-500"
                 onClick={() => fileInputRef.current?.click()}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
@@ -385,13 +385,13 @@ export default function DocumentsPage() {
                   if (file) void handleFileSelected(file);
                 }}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
-                <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
                   Klicken oder Datei hierher ziehen
                 </p>
-                <p className="text-xs text-zinc-400 dark:text-zinc-500">PDF, JPG, PNG</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">PDF, JPG, PNG</p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -411,17 +411,17 @@ export default function DocumentsPage() {
               <div className="mt-5 space-y-3">
                 <div className="flex items-center gap-3">
                   {uploadStep !== "done" ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-700 dark:border-zinc-600 dark:border-t-zinc-200" />
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700 dark:border-slate-600 dark:border-t-slate-200" />
                   ) : (
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-600" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                   )}
-                  <p className="text-sm text-zinc-700 dark:text-zinc-300">{STEP_LABELS[uploadStep]}</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-300">{STEP_LABELS[uploadStep]}</p>
                 </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                   <div
-                    className="h-full rounded-full bg-zinc-900 transition-all duration-500 dark:bg-zinc-100"
+                    className="h-full rounded-full bg-blue-600 transition-all duration-500 dark:bg-blue-500"
                     style={{ width: uploadStep === "uploading" ? "40%" : uploadStep === "analysing" ? "75%" : "100%" }}
                   />
                 </div>

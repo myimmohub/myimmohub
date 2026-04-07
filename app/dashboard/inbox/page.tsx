@@ -128,19 +128,19 @@ export default function InboxPage() {
 
   if (isLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-950">
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Lade Eingang...</p>
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <p className="text-sm text-slate-500 dark:text-slate-400">Lade Eingang...</p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-zinc-100 px-4 py-10 dark:bg-zinc-950">
+    <main className="min-h-screen bg-slate-50 px-4 py-10 dark:bg-slate-950">
       <section className="mx-auto w-full max-w-3xl">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
           KI-Postfach – Eingang
         </h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           Dokumente die auf Bestätigung warten
         </p>
 
@@ -157,7 +157,7 @@ export default function InboxPage() {
         ) : null}
 
         {documents.length === 0 && !error ? (
-          <p className="mt-8 text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="mt-8 text-sm text-slate-500 dark:text-slate-400">
             Keine Dokumente im Eingang.
           </p>
         ) : null}
@@ -170,22 +170,22 @@ export default function InboxPage() {
             return (
               <div
                 key={doc.id}
-                className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+                className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">
+                    <p className="truncate font-medium text-slate-900 dark:text-slate-100">
                       {doc.original_filename ?? doc.file_name}
                     </p>
                     {doc.email_from ? (
-                      <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                      <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
                         Von: {doc.email_from}
                         {doc.email_subject ? ` · ${doc.email_subject}` : ""}
                       </p>
                     ) : null}
                   </div>
                   {doc.ai_confidence !== null ? (
-                    <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                       {Math.round(doc.ai_confidence * 100)}% sicher
                     </span>
                   ) : null}
@@ -199,7 +199,7 @@ export default function InboxPage() {
                       </span>
                     ) : null}
                     {doc.counterpart ? (
-                      <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                         {doc.counterpart}
                       </span>
                     ) : null}
@@ -209,7 +209,7 @@ export default function InboxPage() {
                       </span>
                     ) : null}
                     {doc.document_date ? (
-                      <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                         {new Date(doc.document_date).toLocaleDateString("de-DE")}
                       </span>
                     ) : null}
@@ -224,13 +224,13 @@ export default function InboxPage() {
                 {isEditing ? (
                   <div className="mt-3 space-y-3">
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                      <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
                         Kategorie
                       </label>
                       <select
                         value={editCategory}
                         onChange={(e) => setEditCategory(e.target.value as DocumentCategory)}
-                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                       >
                         {ALL_CATEGORIES.map((cat) => (
                           <option key={cat} value={cat}>
@@ -240,13 +240,13 @@ export default function InboxPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                      <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
                         Immobilie
                       </label>
                       <select
                         value={editPropertyId}
                         onChange={(e) => setEditPropertyId(e.target.value)}
-                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                       >
                         <option value="">Keine Zuordnung</option>
                         {properties.map((p) => (
@@ -265,14 +265,14 @@ export default function InboxPage() {
                       <button
                         type="button"
                         onClick={() => void handleConfirm(doc)}
-                        className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                        className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
                       >
                         Bestätigen
                       </button>
                       <button
                         type="button"
                         onClick={() => handleStartEdit(doc)}
-                        className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                       >
                         Korrigieren
                       </button>
@@ -282,14 +282,14 @@ export default function InboxPage() {
                       <button
                         type="button"
                         onClick={() => void handleSaveEdit(doc)}
-                        className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                        className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
                       >
                         Speichern
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditingId(null)}
-                        className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                       >
                         Abbrechen
                       </button>

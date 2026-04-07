@@ -57,7 +57,7 @@ function getCategoryVariant(cat: string | null): BadgeVariant {
 const BADGE: Record<BadgeVariant, string> = {
   einnahmen:       "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400",
   werbungskosten:  "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400",
-  nicht_absetzbar: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  nicht_absetzbar: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
   unbekannt:       "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400",
 };
 
@@ -89,7 +89,7 @@ function CategorySelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 ${className}`}
+      className={`rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 ${className}`}
     >
       <option value="">— Keine Kategorie —</option>
       <optgroup label="Einnahmen">
@@ -694,11 +694,11 @@ export default function BankingReviewPage() {
           }}
           className={`cursor-pointer transition ${
             isEditing || isSplitting
-              ? "bg-zinc-50 dark:bg-zinc-800/40"
+              ? "bg-slate-50 dark:bg-slate-800/40"
               : isExpanded
-              ? "bg-zinc-50 dark:bg-zinc-800/40"
+              ? "bg-slate-50 dark:bg-slate-800/40"
               : isDone
-              ? "hover:bg-zinc-50 dark:hover:bg-zinc-800/30"
+              ? "hover:bg-slate-50 dark:hover:bg-slate-800/30"
               : "bg-yellow-50/40 hover:bg-yellow-50 dark:bg-yellow-950/10 dark:hover:bg-yellow-950/20"
           }`}
         >
@@ -706,7 +706,7 @@ export default function BankingReviewPage() {
           <td className="w-10 px-3 py-3">
             <input
               type="checkbox"
-              className="h-4 w-4 rounded border-zinc-300 text-zinc-900 dark:border-zinc-600"
+              className="h-4 w-4 rounded border-slate-300 text-slate-900 dark:border-slate-600"
               checked={selectedIds.has(tx.id)}
               onChange={(e) => {
                 setSelectedIds((prev) => {
@@ -720,7 +720,7 @@ export default function BankingReviewPage() {
           </td>
 
           {/* Datum */}
-          <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400">
+          <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
             <div className="flex items-center gap-1.5">
               {isSplitChild && (
                 <span title="Teil einer aufgeteilten Transaktion"
@@ -737,7 +737,7 @@ export default function BankingReviewPage() {
             {fmt(Number(tx.amount))}
             {tx.confidence !== null && tx.confidence !== undefined && (
               <div className={`text-[10px] font-normal ${
-                tx.confidence > 0.85 ? "text-emerald-500" : "text-zinc-400"
+                tx.confidence > 0.85 ? "text-emerald-500" : "text-slate-400"
               }`}>
                 {Math.round(tx.confidence * 100)} % sicher
               </div>
@@ -746,11 +746,11 @@ export default function BankingReviewPage() {
 
           {/* Beschreibung */}
           <td className="max-w-[220px] px-4 py-3">
-            <p className="truncate font-medium text-zinc-800 dark:text-zinc-200">
-              {tx.counterpart ?? <span className="text-zinc-400">—</span>}
+            <p className="truncate font-medium text-slate-800 dark:text-slate-200">
+              {tx.counterpart ?? <span className="text-slate-400">—</span>}
             </p>
             {tx.description && (
-              <p className="truncate text-xs text-zinc-400 dark:text-zinc-500">{tx.description}</p>
+              <p className="truncate text-xs text-slate-400 dark:text-slate-500">{tx.description}</p>
             )}
           </td>
 
@@ -762,7 +762,7 @@ export default function BankingReviewPage() {
                   {ANLAGE_V_CATEGORY_LABELS[tx.category as AnlageVCategory] ?? tx.category}
                 </span>
                 {tx.anlage_v_zeile && (
-                  <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500">
                     Anlage V · Z. {tx.anlage_v_zeile}
                   </span>
                 )}
@@ -778,8 +778,8 @@ export default function BankingReviewPage() {
           {/* Immobilie */}
           <td className="px-4 py-3">
             {tx.property?.name
-              ? <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">{tx.property.name}</span>
-              : <span className="text-xs text-zinc-300 dark:text-zinc-600">—</span>}
+              ? <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400">{tx.property.name}</span>
+              : <span className="text-xs text-slate-300 dark:text-slate-600">—</span>}
           </td>
 
           {/* Aktionen */}
@@ -807,7 +807,7 @@ export default function BankingReviewPage() {
               )}
               {!isEditing && !isSplitting && (
                 <button type="button" onClick={() => startEdit(tx)}
-                  className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                  className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">
                   Ändern
                 </button>
               )}
@@ -817,7 +817,7 @@ export default function BankingReviewPage() {
                   className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
                     isDone
                       ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
-                      : "bg-zinc-900 text-white hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                      : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
                   }`}>
                   {isSaving
                     ? <span className="flex items-center gap-1"><span className="h-3 w-3 animate-spin rounded-full border border-white/40 border-t-white" /></span>
@@ -831,28 +831,28 @@ export default function BankingReviewPage() {
 
         {/* ── Detail-Expansion ───────────────────────────────────────────────── */}
         {isExpanded && !isEditing && !isSplitting && (
-          <tr key={`${tx.id}-detail`} className="bg-zinc-50 dark:bg-zinc-800/30">
+          <tr key={`${tx.id}-detail`} className="bg-slate-50 dark:bg-slate-800/30">
             <td colSpan={7} className="px-4 pb-4 pt-0">
-              <div className="rounded-lg border border-zinc-200 bg-white p-3.5 dark:border-zinc-700 dark:bg-zinc-900">
+              <div className="rounded-lg border border-slate-200 bg-white p-3.5 dark:border-slate-700 dark:bg-slate-900">
                 <div className="grid gap-3 sm:grid-cols-2">
 
                   {/* Verwendungszweck */}
                   <div>
-                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                       Verwendungszweck
                     </p>
-                    <p className="text-sm text-zinc-700 dark:text-zinc-300 break-words">
-                      {tx.description ?? <span className="italic text-zinc-400">—</span>}
+                    <p className="text-sm text-slate-700 dark:text-slate-300 break-words">
+                      {tx.description ?? <span className="italic text-slate-400">—</span>}
                     </p>
                   </div>
 
                   {/* Auftraggeber / Empfänger */}
                   <div>
-                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                       Auftraggeber / Empfänger
                     </p>
-                    <p className="text-sm text-zinc-700 dark:text-zinc-300 break-words">
-                      {tx.counterpart ?? <span className="italic text-zinc-400">—</span>}
+                    <p className="text-sm text-slate-700 dark:text-slate-300 break-words">
+                      {tx.counterpart ?? <span className="italic text-slate-400">—</span>}
                     </p>
                   </div>
 
@@ -860,7 +860,7 @@ export default function BankingReviewPage() {
 
                 {/* KI-Konfidenz + Lernregel-Hinweis */}
                 {tx.confidence !== null && tx.confidence !== undefined && (
-                  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-2.5 dark:border-zinc-700">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2.5 dark:border-slate-700">
                     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
                       tx.confidence >= 0.9
                         ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
@@ -879,7 +879,7 @@ export default function BankingReviewPage() {
                       </span>
                     )}
                     {!isLearned && tx.confidence !== null && (
-                      <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                      <span className="text-xs text-slate-400 dark:text-slate-500">
                         KI-Kategorisierung
                       </span>
                     )}
@@ -892,18 +892,18 @@ export default function BankingReviewPage() {
 
         {/* ── Edit-Zeile ─────────────────────────────────────────────────────── */}
         {isEditing && (
-          <tr key={`${tx.id}-edit`} className="bg-zinc-50 dark:bg-zinc-800/40">
+          <tr key={`${tx.id}-edit`} className="bg-slate-50 dark:bg-slate-800/40">
             <td colSpan={7} className="px-4 py-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="flex-1">
-                  <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Kategorie</label>
+                  <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Kategorie</label>
                   <CategorySelect value={editCategory} onChange={setEditCategory} className="w-full" />
                 </div>
                 {properties.length > 0 && (
                   <div className="flex-1">
-                    <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Immobilie</label>
+                    <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Immobilie</label>
                     <select value={editPropertyId} onChange={(e) => setEditPropertyId(e.target.value)}
-                      className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
                       <option value="">Keine Zuordnung</option>
                       {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
@@ -911,11 +911,11 @@ export default function BankingReviewPage() {
                 )}
                 <div className="flex shrink-0 gap-2">
                   <button type="button" onClick={() => setEditingId(null)}
-                    className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">
                     Abbrechen
                   </button>
                   <button type="button" onClick={() => void handleSaveEdit(tx.id)} disabled={savingId === tx.id}
-                    className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900">
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60">
                     {savingId === tx.id ? "Speichert…" : "Speichern"}
                   </button>
                 </div>
@@ -933,33 +933,33 @@ export default function BankingReviewPage() {
               </p>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="flex-1">
-                  <label className="mb-1 block text-xs font-medium text-zinc-500">
+                  <label className="mb-1 block text-xs font-medium text-slate-500">
                     Zinsanteil (€) <span className="text-blue-500">· absetzbar Z. 35</span>
                   </label>
                   <input type="number" min="0" step="0.01"
                     value={splitDraft.interestAmount}
                     onChange={(e) => handleInterestChange(Number(tx.amount), e.target.value)}
                     placeholder="z. B. 312,50"
-                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" />
                 </div>
                 <div className="flex-1">
-                  <label className="mb-1 block text-xs font-medium text-zinc-500">
-                    Tilgungsanteil (€) <span className="text-zinc-400">· nicht absetzbar</span>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">
+                    Tilgungsanteil (€) <span className="text-slate-400">· nicht absetzbar</span>
                   </label>
                   <input type="number" min="0" step="0.01"
                     value={splitDraft.principalAmount}
                     onChange={(e) => handlePrincipalChange(Number(tx.amount), e.target.value)}
-                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" />
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="mb-1 text-xs text-zinc-400">Summe</p>
+                  <p className="mb-1 text-xs text-slate-400">Summe</p>
                   <p className={`text-sm font-semibold tabular-nums ${splitOk ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>
                     {fmt(splitSum)}
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-2">
                   <button type="button" onClick={() => setSplitId(null)}
-                    className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400">
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400">
                     Abbrechen
                   </button>
                   <button type="button" onClick={() => void handleSplit(tx)} disabled={!splitOk || isSaving}
@@ -978,21 +978,21 @@ export default function BankingReviewPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <main className="min-h-screen bg-zinc-100 px-4 py-10 dark:bg-zinc-950">
+    <main className="min-h-screen bg-slate-50 px-4 py-10 dark:bg-slate-950">
       <section className="mx-auto w-full max-w-6xl space-y-5">
 
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
               Transaktionen prüfen
             </h1>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               Kategorien bestätigen · Kreditraten aufteilen · ähnliche zusammen bearbeiten
             </p>
           </div>
           <Link href="/dashboard/banking"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">
             ← Alle Transaktionen
           </Link>
         </div>
@@ -1009,12 +1009,12 @@ export default function BankingReviewPage() {
 
         {/* Fortschrittsbalken */}
         {!loading && total > 0 && (
-          <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Fortschritt</span>
-              <span className="text-sm text-zinc-500 dark:text-zinc-400">{doneCount} / {total} bestätigt</span>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Fortschritt</span>
+              <span className="text-sm text-slate-500 dark:text-slate-400">{doneCount} / {total} bestätigt</span>
             </div>
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
               <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${progress}%` }} />
             </div>
             {progress === 100 && (
@@ -1067,10 +1067,10 @@ export default function BankingReviewPage() {
                     ? "Keine Transaktionen mit KI-Konfidenz > 85 % vorhanden"
                     : `${batchEligible.length} Transaktionen bestätigen`
                 }
-                className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
               >
                 {batchConfirming ? (
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600" />
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
                 ) : (
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -1097,7 +1097,7 @@ export default function BankingReviewPage() {
               className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
                 viewMode === "grouped"
                   ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-400"
-                  : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
               }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -1119,7 +1119,7 @@ export default function BankingReviewPage() {
               className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
                 viewMode === "kreditraten"
                   ? "border-yellow-300 bg-yellow-50 text-yellow-700 dark:border-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-400"
-                  : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
               }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
@@ -1136,7 +1136,7 @@ export default function BankingReviewPage() {
             {/* Aktiver Filter-Hinweis */}
             {viewMode !== "list" && (
               <button type="button" onClick={() => setViewMode("list")}
-                className="ml-auto text-xs text-zinc-400 underline underline-offset-2 hover:text-zinc-600 dark:hover:text-zinc-300">
+                className="ml-auto text-xs text-slate-400 underline underline-offset-2 hover:text-slate-600 dark:hover:text-slate-300">
                 Filter aufheben
               </button>
             )}
@@ -1244,7 +1244,7 @@ export default function BankingReviewPage() {
                     <select
                       value={bulkPropertyId}
                       onChange={(e) => setBulkPropertyId(e.target.value)}
-                      className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                     >
                       <option value="">— unverändert —</option>
                       <option value="__clear__">Keine Zuordnung</option>
@@ -1273,7 +1273,7 @@ export default function BankingReviewPage() {
                   <button
                     type="button"
                     onClick={() => setBulkDeleteConfirm(true)}
-                    className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-800/60 dark:bg-zinc-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                    className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-800/60 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-950/30"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4">
                       <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.712Z" clipRule="evenodd" />
@@ -1301,7 +1301,7 @@ export default function BankingReviewPage() {
                     <button
                       type="button"
                       onClick={() => setBulkDeleteConfirm(false)}
-                      className="rounded-md border border-red-200 bg-white px-3 py-1 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-800 dark:bg-zinc-900 dark:text-red-400"
+                      className="rounded-md border border-red-200 bg-white px-3 py-1 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-800 dark:bg-slate-900 dark:text-red-400"
                     >
                       Abbrechen
                     </button>
@@ -1313,14 +1313,14 @@ export default function BankingReviewPage() {
         )}
 
         {/* ── Tabelle ──────────────────────────────────────────────────────────── */}
-        <div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           {loading ? (
             <div className="flex items-center justify-center py-20">
-              <span className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600 dark:border-zinc-700 dark:border-t-zinc-300" />
+              <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600 dark:border-slate-700 dark:border-t-slate-300" />
             </div>
           ) : displayedTxs.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-20 text-center">
-              <p className="text-sm text-zinc-400 dark:text-zinc-500">
+              <p className="text-sm text-slate-400 dark:text-slate-500">
                 {viewMode === "kreditraten"
                   ? "Keine unaufgeteilten Kreditraten gefunden."
                   : "Keine Transaktionen vorhanden."}
@@ -1330,11 +1330,11 @@ export default function BankingReviewPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/60">
+                  <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
                     <th className="w-10 px-3 py-3">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-zinc-300 text-zinc-900 dark:border-zinc-600"
+                        className="h-4 w-4 rounded border-slate-300 text-slate-900 dark:border-slate-600"
                         checked={displayedTxs.length > 0 && displayedTxs.every((t) => selectedIds.has(t.id))}
                         onChange={(e) => {
                           if (e.target.checked) {
@@ -1345,18 +1345,18 @@ export default function BankingReviewPage() {
                         }}
                       />
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500">Datum</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-zinc-500">Betrag</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500">Beschreibung</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500">Kategorie</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500">Immobilie</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-zinc-500">Aktionen</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Datum</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500">Betrag</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Beschreibung</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Kategorie</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Immobilie</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500">Aktionen</th>
                   </tr>
                 </thead>
 
                 {/* ── List-View ─────────────────────────────────────────────── */}
                 {viewMode !== "grouped" && (
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {displayedTxs.map((tx) => renderRow(tx))}
                   </tbody>
                 )}
@@ -1367,14 +1367,14 @@ export default function BankingReviewPage() {
                   const isGroupEdit = groupEditing === counterpartKey;
 
                   return (
-                    <tbody key={counterpartKey} className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                    <tbody key={counterpartKey} className="divide-y divide-slate-100 dark:divide-slate-800">
 
                       {/* Gruppen-Header */}
-                      <tr className="border-b-2 border-zinc-200 bg-zinc-100/80 dark:border-zinc-700 dark:bg-zinc-800/80">
+                      <tr className="border-b-2 border-slate-200 bg-slate-100/80 dark:border-slate-700 dark:bg-slate-800/80">
                         <td colSpan={7} className="px-4 py-2.5">
                           <div className="flex items-center gap-3">
-                            <span className="font-medium text-zinc-700 dark:text-zinc-200">{counterpartKey}</span>
-                            <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400">
+                            <span className="font-medium text-slate-700 dark:text-slate-200">{counterpartKey}</span>
+                            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-500 dark:bg-slate-700 dark:text-slate-400">
                               {groupTxs.length} Transaktion{groupTxs.length !== 1 ? "en" : ""}
                             </span>
                             {openCount > 0 && (
@@ -1393,7 +1393,7 @@ export default function BankingReviewPage() {
                               className={`ml-auto rounded-md border px-2.5 py-1 text-xs font-medium transition ${
                                 isGroupEdit
                                   ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-400"
-                                  : "border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                                  : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400"
                               }`}
                             >
                               {isGroupEdit ? "Abbrechen" : "Alle bearbeiten"}
@@ -1404,16 +1404,16 @@ export default function BankingReviewPage() {
                           {isGroupEdit && (
                             <div className="mt-3 flex flex-col gap-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3 dark:border-blue-900/50 dark:bg-blue-950/20 sm:flex-row sm:items-end">
                               <div className="flex-1">
-                                <label className="mb-1 block text-xs font-medium text-zinc-500">
+                                <label className="mb-1 block text-xs font-medium text-slate-500">
                                   Kategorie für alle {groupTxs.length} Transaktionen
                                 </label>
                                 <CategorySelect value={groupCategory} onChange={setGroupCategory} className="w-full" />
                               </div>
                               {properties.length > 0 && (
                                 <div className="flex-1">
-                                  <label className="mb-1 block text-xs font-medium text-zinc-500">Immobilie</label>
+                                  <label className="mb-1 block text-xs font-medium text-slate-500">Immobilie</label>
                                   <select value={groupPropertyId} onChange={(e) => setGroupPropertyId(e.target.value)}
-                                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+                                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
                                     <option value="">Keine Zuordnung</option>
                                     {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                                   </select>
@@ -1439,8 +1439,8 @@ export default function BankingReviewPage() {
                 })}
               </table>
 
-              <div className="border-t border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
-                <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              <div className="border-t border-slate-100 px-4 py-2.5 dark:border-slate-800">
+                <p className="text-xs text-slate-400 dark:text-slate-500">
                   {displayedTxs.length} Transaktion{displayedTxs.length !== 1 ? "en" : ""}
                   {viewMode === "kreditraten" && " · Kreditraten-Filter aktiv"}
                   {viewMode === "grouped" && ` · ${grouped.length} Gruppen`}

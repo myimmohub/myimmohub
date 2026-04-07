@@ -117,8 +117,8 @@ function CustomTooltip({
   if (!active || !payload?.length) return null;
   const value = payload[0].value;
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
       <p className={`mt-0.5 text-sm font-semibold tabular-nums ${
         value >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"
       }`}>
@@ -134,7 +134,7 @@ function KpiRow({
   label,
   value,
   sub,
-  valueClass = "text-zinc-900 dark:text-zinc-100",
+  valueClass = "text-slate-900 dark:text-slate-100",
   hint,
 }: {
   label: string;
@@ -146,12 +146,12 @@ function KpiRow({
   return (
     <div className="flex items-start justify-between gap-4 py-2.5">
       <div className="min-w-0">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{label}</p>
-        {hint && <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">{hint}</p>}
+        <p className="text-sm text-slate-600 dark:text-slate-400">{label}</p>
+        {hint && <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{hint}</p>}
       </div>
       <div className="text-right shrink-0">
         <p className={`text-sm font-semibold tabular-nums ${valueClass}`}>{value}</p>
-        {sub && <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">{sub}</p>}
+        {sub && <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{sub}</p>}
       </div>
     </div>
   );
@@ -204,35 +204,35 @@ export function ProfitabilityCard({ transactions, property, today = new Date(), 
     : "text-red-600 dark:text-red-400";
 
   const taxClass = thisYear.steuerlicher_gewinn_verlust >= 0
-    ? "text-zinc-900 dark:text-zinc-100"
+    ? "text-slate-900 dark:text-slate-100"
     : "text-emerald-700 dark:text-emerald-400"; // Verlust = Steuervorteil → grün
 
   return (
-    <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
 
       {/* Header */}
-      <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-        <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">Rentabilität</h3>
-        <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
+      <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+        <h3 className="font-semibold text-slate-900 dark:text-slate-100">Rentabilität</h3>
+        <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
           Auf Basis kategorisierter Transaktionen · AfA {fmtEur(property.kaufpreis * property.afa_satz / 100)} p. a.
         </p>
       </div>
 
       {noData ? (
         <div className="flex flex-col items-center justify-center gap-2 px-5 py-12 text-center">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-zinc-300 dark:text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-300 dark:text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <p className="text-sm text-zinc-400 dark:text-zinc-500">Keine kategorisierten Transaktionen</p>
+          <p className="text-sm text-slate-400 dark:text-slate-500">Keine kategorisierten Transaktionen</p>
         </div>
       ) : (
         <>
           {/* ── Kennzahlen ──────────────────────────────────────────────────── */}
-          <div className="divide-y divide-zinc-100 px-5 dark:divide-zinc-800">
+          <div className="divide-y divide-slate-100 px-5 dark:divide-slate-800">
 
             {/* Cashflow */}
             <div>
-              <p className="pt-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              <p className="pt-4 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                 Cashflow
               </p>
               <KpiRow
@@ -251,7 +251,7 @@ export function ProfitabilityCard({ transactions, property, today = new Date(), 
 
             {/* AfA */}
             <div>
-              <p className="pt-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              <p className="pt-4 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                 AfA (§ 7 EStG)
               </p>
               <KpiRow
@@ -267,7 +267,7 @@ export function ProfitabilityCard({ transactions, property, today = new Date(), 
 
             {/* Steuerliches Ergebnis */}
             <div>
-              <p className="pt-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              <p className="pt-4 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                 Steuerliches Ergebnis (Jahr)
               </p>
               <KpiRow
@@ -286,7 +286,7 @@ export function ProfitabilityCard({ transactions, property, today = new Date(), 
 
             {/* Rendite */}
             <div className="pb-2">
-              <p className="pt-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              <p className="pt-4 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                 Rendite (annualisiert)
               </p>
               <KpiRow
@@ -299,15 +299,15 @@ export function ProfitabilityCard({ transactions, property, today = new Date(), 
                 value={fmtPct(thisYear.rendite_netto)}
                 hint="Cashflow / Kaufpreis"
                 valueClass={thisYear.rendite_netto >= 0
-                  ? "text-zinc-900 dark:text-zinc-100"
+                  ? "text-slate-900 dark:text-slate-100"
                   : "text-red-600 dark:text-red-400"}
               />
             </div>
           </div>
 
           {/* ── Trend-Diagramm ───────────────────────────────────────────────── */}
-          <div className="border-t border-zinc-100 px-5 pb-5 pt-4 dark:border-zinc-800">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <div className="border-t border-slate-100 px-5 pb-5 pt-4 dark:border-slate-800">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               Cashflow · letzte 12 Monate
             </p>
             <div className="h-40">
@@ -316,18 +316,18 @@ export function ProfitabilityCard({ transactions, property, today = new Date(), 
                   <CartesianGrid
                     vertical={false}
                     stroke="currentColor"
-                    className="text-zinc-100 dark:text-zinc-800"
+                    className="text-slate-100 dark:text-slate-800"
                   />
                   <XAxis
                     dataKey="monat"
                     tick={{ fontSize: 10, fill: "currentColor" }}
-                    className="text-zinc-400 dark:text-zinc-500"
+                    className="text-slate-400 dark:text-slate-500"
                     axisLine={false}
                     tickLine={false}
                   />
                   <YAxis
                     tick={{ fontSize: 10, fill: "currentColor" }}
-                    className="text-zinc-400 dark:text-zinc-500"
+                    className="text-slate-400 dark:text-slate-500"
                     axisLine={false}
                     tickLine={false}
                     tickFormatter={(v: number) =>
@@ -337,7 +337,7 @@ export function ProfitabilityCard({ transactions, property, today = new Date(), 
                     }
                     width={36}
                   />
-                  <ReferenceLine y={0} stroke="currentColor" className="text-zinc-300 dark:text-zinc-700" strokeWidth={1} />
+                  <ReferenceLine y={0} stroke="currentColor" className="text-slate-300 dark:text-slate-700" strokeWidth={1} />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: "transparent" }} />
                   <Bar dataKey="cashflow" radius={[3, 3, 0, 0]} maxBarSize={40}>
                     {chartData.map((entry, index) => (
@@ -351,7 +351,7 @@ export function ProfitabilityCard({ transactions, property, today = new Date(), 
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <div className="mt-2 flex items-center gap-3 text-[11px] text-zinc-400 dark:text-zinc-500">
+            <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-400 dark:text-slate-500">
               <span className="flex items-center gap-1">
                 <span className="inline-block h-2 w-2 rounded-sm bg-emerald-500" /> Positiv
               </span>
@@ -406,15 +406,15 @@ export function ProfitabilityCard({ transactions, property, today = new Date(), 
             }
 
             return (
-              <div className="mx-5 mb-5 flex items-start gap-2.5 rounded-lg bg-zinc-50 px-3.5 py-3 dark:bg-zinc-800/50">
-                <svg xmlns="http://www.w3.org/2000/svg" className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400 dark:text-zinc-500" viewBox="0 0 20 20" fill="currentColor">
+              <div className="mx-5 mb-5 flex items-start gap-2.5 rounded-lg bg-slate-50 px-3.5 py-3 dark:bg-slate-800/50">
+                <svg xmlns="http://www.w3.org/2000/svg" className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
                 <div>
-                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
                     Spekulationssteuer entfällt ab {datumFormatiert}
                   </p>
-                  <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
+                  <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
                     Noch {monate} Monate Haltefrist (§ 23 EStG)
                   </p>
                 </div>
@@ -431,22 +431,22 @@ export function ProfitabilityCard({ transactions, property, today = new Date(), 
 
 function ProfitabilitySkeleton() {
   return (
-    <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-        <div className="h-4 w-28 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
-        <div className="mt-1.5 h-3 w-48 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+        <div className="h-4 w-28 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+        <div className="mt-1.5 h-3 w-48 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
       </div>
       <div className="space-y-3 px-5 py-4">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="flex justify-between">
-            <div className="h-4 w-32 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
-            <div className="h-4 w-20 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+            <div className="h-4 w-32 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+            <div className="h-4 w-20 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
           </div>
         ))}
       </div>
-      <div className="border-t border-zinc-100 px-5 pb-5 pt-4 dark:border-zinc-800">
-        <div className="mb-3 h-3 w-36 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
-        <div className="h-40 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800" />
+      <div className="border-t border-slate-100 px-5 pb-5 pt-4 dark:border-slate-800">
+        <div className="mb-3 h-3 w-36 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+        <div className="h-40 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800" />
       </div>
     </div>
   );

@@ -90,8 +90,8 @@ export default function UploadDocument({ propertyId, onUploaded }: UploadDocumen
   };
 
   return (
-    <div className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Dokument hochladen</label>
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Dokument hochladen</label>
 
       <input
         type="file"
@@ -104,18 +104,18 @@ export default function UploadDocument({ propertyId, onUploaded }: UploadDocumen
           }
           event.currentTarget.value = "";
         }}
-        className="block w-full cursor-pointer rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-70 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:file:bg-zinc-100 dark:file:text-zinc-900 dark:hover:file:bg-zinc-300"
+        className="block w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 file:mr-3 file:rounded-md file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
       />
 
       {isUploading || progress > 0 ? (
         <div className="space-y-1">
-          <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
             <div
-              className="h-full bg-zinc-900 transition-all duration-200 dark:bg-zinc-100"
+              className="h-full bg-slate-900 transition-all duration-200 dark:bg-slate-100"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">{progress}%</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{progress}%</p>
         </div>
       ) : null}
 

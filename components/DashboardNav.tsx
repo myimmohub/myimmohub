@@ -91,18 +91,18 @@ export default function DashboardNav() {
   ];
 
   return (
-    <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white/90 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/90">
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/90">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
 
         {/* Logo */}
         <Link
           href="/dashboard"
-          className="flex items-center gap-2 font-semibold text-zinc-900 transition hover:opacity-70 dark:text-zinc-100"
+          className="flex items-center gap-2 font-semibold text-slate-900 transition hover:opacity-70 dark:text-slate-100"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600 dark:text-blue-500" viewBox="0 0 20 20" fill="currentColor">
             <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
           </svg>
-          MyImmoHub
+          <span className="text-blue-600 dark:text-blue-500">MyImmoHub</span>
         </Link>
 
         {/* Desktop-Navigation */}
@@ -113,8 +113,8 @@ export default function DashboardNav() {
             href="/dashboard"
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
               isActive("/dashboard", true)
-                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100"
+                ? "text-blue-600 font-semibold dark:text-blue-500"
+                : "text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-500"
             }`}
           >
             Dashboard
@@ -127,8 +127,8 @@ export default function DashboardNav() {
               onClick={() => setOpenDrop((v) => v === "immo" ? null : "immo")}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                 immoActive
-                  ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                  : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100"
+                  ? "text-blue-600 font-semibold dark:text-blue-500"
+                  : "text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-500"
               }`}
             >
               {HOUSE_ICON}
@@ -137,18 +137,18 @@ export default function DashboardNav() {
             </button>
 
             {openDrop === "immo" && (
-              <div className="absolute left-0 top-full mt-1.5 w-56 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+              <div className="absolute left-0 top-full mt-1.5 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                 {properties.length === 0 ? (
-                  <div className="px-4 py-3 text-sm text-zinc-400 dark:text-zinc-500">
+                  <div className="px-4 py-3 text-sm text-slate-400 dark:text-slate-500">
                     Noch keine Immobilien
                   </div>
                 ) : (
                   properties.map((p, idx) => (
                     <div key={p.id}>
-                      {idx > 0 && <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />}
+                      {idx > 0 && <div className="my-1 border-t border-slate-100 dark:border-slate-800" />}
                       {/* Immobilienname */}
                       <div className="px-3 pt-2 pb-1">
-                        <p className="truncate text-xs font-semibold text-zinc-500 dark:text-zinc-400">{p.name}</p>
+                        <p className="truncate text-xs font-semibold text-slate-500 dark:text-slate-400">{p.name}</p>
                       </div>
                       {propertyLinks(p).map((link) => (
                         <Link
@@ -156,8 +156,8 @@ export default function DashboardNav() {
                           href={link.href}
                           className={`flex items-center gap-2 px-4 py-1.5 text-sm transition ${
                             isActive(link.href)
-                              ? "bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                              : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                              ? "bg-blue-50 font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                           }`}
                         >
                           {link.label}
@@ -166,10 +166,10 @@ export default function DashboardNav() {
                     </div>
                   ))
                 )}
-                <div className="mt-1 border-t border-zinc-100 dark:border-zinc-800" />
+                <div className="mt-1 border-t border-slate-100 dark:border-slate-800" />
                 <Link
                   href="/onboarding"
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-400 transition hover:bg-zinc-50 hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-400"
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-slate-400 transition hover:bg-slate-50 hover:text-blue-600 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-blue-400"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
@@ -185,8 +185,8 @@ export default function DashboardNav() {
             href="/dashboard/documents"
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
               isActive("/dashboard/documents")
-                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100"
+                ? "text-blue-600 font-semibold dark:text-blue-500"
+                : "text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-500"
             }`}
           >
             Dokumente
@@ -197,8 +197,8 @@ export default function DashboardNav() {
             href="/dashboard/inbox"
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
               isActive("/dashboard/inbox")
-                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100"
+                ? "text-blue-600 font-semibold dark:text-blue-500"
+                : "text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-500"
             }`}
           >
             KI-Postfach
@@ -211,8 +211,8 @@ export default function DashboardNav() {
               onClick={() => setOpenDrop((v) => v === "konto" ? null : "konto")}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                 kontoActive
-                  ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                  : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100"
+                  ? "text-blue-600 font-semibold dark:text-blue-500"
+                  : "text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-500"
               }`}
             >
               {BANKING_ICON}
@@ -221,7 +221,7 @@ export default function DashboardNav() {
             </button>
 
             {openDrop === "konto" && (
-              <div className="absolute right-0 top-full mt-1.5 w-44 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+              <div className="absolute right-0 top-full mt-1.5 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                 {[
                   { href: "/dashboard/banking",        label: "Übersicht",       exact: true  },
                   { href: "/dashboard/banking/import", label: "CSV importieren", exact: false },
@@ -232,12 +232,12 @@ export default function DashboardNav() {
                     href={link.href}
                     className={`flex items-center gap-2 px-3 py-2 text-sm transition ${
                       isActive(link.href, link.exact)
-                        ? "bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                        : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                        ? "bg-blue-50 font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                     }`}
                   >
                     {isActive(link.href, link.exact) && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-zinc-900 dark:bg-zinc-100" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-blue-600 dark:bg-blue-400" />
                     )}
                     <span className={isActive(link.href, link.exact) ? "" : "ml-3.5"}>
                       {link.label}
@@ -254,7 +254,7 @@ export default function DashboardNav() {
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
           aria-label="Menü öffnen"
-          className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 sm:hidden"
+          className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 sm:hidden"
         >
           {menuOpen ? (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -270,13 +270,13 @@ export default function DashboardNav() {
 
       {/* Mobile-Menü */}
       {menuOpen && (
-        <nav className="border-t border-zinc-100 px-4 pb-3 pt-2 dark:border-zinc-800 sm:hidden">
+        <nav className="border-t border-slate-100 px-4 pb-3 pt-2 dark:border-slate-800 sm:hidden">
 
           <Link href="/dashboard"
             className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition ${
               isActive("/dashboard", true)
-                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400"
+                ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400"
             }`}
           >
             Dashboard
@@ -284,20 +284,20 @@ export default function DashboardNav() {
 
           {/* Immobilien-Abschnitt (mobil) */}
           <div className="mt-1">
-            <p className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            <p className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               {HOUSE_ICON} Immobilien
             </p>
             {properties.map((p) => (
               <div key={p.id} className="mb-2">
-                <p className="px-3 py-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400">{p.name}</p>
+                <p className="px-3 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{p.name}</p>
                 {propertyLinks(p).map((link) => (
                   <Link
                     key={link.href}
                     href={link.href}
                     className={`block rounded-lg py-2 pl-7 pr-3 text-sm font-medium transition ${
                       isActive(link.href)
-                        ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                        : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400"
+                        ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                        : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400"
                     }`}
                   >
                     {link.label}
@@ -306,7 +306,7 @@ export default function DashboardNav() {
               </div>
             ))}
             <Link href="/onboarding"
-              className="block rounded-lg py-2 pl-7 pr-3 text-sm text-zinc-400 transition hover:bg-zinc-50 hover:text-zinc-600 dark:text-zinc-500">
+              className="block rounded-lg py-2 pl-7 pr-3 text-sm text-slate-400 transition hover:bg-slate-50 hover:text-blue-600 dark:text-slate-500">
               + Immobilie hinzufügen
             </Link>
           </div>
@@ -314,8 +314,8 @@ export default function DashboardNav() {
           <Link href="/dashboard/documents"
             className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition ${
               isActive("/dashboard/documents")
-                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400"
+                ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400"
             }`}
           >
             Dokumente
@@ -324,8 +324,8 @@ export default function DashboardNav() {
           <Link href="/dashboard/inbox"
             className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition ${
               isActive("/dashboard/inbox")
-                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400"
+                ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400"
             }`}
           >
             KI-Postfach
@@ -333,7 +333,7 @@ export default function DashboardNav() {
 
           {/* Konto-Abschnitt (mobil) */}
           <div className="mt-1">
-            <p className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            <p className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               {BANKING_ICON} Konto
             </p>
             {[
@@ -346,8 +346,8 @@ export default function DashboardNav() {
                 href={link.href}
                 className={`block rounded-lg py-2 pl-7 pr-3 text-sm font-medium transition ${
                   isActive(link.href, link.exact)
-                    ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                    : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400"
+                    ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400"
                 }`}
               >
                 {link.label}

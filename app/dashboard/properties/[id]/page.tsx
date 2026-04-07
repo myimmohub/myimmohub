@@ -96,10 +96,10 @@ export default function PropertyDetailPage() {
   };
 
   return (
-    <main className="flex min-h-screen justify-center bg-zinc-100 px-4 py-10 dark:bg-zinc-950">
-      <section className="w-full max-w-2xl space-y-6 rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <main className="flex min-h-screen justify-center bg-slate-50 px-4 py-10 dark:bg-slate-950">
+      <section className="w-full max-w-2xl space-y-6 rounded-2xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         {isLoading ? (
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">Lade Immobilie...</p>
+          <p className="text-sm text-slate-600 dark:text-slate-400">Lade Immobilie...</p>
         ) : null}
 
         {!isLoading && errorMessage ? (
@@ -111,8 +111,8 @@ export default function PropertyDetailPage() {
         {!isLoading && !errorMessage ? (
           <>
             <div>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">Immobilie</p>
-              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+              <p className="text-sm text-slate-500 dark:text-slate-400">Immobilie</p>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
                 {property?.name || "Unbenannte Immobilie"}
               </h1>
             </div>
@@ -128,10 +128,10 @@ export default function PropertyDetailPage() {
             />
 
             {isAnalyzing ? (
-              <div className="space-y-2 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Dokument wird analysiert...</p>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-                  <div className="h-full w-1/2 animate-pulse rounded-full bg-zinc-900 dark:bg-zinc-100" />
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Dokument wird analysiert...</p>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                  <div className="h-full w-1/2 animate-pulse rounded-full bg-blue-600 dark:bg-blue-500" />
                 </div>
               </div>
             ) : null}

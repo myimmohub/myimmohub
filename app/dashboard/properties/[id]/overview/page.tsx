@@ -160,7 +160,7 @@ export default function PropertyOverviewPage() {
   if (isLoading) {
     return (
       <main className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-sm text-zinc-500">Lade Immobilie…</p>
+        <p className="text-sm text-slate-500">Lade Immobilie…</p>
       </main>
     );
   }
@@ -178,33 +178,33 @@ export default function PropertyOverviewPage() {
       <section className="mx-auto w-full max-w-3xl">
 
         {/* Breadcrumb */}
-        <nav className="mb-6 flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
-          <Link href="/dashboard" className="hover:text-zinc-900 dark:hover:text-zinc-100">Dashboard</Link>
+        <nav className="mb-6 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+          <Link href="/dashboard" className="hover:text-slate-900 dark:hover:text-slate-100">Dashboard</Link>
           <span>/</span>
-          <span className="text-zinc-900 dark:text-zinc-100">{property.name}</span>
+          <span className="text-slate-900 dark:text-slate-100">{property.name}</span>
         </nav>
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
               {property.name}
             </h1>
-            <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
               {TYPE_LABELS[property.type] ?? property.type} · {property.address}
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
             <Link
               href={`/dashboard/properties/${property.id}`}
-              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
             >
               Dokumente
             </Link>
             <button
               type="button"
               onClick={() => { prefillEdit(property); setSaveError(null); setIsEditing((v) => !v); }}
-              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
             >
               {isEditing ? "Abbrechen" : "Bearbeiten"}
             </button>
@@ -213,16 +213,16 @@ export default function PropertyOverviewPage() {
 
         {/* Hinweis wenn noch kein Kaufvertrag vorhanden */}
         {!isEditing && !property.kaufpreis && !property.kaufdatum && !property.baujahr && (
-          <div className="mt-6 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-6 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
-            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center dark:border-slate-700 dark:bg-slate-900/40">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Noch keine Kaufvertragsdaten vorhanden
             </p>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               Lade den Kaufvertrag hoch — die KI extrahiert die Daten automatisch.
             </p>
             <Link
               href={`/dashboard/properties/${property.id}`}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
             >
               Kaufvertrag hochladen
             </Link>
@@ -275,7 +275,7 @@ export default function PropertyOverviewPage() {
                 <Input value={editAfaSatz} onChange={setEditAfaSatz} type="number" placeholder="z. B. 2.0" />
               </FormRow>
               {editAfaSatz && (editGebaeudewert || editKaufpreis) && (
-                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                   AfA-Basis:{" "}
                   {editGebaeudewert
                     ? `${Number(editGebaeudewert).toLocaleString("de-DE")} € (Gebäudeanteil)`
@@ -287,7 +287,7 @@ export default function PropertyOverviewPage() {
             </Card>
 
             <Card title="Kaufpreisaufteilung (§ 7 EStG)">
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">
+              <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
                 Nur der Gebäudeanteil ist AfA-fähig (§ 7 Abs. 4 EStG). Grund und Boden ist nicht abschreibbar (§ 11d EStDV). Inventar kann separat als GWG abgesetzt werden (§ 6 Abs. 2 EStG).
               </p>
               <FormRow label="Gebäudeanteil (€) · AfA-Basis">
@@ -325,7 +325,7 @@ export default function PropertyOverviewPage() {
               type="button"
               onClick={() => void handleSave()}
               disabled={isSaving}
-              className="w-full rounded-lg bg-zinc-900 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+              className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
             >
               {isSaving ? "Speichert…" : "Änderungen speichern"}
             </button>
@@ -349,7 +349,7 @@ export default function PropertyOverviewPage() {
               <DataRow label="Jahresbetrag" value={formatEur(property.afa_jahresbetrag)} highlight />
               {/* AfA-Basis-Hinweis */}
               {property.afa_jahresbetrag !== null && (
-                <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
+                <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
                   Basis:{" "}
                   {property.gebaeudewert
                     ? `${formatEur(property.gebaeudewert)} Gebäudeanteil`
@@ -359,7 +359,7 @@ export default function PropertyOverviewPage() {
                 </p>
               )}
               {afaVorschlag && property.afa_satz === null && (
-                <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
+                <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
                   KI-Vorschlag: {(afaVorschlag.satz * 100).toFixed(1)} % = {formatEur(afaVorschlag.jahresbetrag)} / Jahr
                 </p>
               )}
@@ -371,9 +371,9 @@ export default function PropertyOverviewPage() {
                 <>
                   {/* Quellen-Badge */}
                   {property.kaufpreis_split_quelle && (
-                    <p className="mb-3 text-xs text-zinc-400 dark:text-zinc-500">
+                    <p className="mb-3 text-xs text-slate-400 dark:text-slate-500">
                       Quelle:{" "}
-                      <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-medium dark:bg-zinc-800">
+                      <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium dark:bg-slate-800">
                         {property.kaufpreis_split_quelle === "ki_extraktion"
                           ? "KI-Extraktion aus Kaufvertrag"
                           : property.kaufpreis_split_quelle === "bmf_schaetzung"
@@ -408,7 +408,7 @@ export default function PropertyOverviewPage() {
                           />
                         ) : null}
                       </div>
-                      <div className="mt-1.5 flex flex-wrap gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+                      <div className="mt-1.5 flex flex-wrap gap-3 text-xs text-slate-500 dark:text-slate-400">
                         {property.gebaeudewert ? (
                           <span className="flex items-center gap-1">
                             <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
@@ -445,11 +445,11 @@ export default function PropertyOverviewPage() {
                   />
                 </>
               ) : (
-                <div className="rounded-lg border border-dashed border-zinc-200 p-4 text-center dark:border-zinc-700">
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center dark:border-slate-700">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
                     Keine Kaufpreisaufteilung hinterlegt
                   </p>
-                  <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+                  <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
                     Ohne Aufteilung wird der Gesamtkaufpreis als AfA-Basis genutzt — steuerlich oft ungünstig.
                     Lade den Kaufvertrag hoch (KI extrahiert automatisch) oder trage die Werte manuell ein.
                   </p>
@@ -497,12 +497,12 @@ export default function PropertyOverviewPage() {
 
 /* ── Hilfs-Komponenten ── */
 
-const inputCls = "w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100";
+const inputCls = "w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
         {title}
       </h2>
       <div className="space-y-3">{children}</div>
@@ -512,9 +512,9 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 
 function DataRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-zinc-100 pb-3 last:border-0 last:pb-0 dark:border-zinc-800">
-      <span className="text-sm text-zinc-400 dark:text-zinc-500">{label}</span>
-      <span className={`text-sm ${highlight ? "font-semibold text-zinc-900 dark:text-zinc-100" : "text-zinc-700 dark:text-zinc-300"}`}>
+    <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 last:border-0 last:pb-0 dark:border-slate-800">
+      <span className="text-sm text-slate-400 dark:text-slate-500">{label}</span>
+      <span className={`text-sm ${highlight ? "font-semibold text-slate-900 dark:text-slate-100" : "text-slate-700 dark:text-slate-300"}`}>
         {value}
       </span>
     </div>
@@ -524,7 +524,7 @@ function DataRow({ label, value, highlight }: { label: string; value: string; hi
 function FormRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">{label}</label>
+      <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">{label}</label>
       {children}
     </div>
   );

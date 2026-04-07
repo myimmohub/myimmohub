@@ -121,21 +121,21 @@ export default function DocumentDetailPage() {
 
   if (isLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-950">
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Lade Dokument…</p>
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <p className="text-sm text-slate-500 dark:text-slate-400">Lade Dokument…</p>
       </main>
     );
   }
 
   if (error || !data) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-950">
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
         <div className="text-center">
           <p className="text-sm text-red-600 dark:text-red-400">{error ?? "Dokument nicht gefunden."}</p>
           <button
             type="button"
             onClick={() => router.back()}
-            className="mt-4 text-sm text-zinc-500 underline dark:text-zinc-400"
+            className="mt-4 text-sm text-slate-500 underline dark:text-slate-400"
           >
             Zurück
           </button>
@@ -148,23 +148,23 @@ export default function DocumentDetailPage() {
   const displayName = doc.original_filename ?? doc.file_name;
 
   return (
-    <main className="min-h-screen bg-zinc-100 px-4 py-10 dark:bg-zinc-950">
+    <main className="min-h-screen bg-slate-50 px-4 py-10 dark:bg-slate-950">
       <section className="mx-auto w-full max-w-5xl">
 
         {/* Breadcrumb */}
-        <nav className="mb-6 flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
-          <Link href="/dashboard/documents" className="hover:text-zinc-900 dark:hover:text-zinc-100">
+        <nav className="mb-6 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+          <Link href="/dashboard/documents" className="hover:text-slate-900 dark:hover:text-slate-100">
             Dokumente
           </Link>
           <span>/</span>
-          <span className="truncate text-zinc-900 dark:text-zinc-100">{displayName}</span>
+          <span className="truncate text-slate-900 dark:text-slate-100">{displayName}</span>
         </nav>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
 
           {/* Linke Spalte: Vorschau */}
           <div className="flex flex-col gap-4">
-            <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
               {signedUrl ? (
                 isImage(signedUrl) ? (
                   <img
@@ -180,7 +180,7 @@ export default function DocumentDetailPage() {
                   />
                 )
               ) : (
-                <div className="flex h-48 items-center justify-center text-sm text-zinc-400">
+                <div className="flex h-48 items-center justify-center text-sm text-slate-400">
                   Keine Vorschau verfügbar
                 </div>
               )}
@@ -191,7 +191,7 @@ export default function DocumentDetailPage() {
               <a
                 href={signedUrl}
                 download={displayName}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -203,22 +203,22 @@ export default function DocumentDetailPage() {
 
           {/* Rechte Spalte: Metadaten */}
           <div className="flex flex-col gap-4">
-            <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
 
               {/* Header */}
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <h1 className="truncate text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                  <h1 className="truncate text-lg font-semibold text-slate-900 dark:text-slate-100">
                     {displayName}
                   </h1>
                   {doc.email_from && (
-                    <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                    <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
                       Von: {doc.email_from}
                       {doc.email_subject ? ` · ${doc.email_subject}` : ""}
                     </p>
                   )}
                   {doc.ai_confidence !== null && (
-                    <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
+                    <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
                       KI-Konfidenz: {Math.round(doc.ai_confidence * 100)}%
                     </p>
                   )}
@@ -226,7 +226,7 @@ export default function DocumentDetailPage() {
                 <button
                   type="button"
                   onClick={() => { setIsEditing((v) => !v); setSaveError(null); }}
-                  className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                 >
                   {isEditing ? "Abbrechen" : "Bearbeiten"}
                 </button>
@@ -292,7 +292,7 @@ export default function DocumentDetailPage() {
                       type="button"
                       onClick={() => void handleSave()}
                       disabled={isSaving}
-                      className="mt-2 w-full rounded-lg bg-zinc-900 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                      className="mt-2 w-full rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
                     >
                       {isSaving ? "Speichert…" : "Änderungen speichern"}
                     </button>
@@ -301,28 +301,28 @@ export default function DocumentDetailPage() {
                   <>
                     <MetaRow label="Kategorie">
                       {doc.category ? (
-                        <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
                           {CATEGORY_LABELS[doc.category]}
                         </span>
                       ) : <Empty />}
                     </MetaRow>
                     <MetaRow label="Absender / Dienstleister">
                       {doc.counterpart ? (
-                        <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
                           {doc.counterpart}
                         </span>
                       ) : <Empty />}
                     </MetaRow>
                     <MetaRow label="Betrag">
                       {doc.amount !== null ? (
-                        <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
                           {doc.amount.toLocaleString("de-DE", { style: "currency", currency: "EUR" })}
                         </span>
                       ) : <Empty />}
                     </MetaRow>
                     <MetaRow label="Datum">
                       {doc.document_date ? (
-                        <span className="text-sm text-zinc-900 dark:text-zinc-100">
+                        <span className="text-sm text-slate-900 dark:text-slate-100">
                           {new Date(doc.document_date).toLocaleDateString("de-DE")}
                         </span>
                       ) : <Empty />}
@@ -331,19 +331,19 @@ export default function DocumentDetailPage() {
                       {doc.properties ? (
                         <Link
                           href={`/dashboard/properties/${doc.properties.id}`}
-                          className="text-sm text-zinc-900 underline-offset-2 hover:underline dark:text-zinc-100"
+                          className="text-sm text-slate-900 underline-offset-2 hover:underline dark:text-slate-100"
                         >
                           {doc.properties.name}
                         </Link>
                       ) : <Empty />}
                     </MetaRow>
                     <MetaRow label="Hinzugefügt">
-                      <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                      <span className="text-sm text-slate-500 dark:text-slate-400">
                         {new Date(doc.created_at).toLocaleDateString("de-DE")}
                       </span>
                     </MetaRow>
                     <MetaRow label="Quelle">
-                      <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                      <span className="text-sm text-slate-500 dark:text-slate-400">
                         {doc.source === "email" ? "E-Mail" : doc.source ?? "—"}
                       </span>
                     </MetaRow>
@@ -354,11 +354,11 @@ export default function DocumentDetailPage() {
 
             {/* Extrahierter Text */}
             {doc.extracted_text && (
-              <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <h2 className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <h2 className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">
                   Extrahierter Text
                 </h2>
-                <p className="max-h-64 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+                <p className="max-h-64 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-slate-600 dark:text-slate-400">
                   {doc.extracted_text}
                 </p>
               </div>
@@ -371,12 +371,12 @@ export default function DocumentDetailPage() {
 }
 
 const inputClass =
-  "w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100";
+  "w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+      <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
         {label}
       </label>
       {children}
@@ -386,13 +386,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-zinc-100 pb-3 dark:border-zinc-800">
-      <span className="shrink-0 text-sm text-zinc-400 dark:text-zinc-500">{label}</span>
+    <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3 dark:border-slate-800">
+      <span className="shrink-0 text-sm text-slate-400 dark:text-slate-500">{label}</span>
       <div className="text-right">{children}</div>
     </div>
   );
 }
 
 function Empty() {
-  return <span className="text-sm text-zinc-300 dark:text-zinc-600">—</span>;
+  return <span className="text-sm text-slate-300 dark:text-slate-600">—</span>;
 }

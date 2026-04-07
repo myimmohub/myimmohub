@@ -63,21 +63,21 @@ export default function PropertyLayout({ children }: { children: React.ReactNode
   return (
     <>
       {/* Sub-Navigation */}
-      <div className="sticky top-14 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/95">
+      <div className="sticky top-14 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/95">
         <div className="mx-auto max-w-6xl px-4">
           {/* Immobilienname */}
           {propertyName && (
             <div className="flex items-center gap-2 pb-0 pt-3">
               <Link
                 href="/dashboard"
-                className="text-xs text-zinc-400 transition hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+                className="text-xs text-slate-400 transition hover:text-blue-600 dark:text-slate-500 dark:hover:text-blue-400"
               >
                 Dashboard
               </Link>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-zinc-300 dark:text-zinc-600" viewBox="0 0 20 20" fill="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-slate-300 dark:text-slate-600" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
               </svg>
-              <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{propertyName}</span>
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{propertyName}</span>
             </div>
           )}
 
@@ -91,8 +91,8 @@ export default function PropertyLayout({ children }: { children: React.ReactNode
                   href={tab.href(id)}
                   className={`flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition ${
                     active
-                      ? "border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100"
-                      : "border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-200"
+                      ? "border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-400"
+                      : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200"
                   }`}
                 >
                   {tab.icon}
