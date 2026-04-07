@@ -10,6 +10,7 @@ import {
   TAX_DEDUCTIBLE,
   type AnlageVCategory,
 } from "@/lib/banking/categorizeTransaction";
+import ReceiptButton from "@/components/banking/ReceiptButton";
 
 // ── Typen ─────────────────────────────────────────────────────────────────────
 
@@ -27,6 +28,7 @@ type Transaction = {
   property_id: string | null;
   split_from_transaction_id: string | null;
   property?: { name: string } | null;
+  receipt: { id: string; filename: string } | null;
 };
 
 type Property = { id: string; name: string };
@@ -189,6 +191,7 @@ export default function BankingReviewPage() {
     // um bei fehlenden Spalten dennoch die Grunddaten anzeigen zu können.
     const extendedSelect = [...baseSelect,
       "confidence", "is_tax_deductible", "anlage_v_zeile", "split_from_transaction_id", "is_confirmed",
+      "receipts!receipts_transaction_id_fkey(id, filename)",
     ];
 
     const [{ data: txData, error: txError }, { data: propData }] = await Promise.all([
@@ -221,7 +224,7 @@ export default function BankingReviewPage() {
         "Hinweis: Einige Datenbank-Spalten fehlen noch. Bitte die SQL-Migrationen in Supabase ausführen " +
         "(is_tax_deductible, anlage_v_zeile, confidence, split_from_transaction_id).",
       );
-      const txs = (fallbackData as unknown as Transaction[]) ?? [];
+      const txs: Transaction[] = ((fallbackData as unknown as Omit<Transaction, "receipt">[]) ?? []).map((t) => ({ ...t, receipt: null }));
       setTransactions(txs);
       setProperties(propData ?? []);
       setConfirmed(new Set(txs.filter((t) => t.is_confirmed).map((t) => t.id)));
@@ -229,7 +232,11 @@ export default function BankingReviewPage() {
       return;
     }
 
-    const txs = (txData as unknown as Transaction[]) ?? [];
+    const rawTxs = (txData as unknown as (Omit<Transaction, "receipt"> & { receipts?: { id: string; filename: string }[] })[]) ?? [];
+    const txs: Transaction[] = rawTxs.map((tx) => ({
+      ...tx,
+      receipt: tx.receipts?.[0] ?? null,
+    }));
     setTransactions(txs);
     setProperties(propData ?? []);
     setConfirmed(new Set(txs.filter((t) => t.category !== null).map((t) => t.id)));
@@ -778,6 +785,11 @@ export default function BankingReviewPage() {
           {/* Aktionen */}
           <td className="px-4 py-3">
             <div className="flex items-center justify-end gap-1.5">
+              <ReceiptButton
+                transactionId={tx.id}
+                receipt={tx.receipt}
+                onLinked={loadData}
+              />
               {isSplitChild && !isSplitting && (
                 <button type="button" onClick={() => void handleUnsplit(tx)}
                   disabled={unsplitting === tx.id}
