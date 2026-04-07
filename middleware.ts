@@ -26,9 +26,9 @@ function basicAuthGuard(request: NextRequest): NextResponse | null {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Öffentliche Tools – kein Basic-Auth, kein Login erforderlich
-  const isPublicTool = pathname.startsWith("/tools");
-  if (isPublicTool) return NextResponse.next({ request });
+  // Öffentliche Seiten – kein Basic-Auth, kein Login erforderlich
+  const isPublicPage = pathname.startsWith("/tools") || pathname.startsWith("/wissen");
+  if (isPublicPage) return NextResponse.next({ request });
 
   // Basic-Auth vor allem anderen prüfen
   const guard = basicAuthGuard(request);
