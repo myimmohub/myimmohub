@@ -22,6 +22,13 @@ const FIELDS: Field[] = [
   { key: "kaufnebenkosten_geschaetzt", label: "Kaufnebenkosten (geschätzt)", type: "number", unit: "€" },
 ];
 
+/** Kaufpreisaufteilung — nur anzeigen wenn mindestens ein Wert extrahiert wurde */
+const SPLIT_FIELDS: Field[] = [
+  { key: "gebaeudewert",  label: "Gebäudeanteil (AfA-Basis)",        type: "number", unit: "€" },
+  { key: "grundwert",     label: "Grundstücksanteil (nicht absetzbar)", type: "number", unit: "€" },
+  { key: "inventarwert",  label: "Inventarwert (GWG)",                type: "number", unit: "€" },
+];
+
 type Props = {
   propertyId: string;
   data: ContractData;
@@ -36,6 +43,9 @@ export default function ContractExtraction({ propertyId, data }: Props) {
     baujahr: data.baujahr?.toString() ?? "",
     wohnflaeche: data.wohnflaeche?.toString() ?? "",
     kaufnebenkosten_geschaetzt: data.kaufnebenkosten_geschaetzt?.toString() ?? "",
+    gebaeudewert: data.gebaeudewert?.toString() ?? "",
+    grundwert: data.grundwert?.toString() ?? "",
+    inventarwert: data.inventarwert?.toString() ?? "",
   });
 
   const [confirmed, setConfirmed] = useState<Record<keyof ContractData, boolean>>({
@@ -45,6 +55,9 @@ export default function ContractExtraction({ propertyId, data }: Props) {
     baujahr: false,
     wohnflaeche: false,
     kaufnebenkosten_geschaetzt: false,
+    gebaeudewert: false,
+    grundwert: false,
+    inventarwert: false,
   });
 
   // AfA — leer bedeutet: Vorschlag aus calculateAfA verwenden
@@ -60,10 +73,11 @@ export default function ContractExtraction({ propertyId, data }: Props) {
   const afaSatzAnzeige = afaSatzOverride !== "" ? afaSatzOverride : (afaVorschlag ? (afaVorschlag.satz * 100).toFixed(1) : "");
   const afaJahresbetrag = useMemo(() => {
     const satz = Number(afaSatzAnzeige) / 100;
-    const kaufpreis = Number(values.kaufpreis);
-    if (!satz || !kaufpreis) return null;
-    return kaufpreis * satz;
-  }, [afaSatzAnzeige, values.kaufpreis]);
+    // AfA-Basis: Gebäudewert wenn angegeben, sonst Kaufpreis
+    const afaBasis = Number(values.gebaeudewert) || Number(values.kaufpreis);
+    if (!satz || !afaBasis) return null;
+    return afaBasis * satz;
+  }, [afaSatzAnzeige, values.kaufpreis, values.gebaeudewert]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -99,6 +113,13 @@ export default function ContractExtraction({ propertyId, data }: Props) {
           : null,
         afa_satz: afaSatzAnzeige ? Number(afaSatzAnzeige) / 100 : null,
         afa_jahresbetrag: afaJahresbetrag,
+        // Kaufpreisaufteilung (§ 7 EStG) — nur wenn vom KI extrahiert
+        gebaeudewert:  values.gebaeudewert  ? Number(values.gebaeudewert)  : null,
+        grundwert:     values.grundwert     ? Number(values.grundwert)     : null,
+        inventarwert:  values.inventarwert  ? Number(values.inventarwert)  : null,
+        kaufpreis_split_quelle: (values.gebaeudewert || values.grundwert || values.inventarwert)
+          ? "ki_extraktion"
+          : null,
       }),
     });
 
@@ -165,6 +186,39 @@ export default function ContractExtraction({ propertyId, data }: Props) {
           </div>
         ))}
       </div>
+
+      {/* Kaufpreisaufteilung — nur anzeigen wenn KI mindestens einen Wert gefunden hat */}
+      {(data.gebaeudewert || data.grundwert || data.inventarwert) && (
+        <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 dark:border-blue-900/40 dark:bg-blue-950/20">
+          <p className="mb-2 text-xs font-semibold text-blue-700 dark:text-blue-400">
+            Kaufpreisaufteilung erkannt (§ 7 EStG)
+          </p>
+          <p className="mb-3 text-xs text-blue-600 dark:text-blue-500">
+            Die KI hat eine Kaufpreisaufteilung im Vertrag gefunden. Nur der Gebäudeanteil ist AfA-fähig.
+          </p>
+          <div className="space-y-3">
+            {SPLIT_FIELDS.map((field) => (
+              <div key={field.key} className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    {field.label}
+                    {field.unit ? ` (${field.unit})` : ""}
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={values[field.key]}
+                    onChange={(e) => {
+                      setValues((prev) => ({ ...prev, [field.key]: e.target.value }));
+                    }}
+                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-500 dark:focus:ring-zinc-800"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* AfA-Berechnung */}
       {afaVorschlag || afaSatzAnzeige ? (

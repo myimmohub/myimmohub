@@ -68,6 +68,9 @@ export default function BankingImportPage() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [aiCategorizing, setAiCategorizing] = useState(false);
+  const [aiCategorized, setAiCategorized] = useState<number | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Properties laden für optionale Zuordnung
   useEffect(() => {
@@ -493,7 +496,61 @@ export default function BankingImportPage() {
               )}
             </div>
 
-            <div className="mt-8 flex gap-3">
+            {/* KI-Kategorisierung direkt nach Import */}
+            {importResult.inserted > 0 && (
+              <div className="mt-6 w-full rounded-xl border border-purple-200 bg-purple-50 p-4 dark:border-purple-800/50 dark:bg-purple-950/30">
+                <p className="text-sm font-medium text-purple-800 dark:text-purple-300">
+                  Transaktionen automatisch kategorisieren?
+                </p>
+                <p className="mt-0.5 text-xs text-purple-600 dark:text-purple-400">
+                  Die KI ordnet jeder Transaktion eine Anlage-V-Kategorie zu. Du kannst die Vorschläge danach prüfen und korrigieren.
+                </p>
+                {aiCategorized !== null && (
+                  <p className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                    ✓ {aiCategorized} Transaktion{aiCategorized !== 1 ? "en" : ""} kategorisiert
+                  </p>
+                )}
+                {aiError && (
+                  <div className="mt-2 rounded bg-red-50 px-3 py-2 dark:bg-red-950/40">
+                    <p className="font-mono text-xs text-red-700 dark:text-red-300 break-all">{aiError}</p>
+                  </div>
+                )}
+                {aiCategorized === null && (
+                  <button
+                    type="button"
+                    disabled={aiCategorizing}
+                    onClick={async () => {
+                      setAiCategorizing(true);
+                      setAiError(null);
+                      const res = await fetch("/api/banking/categorize", { method: "POST" });
+                      setAiCategorizing(false);
+                      const body = (await res.json()) as { categorized: number; errors: number; firstError: string | null };
+                      setAiCategorized(body.categorized);
+                      if (body.errors > 0 && body.firstError) {
+                        setAiError(`${body.errors} Fehler · ${body.firstError}`);
+                      }
+                    }}
+                    className="mt-3 inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-purple-700 disabled:opacity-60"
+                  >
+                    {aiCategorizing ? (
+                      <>
+                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                        Kategorisiere…
+                      </>
+                    ) : (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                        </svg>
+                        Jetzt KI-kategorisieren
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="mt-6 flex gap-3">
               <button
                 type="button"
                 onClick={reset}
@@ -503,10 +560,10 @@ export default function BankingImportPage() {
               </button>
               <button
                 type="button"
-                onClick={() => router.push("/dashboard")}
+                onClick={() => router.push(aiCategorized !== null ? "/dashboard/banking/review" : "/dashboard/banking")}
                 className="flex-1 rounded-lg bg-zinc-900 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
               >
-                Zum Dashboard
+                {aiCategorized !== null ? "Kategorien prüfen" : "Transaktionen anzeigen"}
               </button>
             </div>
           </div>

@@ -249,41 +249,90 @@ export default function OnboardingPage() {
         ) : null}
 
         {step === 3 ? (
-          <div className="mt-8 space-y-4">
-            <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
-              Onboarding abgeschlossen
-            </h2>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Deine erste Immobilie wurde erfasst (lokal gespeichert). In den nächsten Schritten kannst
-              du im Dashboard weitere Details pflegen, Mieter hinzufügen und Dokumente verwalten.
-            </p>
-
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-200">
-              <p className="font-medium">Zusammenfassung</p>
-              <p className="mt-2">
-                <span className="font-medium">Bezeichnung:</span> {label || "—"}
-              </p>
-              <p className="mt-1">
-                <span className="font-medium">Adresse:</span> {address || "—"}
-              </p>
-              <p className="mt-1">
-                <span className="font-medium">Typ:</span>{" "}
-                {type === "wohnung"
-                  ? "Wohnung"
-                  : type === "haus"
-                  ? "Haus"
-                  : type === "gewerbe"
-                  ? "Gewerbe"
-                  : "Sonstiges"}
-              </p>
+          <div className="mt-8 space-y-6">
+            {/* Erfolgs-Header */}
+            <div className="flex items-start gap-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-emerald-600 dark:text-emerald-400">
+                  <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+                </svg>
+              </span>
+              <div>
+                <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
+                  {label} wurde angelegt
+                </h2>
+                <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+                  {address}
+                </p>
+              </div>
             </div>
 
+            {/* Nächste Schritte */}
+            <div>
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Jetzt empfohlen — lade diese Dokumente hoch:
+              </p>
+
+              <div className="mt-3 space-y-3">
+
+                {/* Kaufvertrag */}
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-zinc-500 shadow-sm dark:bg-zinc-900 dark:text-zinc-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 0 1 2-2h4.586A2 2 0 0 1 12 2.586L15.414 6A2 2 0 0 1 16 7.414V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm2 6a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 10Zm.75 2.75a.75.75 0 0 0 0 1.5h6.5a.75.75 0 0 0 0-1.5h-6.5Z" clipRule="evenodd" />
+                      </svg>
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        Kaufvertrag
+                        <span className="ml-2 text-xs font-normal text-zinc-400">PDF</span>
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                        Die KI liest Kaufpreis, Kaufdatum, Baujahr, Wohnfläche und die Kaufpreisaufteilung
+                        (Gebäude / Grund / Inventar) automatisch aus. Das Ergebnis wird direkt in den
+                        Steckbrief übernommen und für die AfA-Berechnung genutzt.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Kontoauszug */}
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-zinc-500 shadow-sm dark:bg-zinc-900 dark:text-zinc-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                        <path fillRule="evenodd" d="M1 4a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4Zm12 4a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM4 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm13-1a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" clipRule="evenodd" />
+                        <path d="M3 13.5A1.5 1.5 0 0 1 1.5 12v-.5A2.5 2.5 0 0 0 4 14h12a2.5 2.5 0 0 0 2.5-2.5v.5a1.5 1.5 0 0 1-1.5 1.5H3Z" />
+                      </svg>
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        Kontoauszug
+                        <span className="ml-2 text-xs font-normal text-zinc-400">CSV · alle deutschen Banken</span>
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                        Buchungen werden automatisch den steuerlichen Kategorien der Anlage V zugeordnet
+                        (z. B. Schuldzinsen, Erhaltungsaufwand, Grundsteuer). Duplikate werden beim
+                        erneuten Import automatisch übersprungen.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* CTA */}
             <button
               type="button"
               onClick={handleFinish}
-              className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
             >
-              {createdPropertyId ? "Zur Immobilien-Detailseite" : "Zum Dashboard"}
+              {createdPropertyId ? "Zur Immobilie & Dokumente hochladen" : "Zum Dashboard"}
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4">
+                <path fillRule="evenodd" d="M2 8a.75.75 0 0 1 .75-.75h8.69L8.22 4.03a.75.75 0 0 1 1.06-1.06l4.5 4.5a.75.75 0 0 1 0 1.06l-4.5 4.5a.75.75 0 0 1-1.06-1.06l3.22-3.22H2.75A.75.75 0 0 1 2 8Z" clipRule="evenodd" />
+              </svg>
             </button>
           </div>
         ) : null}

@@ -20,6 +20,8 @@ export type ImportSummary = {
   skipped: number;
   /** Zeilen-Fehler aus dem CSV-Parsing sowie etwaige DB-Fehler */
   errors: { row: number; error: string }[];
+  /** IDs der neu eingefügten Transaktionen (für nachgelagerte Lern-Schleife) */
+  insertedIds: string[];
 };
 
 /**
@@ -72,6 +74,7 @@ export async function importTransactions(
 
   const inserted = insertedRows?.length ?? 0;
   const skipped = toInsert.length - inserted;
+  const insertedIds = (insertedRows ?? []).map((r) => r.id as string);
 
-  return { inserted, skipped, errors };
+  return { inserted, skipped, errors, insertedIds };
 }

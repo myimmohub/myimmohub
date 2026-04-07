@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { calculateAfA } from "@/lib/calculateAfA";
+import { ProfitabilityCard } from "@/components/properties/ProfitabilityCard";
+import type { ProfitabilityTransaction } from "@/lib/calculations/profitability";
 // supabase wird nur für den initialen Lesezugriff genutzt, Updates laufen über /api/properties/[id]
 
 type Property = {
@@ -19,6 +21,10 @@ type Property = {
   kaufnebenkosten_geschaetzt: number | null;
   afa_satz: number | null;
   afa_jahresbetrag: number | null;
+  gebaeudewert: number | null;
+  grundwert: number | null;
+  inventarwert: number | null;
+  kaufpreis_split_quelle: string | null;
   created_at: string;
 };
 
@@ -48,6 +54,7 @@ export default function PropertyOverviewPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [transactions, setTransactions] = useState<ProfitabilityTransaction[]>([]);
 
   // Edit-Felder
   const [editName, setEditName] = useState("");
@@ -59,20 +66,28 @@ export default function PropertyOverviewPage() {
   const [editWohnflaeche, setEditWohnflaeche] = useState("");
   const [editNebenkosten, setEditNebenkosten] = useState("");
   const [editAfaSatz, setEditAfaSatz] = useState("");
+  // Kaufpreisaufteilung
+  const [editGebaeudewert, setEditGebaeudewert] = useState("");
+  const [editGrundwert, setEditGrundwert]       = useState("");
+  const [editInventarwert, setEditInventarwert] = useState("");
 
   useEffect(() => {
     const load = async () => {
-      const { data, error } = await supabase
-        .from("properties")
-        .select("*")
-        .eq("id", id)
-        .single();
+      const [{ data, error }, { data: txData }] = await Promise.all([
+        supabase.from("properties").select("*").eq("id", id).single(),
+        supabase
+          .from("transactions")
+          .select("date, amount, category")
+          .eq("property_id", id)
+          .or("category.is.null,category.neq.aufgeteilt"),
+      ]);
       if (error || !data) {
         setError("Immobilie nicht gefunden.");
       } else {
         setProperty(data as Property);
         prefillEdit(data as Property);
       }
+      setTransactions((txData ?? []) as ProfitabilityTransaction[]);
       setIsLoading(false);
     };
     void load();
@@ -88,15 +103,23 @@ export default function PropertyOverviewPage() {
     setEditWohnflaeche(p.wohnflaeche?.toString() ?? "");
     setEditNebenkosten(p.kaufnebenkosten_geschaetzt?.toString() ?? "");
     setEditAfaSatz(p.afa_satz !== null ? (p.afa_satz * 100).toFixed(1) : "");
+    setEditGebaeudewert(p.gebaeudewert?.toString() ?? "");
+    setEditGrundwert(p.grundwert?.toString() ?? "");
+    setEditInventarwert(p.inventarwert?.toString() ?? "");
   };
 
   const handleSave = async () => {
     if (!property) return;
     setIsSaving(true);
 
-    const kaufpreis = editKaufpreis ? Number(editKaufpreis) : null;
-    const afaSatz = editAfaSatz ? Number(editAfaSatz) / 100 : null;
-    const afaJahresbetrag = kaufpreis && afaSatz ? kaufpreis * afaSatz : null;
+    const kaufpreis      = editKaufpreis  ? Number(editKaufpreis)  : null;
+    const afaSatz        = editAfaSatz    ? Number(editAfaSatz) / 100 : null;
+    const gebaeudewert   = editGebaeudewert  ? Number(editGebaeudewert)  : null;
+    const grundwert      = editGrundwert     ? Number(editGrundwert)     : null;
+    const inventarwert   = editInventarwert  ? Number(editInventarwert)  : null;
+    // AfA-Jahresbetrag basiert auf dem Gebäudewert (nicht Gesamtkaufpreis)
+    const afaBasis       = gebaeudewert ?? kaufpreis;
+    const afaJahresbetrag = afaBasis && afaSatz ? afaBasis * afaSatz : null;
 
     const res = await fetch(`/api/properties/${property.id}`, {
       method: "PATCH",
@@ -112,6 +135,10 @@ export default function PropertyOverviewPage() {
         kaufnebenkosten_geschaetzt: editNebenkosten ? Number(editNebenkosten) : null,
         afa_satz: afaSatz,
         afa_jahresbetrag: afaJahresbetrag,
+        gebaeudewert,
+        grundwert,
+        inventarwert,
+        kaufpreis_split_quelle: (gebaeudewert || grundwert || inventarwert) ? "manuell" : null,
       }),
     });
 
@@ -247,11 +274,46 @@ export default function PropertyOverviewPage() {
               <FormRow label="AfA-Satz (%)">
                 <Input value={editAfaSatz} onChange={setEditAfaSatz} type="number" placeholder="z. B. 2.0" />
               </FormRow>
-              {editAfaSatz && editKaufpreis && (
+              {editAfaSatz && (editGebaeudewert || editKaufpreis) && (
                 <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                  = {(Number(editKaufpreis) * Number(editAfaSatz) / 100).toLocaleString("de-DE", { maximumFractionDigits: 0 })} € / Jahr
+                  AfA-Basis:{" "}
+                  {editGebaeudewert
+                    ? `${Number(editGebaeudewert).toLocaleString("de-DE")} € (Gebäudeanteil)`
+                    : `${Number(editKaufpreis).toLocaleString("de-DE")} € (Gesamtkaufpreis)`}
+                  {" "}→{" "}
+                  {((Number(editGebaeudewert || editKaufpreis)) * Number(editAfaSatz) / 100).toLocaleString("de-DE", { maximumFractionDigits: 0 })} € / Jahr
                 </p>
               )}
+            </Card>
+
+            <Card title="Kaufpreisaufteilung (§ 7 EStG)">
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">
+                Nur der Gebäudeanteil ist AfA-fähig (§ 7 Abs. 4 EStG). Grund und Boden ist nicht abschreibbar (§ 11d EStDV). Inventar kann separat als GWG abgesetzt werden (§ 6 Abs. 2 EStG).
+              </p>
+              <FormRow label="Gebäudeanteil (€) · AfA-Basis">
+                <Input value={editGebaeudewert} onChange={setEditGebaeudewert} type="number" placeholder="z. B. 280000" />
+              </FormRow>
+              <FormRow label="Grundstücksanteil (€) · nicht abschreibbar">
+                <Input value={editGrundwert} onChange={setEditGrundwert} type="number" placeholder="z. B. 60000" />
+              </FormRow>
+              <FormRow label="Inventarwert (€) · separat absetzbar">
+                <Input value={editInventarwert} onChange={setEditInventarwert} type="number" placeholder="z. B. 10000" />
+              </FormRow>
+              {/* Summen-Validierung */}
+              {editKaufpreis && (editGebaeudewert || editGrundwert || editInventarwert) && (() => {
+                const kp   = Number(editKaufpreis);
+                const sum  = Number(editGebaeudewert || 0) + Number(editGrundwert || 0) + Number(editInventarwert || 0);
+                const diff = Math.abs(sum - kp);
+                const ok   = diff < 1;
+                return (
+                  <p className={`mt-2 text-xs ${ok ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                    Summe: {sum.toLocaleString("de-DE", { maximumFractionDigits: 0 })} €
+                    {ok
+                      ? " ✓ entspricht dem Kaufpreis"
+                      : ` · Differenz ${diff.toLocaleString("de-DE", { maximumFractionDigits: 0 })} € zum Kaufpreis`}
+                  </p>
+                );
+              })()}
             </Card>
 
             {saveError ? (
@@ -285,10 +347,113 @@ export default function PropertyOverviewPage() {
                 value={property.afa_satz !== null ? `${(property.afa_satz * 100).toFixed(1)} %` : "—"}
               />
               <DataRow label="Jahresbetrag" value={formatEur(property.afa_jahresbetrag)} highlight />
+              {/* AfA-Basis-Hinweis */}
+              {property.afa_jahresbetrag !== null && (
+                <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
+                  Basis:{" "}
+                  {property.gebaeudewert
+                    ? `${formatEur(property.gebaeudewert)} Gebäudeanteil`
+                    : property.kaufpreis
+                    ? `${formatEur(property.kaufpreis)} Gesamtkaufpreis (kein Gebäudewert hinterlegt)`
+                    : "—"}
+                </p>
+              )}
               {afaVorschlag && property.afa_satz === null && (
                 <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
                   KI-Vorschlag: {(afaVorschlag.satz * 100).toFixed(1)} % = {formatEur(afaVorschlag.jahresbetrag)} / Jahr
                 </p>
+              )}
+            </Card>
+
+            {/* ── Kaufpreisaufteilung ── */}
+            <Card title="Kaufpreisaufteilung">
+              {property.gebaeudewert || property.grundwert || property.inventarwert ? (
+                <>
+                  {/* Quellen-Badge */}
+                  {property.kaufpreis_split_quelle && (
+                    <p className="mb-3 text-xs text-zinc-400 dark:text-zinc-500">
+                      Quelle:{" "}
+                      <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-medium dark:bg-zinc-800">
+                        {property.kaufpreis_split_quelle === "ki_extraktion"
+                          ? "KI-Extraktion aus Kaufvertrag"
+                          : property.kaufpreis_split_quelle === "bmf_schaetzung"
+                          ? "BMF-Arbeitshilfe (Schätzung)"
+                          : "Manuell eingegeben"}
+                      </span>
+                    </p>
+                  )}
+                  {/* Balken-Visualisierung */}
+                  {property.kaufpreis && (
+                    <div className="mb-4">
+                      <div className="flex h-3 w-full overflow-hidden rounded-full">
+                        {property.gebaeudewert ? (
+                          <div
+                            className="bg-blue-500"
+                            style={{ width: `${(property.gebaeudewert / property.kaufpreis) * 100}%` }}
+                            title={`Gebäude: ${formatEur(property.gebaeudewert)}`}
+                          />
+                        ) : null}
+                        {property.grundwert ? (
+                          <div
+                            className="bg-amber-400"
+                            style={{ width: `${(property.grundwert / property.kaufpreis) * 100}%` }}
+                            title={`Grund: ${formatEur(property.grundwert)}`}
+                          />
+                        ) : null}
+                        {property.inventarwert ? (
+                          <div
+                            className="bg-emerald-400"
+                            style={{ width: `${(property.inventarwert / property.kaufpreis) * 100}%` }}
+                            title={`Inventar: ${formatEur(property.inventarwert)}`}
+                          />
+                        ) : null}
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+                        {property.gebaeudewert ? (
+                          <span className="flex items-center gap-1">
+                            <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
+                            Gebäude {((property.gebaeudewert / property.kaufpreis) * 100).toFixed(0)} %
+                          </span>
+                        ) : null}
+                        {property.grundwert ? (
+                          <span className="flex items-center gap-1">
+                            <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
+                            Grund {((property.grundwert / property.kaufpreis) * 100).toFixed(0)} %
+                          </span>
+                        ) : null}
+                        {property.inventarwert ? (
+                          <span className="flex items-center gap-1">
+                            <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
+                            Inventar {((property.inventarwert / property.kaufpreis) * 100).toFixed(0)} %
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
+                  <DataRow
+                    label="Gebäudeanteil · AfA-Basis"
+                    value={formatEur(property.gebaeudewert)}
+                    highlight
+                  />
+                  <DataRow
+                    label="Grundstücksanteil · nicht abschreibbar"
+                    value={formatEur(property.grundwert)}
+                  />
+                  <DataRow
+                    label="Inventarwert · GWG-Abzug möglich"
+                    value={formatEur(property.inventarwert)}
+                  />
+                </>
+              ) : (
+                <div className="rounded-lg border border-dashed border-zinc-200 p-4 text-center dark:border-zinc-700">
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    Keine Kaufpreisaufteilung hinterlegt
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+                    Ohne Aufteilung wird der Gesamtkaufpreis als AfA-Basis genutzt — steuerlich oft ungünstig.
+                    Lade den Kaufvertrag hoch (KI extrahiert automatisch) oder trage die Werte manuell ein.
+                  </p>
+                </div>
               )}
             </Card>
 
@@ -313,6 +478,16 @@ export default function PropertyOverviewPage() {
                   : "—"}
               />
             </Card>
+
+            <ProfitabilityCard
+              transactions={transactions}
+              property={{
+                kaufpreis:    property.kaufpreis ?? 0,
+                gebaeudewert: property.gebaeudewert ?? null,
+                afa_satz:     (property.afa_satz ?? 0) * 100,
+                kaufdatum:    property.kaufdatum ?? null,
+              }}
+            />
           </div>
         )}
       </section>

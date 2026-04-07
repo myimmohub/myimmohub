@@ -107,9 +107,28 @@ export default function DashboardPage() {
             <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">Deine Immobilien</h2>
 
             {properties.length === 0 ? (
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                Noch keine Immobilie vorhanden. Starte mit dem Onboarding.
-              </p>
+              <div className="flex flex-col items-center gap-4 rounded-xl border-2 border-dashed border-zinc-200 py-10 text-center dark:border-zinc-700">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-zinc-400 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-zinc-700 dark:text-zinc-300">Noch keine Immobilie angelegt</p>
+                  <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                    Füge deine erste Immobilie hinzu, um alle Funktionen zu nutzen.
+                  </p>
+                </div>
+                <Link
+                  href="/onboarding"
+                  className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                  </svg>
+                  Erste Immobilie anlegen
+                </Link>
+              </div>
             ) : (
               properties.map((property) => (
                 <div
@@ -127,7 +146,13 @@ export default function DashboardPage() {
                       href={`/dashboard/properties/${property.id}/overview`}
                       className="text-sm font-medium text-zinc-800 underline underline-offset-4 transition hover:text-zinc-950 dark:text-zinc-200 dark:hover:text-zinc-50"
                     >
-                      Übersicht
+                      Steckbrief
+                    </Link>
+                    <Link
+                      href={`/dashboard/properties/${property.id}/profitability`}
+                      className="text-sm font-medium text-zinc-800 underline underline-offset-4 transition hover:text-zinc-950 dark:text-zinc-200 dark:hover:text-zinc-50"
+                    >
+                      Profitabilität
                     </Link>
                     <Link
                       href={`/dashboard/properties/${property.id}`}

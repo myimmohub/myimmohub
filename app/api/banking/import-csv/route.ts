@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/getUser";
 import { serviceRoleClient } from "@/lib/supabase/queries";
 import { importTransactions, type ImportSummary } from "@/lib/banking/importTransactions";
+import { applyLearning } from "@/lib/banking/applyLearning";
 import type { ParsedTransaction, ParseRowError } from "@/lib/banking/parseCSV";
 
 type RequestBody = {
@@ -51,6 +52,17 @@ export async function POST(request: Request) {
     );
   }
 
+  // ── Lern-Schleife: bestätigte Regeln auf neue Transaktionen anwenden ──────
+  let learned = 0;
+  if (summary.insertedIds.length > 0) {
+    try {
+      const result = await applyLearning(serviceRoleClient(), user.id, summary.insertedIds);
+      learned = result.applied;
+    } catch {
+      // Lernfehler nie als Fatal behandeln — Import war erfolgreich
+    }
+  }
+
   // ── Zusammenfassung zurückgeben ────────────────────────────────────────────
   return NextResponse.json({
     inserted: summary.inserted,
@@ -60,6 +72,7 @@ export async function POST(request: Request) {
       summary.inserted === 0
         ? `Keine neuen Transaktionen — ${summary.skipped} Duplikat${summary.skipped !== 1 ? "e" : ""} übersprungen.`
         : `${summary.inserted} neue Transaktion${summary.inserted !== 1 ? "en" : ""} importiert` +
-          (summary.skipped > 0 ? `, ${summary.skipped} Duplikat${summary.skipped !== 1 ? "e" : ""} übersprungen.` : "."),
+          (summary.skipped > 0 ? `, ${summary.skipped} Duplikat${summary.skipped !== 1 ? "e" : ""} übersprungen.` : ".") +
+          (learned > 0 ? ` ${learned} automatisch kategorisiert (Lernregel).` : ""),
   } satisfies ImportSummary & { message: string });
 }

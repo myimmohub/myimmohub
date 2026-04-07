@@ -1,35 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
-
-export type DocumentCategory =
-  | "miete"
-  | "rechnung_handwerk"
-  | "rechnung_verwaltung"
-  | "versicherung"
-  | "nebenkostenabrechnung"
-  | "zinsen"
-  | "sonstiges";
-
-/** Anzeigetexte für alle Kategorien — zentral definiert, von UI-Komponenten importiert. */
-export const CATEGORY_LABELS: Record<DocumentCategory, string> = {
-  miete: "Miete",
-  rechnung_handwerk: "Handwerkerrechnung",
-  rechnung_verwaltung: "Verwaltungsrechnung",
-  versicherung: "Versicherung",
-  nebenkostenabrechnung: "Nebenkostenabrechnung",
-  zinsen: "Zinsen",
-  sonstiges: "Sonstiges",
-};
-
-/** Geordnete Liste aller Kategorien für Dropdowns. */
-export const ALL_CATEGORIES: DocumentCategory[] = [
-  "miete",
-  "rechnung_handwerk",
-  "rechnung_verwaltung",
-  "versicherung",
-  "nebenkostenabrechnung",
-  "zinsen",
-  "sonstiges",
-];
+export type { DocumentCategory } from "@/lib/ai/categories";
+export { CATEGORY_LABELS, ALL_CATEGORIES } from "@/lib/ai/categories";
+import type { DocumentCategory } from "@/lib/ai/categories";
 
 export type Property = {
   id: string;

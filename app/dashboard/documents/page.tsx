@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { type DocumentCategory, CATEGORY_LABELS } from "@/lib/ai/classifyDocument";
+import { type DocumentCategory, CATEGORY_LABELS } from "@/lib/ai/categories";
 import { ALLOWED_TYPES, sanitizeFileName } from "@/lib/constants";
 
 type UploadStep = "idle" | "uploading" | "analysing" | "done" | "error";
