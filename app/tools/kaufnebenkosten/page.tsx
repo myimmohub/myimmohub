@@ -35,6 +35,8 @@ const bundeslaender = Object.keys(grunderwerbsteuer).sort((a, b) => a.localeComp
 export default function KaufnebenkostenRechner() {
   const [kaufpreis, setKaufpreis] = useState<string>("300000");
   const [bundesland, setBundesland] = useState<string>("Bayern");
+  const [notarPct, setNotarPct] = useState<string>("1.2");
+  const [grundbuchPct, setGrundbuchPct] = useState<string>("0.5");
   const [mitMakler, setMitMakler] = useState<boolean>(true);
   const [maklercourtage, setMaklercourtage] = useState<string>("3.57");
 
@@ -44,8 +46,8 @@ export default function KaufnebenkostenRechner() {
 
     const gewSatz = grunderwerbsteuer[bundesland] ?? 3.5;
     const grunderwerbsteuerBetrag = (kp * gewSatz) / 100;
-    const notarkosten = kp * 0.015;
-    const grundbuch = kp * 0.005;
+    const notarkosten = (kp * parseFloat(notarPct || "0")) / 100;
+    const grundbuch = (kp * parseFloat(grundbuchPct || "0")) / 100;
     const makler = mitMakler ? (kp * parseFloat(maklercourtage || "0")) / 100 : 0;
 
     const gesamtNebenkosten = grunderwerbsteuerBetrag + notarkosten + grundbuch + makler;
@@ -64,7 +66,7 @@ export default function KaufnebenkostenRechner() {
       gesamtInvestition,
       nebenkostenPct,
     };
-  }, [kaufpreis, bundesland, mitMakler, maklercourtage]);
+  }, [kaufpreis, bundesland, notarPct, grundbuchPct, mitMakler, maklercourtage]);
 
   const inputClass =
     "w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-4 py-2 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-500";
@@ -118,6 +120,34 @@ export default function KaufnebenkostenRechner() {
                 ))}
               </select>
             </div>
+            <div>
+              <label className={labelClass}>Notarkosten (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="5"
+                step="0.1"
+                value={notarPct}
+                onChange={(e) => setNotarPct(e.target.value)}
+                className={inputClass}
+                placeholder="z. B. 1.2"
+              />
+              <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Üblich: 1,0–1,5 % · Standard: 1,2 %</p>
+            </div>
+            <div>
+              <label className={labelClass}>Grundbucheintragung (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="3"
+                step="0.1"
+                value={grundbuchPct}
+                onChange={(e) => setGrundbuchPct(e.target.value)}
+                className={inputClass}
+                placeholder="z. B. 0.5"
+              />
+              <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Üblich: ca. 0,5 %</p>
+            </div>
             <div className="flex items-center gap-3">
               <input
                 type="checkbox"
@@ -161,13 +191,13 @@ export default function KaufnebenkostenRechner() {
                 </span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-700">
-                <span className="text-sm text-zinc-600 dark:text-zinc-400">Notarkosten (1,5 %)</span>
+                <span className="text-sm text-zinc-600 dark:text-zinc-400">Notarkosten ({formatPercent(parseFloat(notarPct || "0"), 1)})</span>
                 <span className="text-base font-semibold text-zinc-800 dark:text-zinc-200">
                   {formatEuro(result.notarkosten)}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-700">
-                <span className="text-sm text-zinc-600 dark:text-zinc-400">Grundbucheintrag (0,5 %)</span>
+                <span className="text-sm text-zinc-600 dark:text-zinc-400">Grundbucheintragung ({formatPercent(parseFloat(grundbuchPct || "0"), 1)})</span>
                 <span className="text-base font-semibold text-zinc-800 dark:text-zinc-200">
                   {formatEuro(result.grundbuch)}
                 </span>
