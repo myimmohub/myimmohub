@@ -45,7 +45,7 @@ export async function importTransactions(
   }));
 
   if (transactions.length === 0) {
-    return { inserted: 0, skipped: 0, errors };
+    return { inserted: 0, skipped: 0, errors, insertedIds: [] };
   }
 
   // ── import_hash für jede Transaktion berechnen ──────────────────────────────
