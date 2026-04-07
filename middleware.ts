@@ -24,6 +24,12 @@ function basicAuthGuard(request: NextRequest): NextResponse | null {
 }
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Öffentliche Tools – kein Basic-Auth, kein Login erforderlich
+  const isPublicTool = pathname.startsWith("/tools");
+  if (isPublicTool) return NextResponse.next({ request });
+
   // Basic-Auth vor allem anderen prüfen
   const guard = basicAuthGuard(request);
   if (guard) return guard;
@@ -57,7 +63,6 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith("/auth");
 
   if (!user && !isAuthRoute) {
