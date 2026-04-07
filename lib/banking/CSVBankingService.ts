@@ -105,7 +105,7 @@ export class CSVBankingService implements BankingService {
       throw new Error(`getTransactions: ${error.message}`);
     }
 
-    return (data ?? []) as BankingTransaction[];
+    return (data ?? []) as unknown as BankingTransaction[];
   }
 
   // ── importFromCSV ───────────────────────────────────────────────────────────
