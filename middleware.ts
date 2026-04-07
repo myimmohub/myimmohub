@@ -1,7 +1,33 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+// ── HTTP Basic Auth (Seiten-Passwortschutz) ────────────────────────────────
+function basicAuthGuard(request: NextRequest): NextResponse | null {
+  const sitePassword = process.env.SITE_PASSWORD;
+  if (!sitePassword) return null; // kein Schutz wenn env-Variable fehlt
+
+  const authHeader = request.headers.get("authorization") ?? "";
+  if (authHeader.startsWith("Basic ")) {
+    const base64 = authHeader.slice(6);
+    const decoded = Buffer.from(base64, "base64").toString("utf-8");
+    // Format: "username:password" — wir prüfen nur das Passwort
+    const password = decoded.split(":").slice(1).join(":");
+    if (password === sitePassword) return null; // ✓ korrekt
+  }
+
+  return new NextResponse("Zugang gesperrt", {
+    status: 401,
+    headers: {
+      "WWW-Authenticate": `Basic realm="MyImmoHub"`,
+    },
+  });
+}
+
 export async function middleware(request: NextRequest) {
+  // Basic-Auth vor allem anderen prüfen
+  const guard = basicAuthGuard(request);
+  if (guard) return guard;
+
   let response = NextResponse.next({
     request,
   });
