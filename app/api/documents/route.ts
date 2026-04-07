@@ -75,7 +75,7 @@ export async function POST(request: Request) {
   const properties: Property[] = propertiesData ?? [];
 
   // 4. Klassifikation
-  let category = null, amount = null, documentDate = null, suggestedPropertyId = null, aiConfidence = null;
+  let category = null, amount = null, documentDate = null, counterpart = null, suggestedPropertyId = null, aiConfidence = null;
 
   if (extractedText) {
     try {
@@ -83,6 +83,7 @@ export async function POST(request: Request) {
       category = cls.category;
       amount = cls.amount;
       documentDate = cls.date;
+      counterpart = cls.counterpart;
       suggestedPropertyId = body.propertyId ?? cls.property_id;
       aiConfidence = cls.confidence;
     } catch {
@@ -98,6 +99,7 @@ export async function POST(request: Request) {
       category,
       amount,
       document_date: documentDate,
+      counterpart,
       suggested_property_id: suggestedPropertyId,
       ai_confidence: aiConfidence,
       status: extractedText ? "pending_review" : "pending_analysis",

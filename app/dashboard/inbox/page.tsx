@@ -16,6 +16,7 @@ type InboxDocument = {
   category: DocumentCategory | null;
   amount: number | null;
   document_date: string | null;
+  counterpart: string | null;
   suggested_property_id: string | null;
   ai_confidence: number | null;
   email_from: string | null;
@@ -195,6 +196,11 @@ export default function InboxPage() {
                     {doc.category ? (
                       <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
                         {CATEGORY_LABELS[doc.category]}
+                      </span>
+                    ) : null}
+                    {doc.counterpart ? (
+                      <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                        {doc.counterpart}
                       </span>
                     ) : null}
                     {doc.amount !== null ? (

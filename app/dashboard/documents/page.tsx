@@ -35,6 +35,7 @@ type Document = {
   category: DocumentCategory | null;
   amount: number | null;
   document_date: string | null;
+  counterpart: string | null;
   status: string | null;
   extracted_text: string | null;
   property_id: string | null;
@@ -277,6 +278,7 @@ export default function DocumentsPage() {
                   <tr className="border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/60">
                     <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">Datum</th>
                     <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">Dateiname</th>
+                    <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">Absender</th>
                     <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">Kategorie</th>
                     <th className="px-4 py-3 text-right font-medium text-zinc-500 dark:text-zinc-400">Betrag</th>
                     <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">Immobilie</th>
@@ -302,6 +304,9 @@ export default function DocumentsPage() {
                             …{getSnippet(doc.extracted_text, search)}…
                           </p>
                         ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 truncate max-w-[160px]">
+                        {doc.counterpart ?? "—"}
                       </td>
                       <td className="px-4 py-3">
                         {doc.category ? (

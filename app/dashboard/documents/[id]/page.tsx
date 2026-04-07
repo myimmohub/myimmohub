@@ -15,6 +15,7 @@ type DocumentDetail = {
   category: DocumentCategory | null;
   amount: number | null;
   document_date: string | null;
+  counterpart: string | null;
   status: string;
   extracted_text: string | null;
   property_id: string | null;
@@ -302,6 +303,13 @@ export default function DocumentDetailPage() {
                       {doc.category ? (
                         <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                           {CATEGORY_LABELS[doc.category]}
+                        </span>
+                      ) : <Empty />}
+                    </MetaRow>
+                    <MetaRow label="Absender / Dienstleister">
+                      {doc.counterpart ? (
+                        <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                          {doc.counterpart}
                         </span>
                       ) : <Empty />}
                     </MetaRow>

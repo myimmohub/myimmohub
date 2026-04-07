@@ -14,6 +14,7 @@ export type ClassificationResult = {
   category: DocumentCategory;
   amount: number | null;
   date: string | null; // ISO-Format YYYY-MM-DD oder null
+  counterpart: string | null; // Absender, Dienstleister, Vertragspartner
   property_id: string | null;
   confidence: number;
 };
@@ -55,14 +56,16 @@ AUFGABE:
 1. Bestimme die passendste Kategorie.
 2. Extrahiere den Gesamtbetrag in Euro (nur Zahl, z.B. 1250.00) – falls mehrere Beträge, nimm den Endbetrag/Gesamtbetrag. null wenn nicht eindeutig.
 3. Extrahiere das Hauptdatum des Dokuments (Rechnungsdatum, Vertragsdatum o.ä.) im Format YYYY-MM-DD. null wenn nicht gefunden.
-4. Ordne die Immobilie zu, deren Name oder Adresse am besten zum Dokumentinhalt passt. Gibt es keinen klaren Bezug, setze property_id auf null.
-5. Schätze deine Konfidenz (0.0–1.0).
+4. Extrahiere den Absender/Dienstleister/Vertragspartner (z.B. Firmenname, Handwerker, Versicherung, Hausverwaltung). null wenn nicht erkennbar.
+5. Ordne die Immobilie zu, deren Name oder Adresse am besten zum Dokumentinhalt passt. Gibt es keinen klaren Bezug, setze property_id auf null.
+6. Schätze deine Konfidenz (0.0–1.0).
 
 Antworte ausschließlich mit einem JSON-Objekt ohne Markdown:
 {
   "category": "<kategorie>",
   "amount": <zahl oder null>,
   "date": "<YYYY-MM-DD oder null>",
+  "counterpart": "<name oder null>",
   "property_id": "<id oder null>",
   "confidence": <0.0-1.0>
 }
@@ -78,9 +81,15 @@ ${text}`,
     .map((block) => (block as { type: "text"; text: string }).text)
     .join("");
 
+  const cleaned = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
+
   try {
-    return JSON.parse(raw) as ClassificationResult;
+    return JSON.parse(cleaned) as ClassificationResult;
   } catch {
-    throw new Error(`classifyDocument: Ungültiges JSON in API-Antwort: ${raw.slice(0, 200)}`);
+    throw new Error(`classifyDocument: Ungültiges JSON in API-Antwort: ${cleaned.slice(0, 200)}`);
   }
 }
