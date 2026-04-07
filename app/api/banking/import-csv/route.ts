@@ -65,9 +65,10 @@ export async function POST(request: Request) {
 
   // ── Zusammenfassung zurückgeben ────────────────────────────────────────────
   return NextResponse.json({
-    inserted: summary.inserted,
-    skipped:  summary.skipped,
-    errors:   summary.errors,
+    inserted:    summary.inserted,
+    skipped:     summary.skipped,
+    errors:      summary.errors,
+    insertedIds: summary.insertedIds,
     message:
       summary.inserted === 0
         ? `Keine neuen Transaktionen — ${summary.skipped} Duplikat${summary.skipped !== 1 ? "e" : ""} übersprungen.`
