@@ -87,6 +87,7 @@ export default function DashboardNav() {
   const propertyLinks = (p: Property) => [
     { href: `/dashboard/properties/${p.id}/overview`,      label: "Steckbrief"     },
     { href: `/dashboard/properties/${p.id}/profitability`, label: "Profitabilität" },
+    { href: `/dashboard/properties/${p.id}/tax`,           label: "Steuerdaten"    },
     { href: `/dashboard/properties/${p.id}`,               label: "Dokumente"      },
   ];
 
