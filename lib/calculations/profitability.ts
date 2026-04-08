@@ -108,8 +108,16 @@ export type ProfitabilityResult = {
 
 // ── Kategorien ────────────────────────────────────────────────────────────────
 
-/** Kategorien die als Einnahmen zählen */
-const EINNAHMEN_KATEGORIEN = new Set<string>([
+/** Minimaler DB-Kategorie-Typ für die Profitabilitätsberechnung */
+export type ProfitabilityDbCategory = {
+  label: string;
+  typ: string;          // "einnahme" | "ausgabe"
+  anlage_v: string | null;
+  gruppe: string;
+};
+
+/** Alte Slugs für Abwärtskompatibilität (Transaktionen vor der DB-Migration) */
+const OLD_EINNAHMEN_SLUGS = new Set<string>([
   "miete_einnahmen_wohnen",
   "miete_einnahmen_gewerbe",
   "nebenkosten_einnahmen",
@@ -117,14 +125,23 @@ const EINNAHMEN_KATEGORIEN = new Set<string>([
   "sonstige_einnahmen",
 ]);
 
-/** Kategorien die als Ausgaben zählen (alle außer Einnahmen und 'aufgeteilt') */
-const NICHT_AUSGABEN_KATEGORIEN = new Set<string>([
-  ...EINNAHMEN_KATEGORIEN,
-  "aufgeteilt",
-]);
+const OLD_ZINSEN_SLUGS = new Set<string>(["schuldzinsen"]);
 
-/** Kategorien die als Schuldzinsen (Werbungskosten Z. 35) gelten */
-const ZINSEN_KATEGORIEN = new Set<string>(["schuldzinsen"]);
+function isEinnahme(cat: string, dbCats?: Map<string, ProfitabilityDbCategory>): boolean {
+  if (dbCats) {
+    const db = dbCats.get(cat);
+    if (db) return db.typ === "einnahme";
+  }
+  return OLD_EINNAHMEN_SLUGS.has(cat);
+}
+
+function isZinsen(cat: string, dbCats?: Map<string, ProfitabilityDbCategory>): boolean {
+  if (dbCats) {
+    const db = dbCats.get(cat);
+    if (db) return db.anlage_v === "Z. 35";
+  }
+  return OLD_ZINSEN_SLUGS.has(cat);
+}
 
 // ── Hilfsfunktionen ───────────────────────────────────────────────────────────
 
@@ -170,6 +187,7 @@ export function calculateProfitability(
   transactions: ProfitabilityTransaction[],
   property: PropertyInput,
   dateRange: DateRange,
+  dbCategories?: ProfitabilityDbCategory[],
 ): ProfitabilityResult {
   const { von, bis } = dateRange;
   const { kaufpreis, afa_satz } = property;
@@ -177,6 +195,11 @@ export function calculateProfitability(
   const afaBasis = (property.gebaeudewert != null && property.gebaeudewert > 0)
     ? property.gebaeudewert
     : kaufpreis;
+
+  // DB-Kategorien als Map für schnellen Lookup
+  const dbCatMap = dbCategories
+    ? new Map(dbCategories.map((c) => [c.label, c]))
+    : undefined;
 
   // ── Zeitraum-Länge ────────────────────────────────────────────────────────
   const anzahl_monate = Math.max(0, countMonths(von, bis));
@@ -202,11 +225,11 @@ export function calculateProfitability(
     const amount = Number(tx.amount);
     const cat    = tx.category ?? "";
 
-    if (EINNAHMEN_KATEGORIEN.has(cat)) {
+    if (isEinnahme(cat, dbCatMap)) {
       einnahmen += amount; // positiv
-    } else if (!NICHT_AUSGABEN_KATEGORIEN.has(cat)) {
+    } else {
       ausgaben += Math.abs(amount); // als positiven Wert speichern
-      if (ZINSEN_KATEGORIEN.has(cat)) {
+      if (isZinsen(cat, dbCatMap)) {
         zinsen += Math.abs(amount);
       }
     }

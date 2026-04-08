@@ -162,6 +162,8 @@ function KpiRow({
 export function ProfitabilityCard({ transactions, property, today = new Date(), loading = false }: Props) {
   const currentMonthKey = getMonthKey(today);
   const currentYear     = today.getFullYear();
+  const afaBasis = (property.gebaeudewert != null && property.gebaeudewert > 0)
+    ? property.gebaeudewert : property.kaufpreis;
 
   // ── Berechnungen ────────────────────────────────────────────────────────────
   const thisMonth = useMemo(() => calculateProfitability(
@@ -214,7 +216,8 @@ export function ProfitabilityCard({ transactions, property, today = new Date(), 
       <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         <h3 className="font-semibold text-slate-900 dark:text-slate-100">Rentabilität</h3>
         <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
-          Auf Basis kategorisierter Transaktionen · AfA {fmtEur(property.kaufpreis * property.afa_satz / 100)} p. a.
+          Auf Basis kategorisierter Transaktionen · AfA {fmtEur(afaBasis * property.afa_satz / 100)} p. a.
+          {property.gebaeudewert ? " (Gebäudewert)" : ""}
         </p>
       </div>
 
@@ -257,7 +260,7 @@ export function ProfitabilityCard({ transactions, property, today = new Date(), 
               <KpiRow
                 label="Monatsanteil"
                 value={fmtEur(thisMonth.afa_periodenanteil)}
-                hint={`${property.afa_satz} % von ${fmtEur(property.kaufpreis)}`}
+                hint={`${property.afa_satz} % von ${fmtEur(afaBasis)}${property.gebaeudewert ? " (Gebäudewert)" : ""}`}
               />
               <KpiRow
                 label="Jahresbetrag"

@@ -45,8 +45,14 @@ function autoDetectMapping(headers: string[]): Mapping {
   const result: Mapping = {};
   for (const field of DB_FIELDS) {
     const candidates = AUTO_MAP[field.key];
-    const idx = lower.findIndex((h) => candidates.includes(h));
-    if (idx !== -1) result[field.key] = headers[idx];
+    // Iterate candidates in priority order (e.g. "verwendungszweck" before "buchungstext")
+    for (const candidate of candidates) {
+      const idx = lower.indexOf(candidate);
+      if (idx !== -1) {
+        result[field.key] = headers[idx];
+        break;
+      }
+    }
   }
   return result;
 }

@@ -140,7 +140,7 @@ export type CategorizeInput = {
 };
 
 export type CategorizeResult = {
-  category: AnlageVCategory;
+  category: string;
   is_tax_deductible: boolean;
   anlage_v_zeile: number | null;
   /** 0–1: Konfidenz der KI-Einschätzung */
@@ -148,6 +148,64 @@ export type CategorizeResult = {
   /** Kurzbegründung auf Deutsch (1–2 Sätze) */
   reason: string;
 };
+
+/** Kategorie-Daten aus der Datenbank (für dynamischen KI-Prompt) */
+export type DbCategoryForPrompt = {
+  label: string;
+  icon: string;
+  gruppe: string;
+  typ: string;
+  anlage_v: string | null;
+  description: string | null;
+};
+
+// ── Prompt-Bausteine ─────────────────────────────────────────────────────────
+
+function buildDynamicCategoryBlock(cats: DbCategoryForPrompt[]): string {
+  const grouped = new Map<string, DbCategoryForPrompt[]>();
+  for (const cat of cats) {
+    if (!grouped.has(cat.gruppe)) grouped.set(cat.gruppe, []);
+    grouped.get(cat.gruppe)!.push(cat);
+  }
+  const lines: string[] = [];
+  for (const [gruppe, items] of grouped) {
+    lines.push(`\n${gruppe}:`);
+    for (const cat of items) {
+      const anlage = cat.anlage_v ? ` (Anlage V ${cat.anlage_v})` : "";
+      const desc = cat.description ? ` – ${cat.description}` : "";
+      lines.push(`- ${cat.label}${anlage}${desc}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function buildLegacyCategoryBlock(): string {
+  return `
+Einnahmen:
+- Mieteinnahmen (Anlage V Z. 9 / 10 / 11)
+- Ferienvermietung – Einnahmen (Z. 9)
+- Nebenkostenerstattungen (Z. 13)
+- Sonstige Einnahmen (Z. 14)
+
+Ausgaben (steuerlich absetzbar):
+- Grundsteuer (Z. 47)
+- Versicherungen (Z. 48)
+- Hausverwaltung / WEG-Kosten (Z. 48)
+- Handwerkerleistungen (Z. 40)
+- Hausmeisterdienste (Z. 48)
+- Materialkosten (Z. 40)
+- Energieversorgung (Z. 48)
+- Wasser & Abwasser (Z. 48)
+- Müllentsorgung (Z. 48)
+- Internet / Telefon / TV (Z. 48)
+- Einrichtung / Möbel (Z. 33–39 / 48)
+- Haushaltsbedarf / Kleinausstattung (Z. 48)
+- Kreditzinsen / Schuldzinsen (Z. 35)
+- Steuerberatung / Rechtskosten (Z. 48)
+- Inserate & Vermarktung (Z. 48)
+- Fahrtkosten (Z. 48)
+- Bürokosten / Verwaltungsaufwand (Z. 48)`;
+}
 
 // ── Kategorisierungs-Funktion ─────────────────────────────────────────────────
 
@@ -159,6 +217,7 @@ export type CategorizeResult = {
  */
 export async function categorizeTransaction(
   input: CategorizeInput,
+  dbCategories?: DbCategoryForPrompt[],
 ): Promise<CategorizeResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -171,7 +230,12 @@ export async function categorizeTransaction(
   }).format(input.amount);
   const direction = input.amount >= 0 ? "Einnahme" : "Ausgabe";
 
-  const prompt = `Du bist ein deutscher Steuerexperte für Vermieter. Kategorisiere diese Immobilien-Transaktion mit der korrekten Anlage-V-Kategorie.
+  // Dynamische Kategorie-Liste aus der Datenbank
+  const categoryBlock = dbCategories && dbCategories.length > 0
+    ? buildDynamicCategoryBlock(dbCategories)
+    : buildLegacyCategoryBlock();
+
+  const prompt = `Du bist ein deutscher Steuerexperte für Vermieter. Kategorisiere diese Immobilien-Transaktion mit der korrekten Kategorie.
 
 TRANSAKTION:
 - Datum: ${input.date}
@@ -180,41 +244,18 @@ TRANSAKTION:
 - Auftraggeber / Empfänger: ${input.counterpart ?? "—"}
 
 VERFÜGBARE KATEGORIEN:
-Einnahmen:
-- miete_einnahmen_wohnen: Kaltmiete Wohnnutzung (Anlage V Z. 9)
-- miete_einnahmen_gewerbe: Kaltmiete Gewerbenutzung (Z. 10)
-- nebenkosten_einnahmen: Nebenkostenvorauszahlung vom Mieter (Z. 13)
-- mietsicherheit_einnahme: Kaution erhalten – NICHT steuerpflichtig
-- sonstige_einnahmen: Entschädigungen, Sonstiges (Z. 17)
-
-Werbungskosten (steuerlich absetzbar):
-- schuldzinsen: NUR der Zinsanteil eines Darlehens, NICHT die Tilgung (Z. 35)
-- geldbeschaffungskosten: Disagio, Bankgebühren für Kredit (Z. 36)
-- erhaltungsaufwand: Reparaturen, Handwerker, Wartung (Z. 40)
-- versicherungen: Gebäude-, Haftpflichtversicherung (Z. 45)
-- verwaltungskosten: Hausverwaltung, Steuerberatung, Kontoführung (Z. 46)
-- grundsteuer: Laufende Grundsteuer – NICHT Grunderwerbsteuer (Z. 47)
-- betriebskosten: Heizung, Wasser, Müll soweit Vermieter trägt (Z. 48)
-- reinigung: Treppenhausreinigung, Gartenarbeit (Z. 49)
-- maklerkosten: Provision bei Neuvermietung – NICHT bei Immobilienkauf (Z. 50)
-- fahrtkosten: Fahrten zur Immobilie (Z. 51)
-- rechtskosten: Anwalts-/Gerichtskosten (Z. 52)
-- sonstiges_werbungskosten: Porto, Telefon, Kleinbeträge (Z. 53)
-
-Nicht steuerlich absetzbar:
-- tilgung_kredit: Tilgungsanteil – WICHTIG: nicht in Anlage V absetzbar
-- mietsicherheit_ausgabe: Kaution zurückgezahlt
-- sonstiges_nicht_absetzbar: Grunderwerbsteuer, Kaufnebenkosten, etc.
+${categoryBlock}
 
 SONDERREGELN:
-1. Kreditrate (Annuität): Enthält der Verwendungszweck "Rate", "Annuität", "Darlehen" oder ähnliches, besteht die Zahlung aus einem Zins- UND einem Tilgungsanteil. Falls der Kontoauszug den Zinsanteil ausweist, wähle schuldzinsen. Falls nur der Gesamtbetrag erkennbar ist und keine Aufteilung vorliegt, wähle tilgung_kredit und weise in reason ausdrücklich darauf hin, dass eine manuelle Aufteilung in Zins (Zeile 35, absetzbar) und Tilgung (nicht absetzbar) beim Kreditinstitut erfragt werden sollte.
-2. Kaution / Mietsicherheit: Eine empfangene oder zurückgezahlte Kaution ist NICHT steuerpflichtig und gehört NICHT in die Anlage V. Wähle mietsicherheit_einnahme bzw. mietsicherheit_ausgabe – niemals eine Einnahmen- oder Werbungskosten-Kategorie.
-3. Maklerkosten: Provision bei Neuvermietung → maklerkosten (Werbungskosten, Zeile 50, absetzbar). Maklerprovision beim Immobilienkauf → sonstiges_nicht_absetzbar (erhöht die AfA-Bemessungsgrundlage, kein direkter Abzug).
-4. Grundsteuer vs. Grunderwerbsteuer: Die laufende Grundsteuer (wiederkehrend, ans Finanzamt oder die Gemeinde) → grundsteuer (Werbungskosten, Zeile 47, absetzbar). Die einmalige Grunderwerbsteuer beim Kauf → sonstiges_nicht_absetzbar (erhöht die AfA-Bemessungsgrundlage, kein direkter Abzug in der Anlage V).
+1. Kreditrate (Annuität): Enthält der Verwendungszweck "Rate", "Annuität", "Darlehen" oder ähnliches, handelt es sich um eine Kreditrate. Wähle "Kreditzinsen / Schuldzinsen" und weise in reason darauf hin, dass eine Aufteilung in Zins (absetzbar) und Tilgung (nicht absetzbar) nötig sein kann.
+2. Grundsteuer vs. Grunderwerbsteuer: Die laufende Grundsteuer (wiederkehrend) → "Grundsteuer". Die einmalige Grunderwerbsteuer beim Kauf gehört NICHT zu den laufenden Kosten.
+3. Wähle immer die spezifischste passende Kategorie.
+
+WICHTIG: Der Wert von "category" MUSS exakt einem der oben genannten Kategorienamen entsprechen (Groß-/Kleinschreibung beachten).
 
 Antworte ausschließlich mit einem JSON-Objekt ohne Markdown-Codeblock:
 {
-  "category": "<kategorie>",
+  "category": "<exakter Kategoriename>",
   "confidence": <0.0-1.0>,
   "reason": "<Begründung auf Deutsch, max. 8 Wörter>"
 }`;
@@ -257,7 +298,7 @@ Antworte ausschließlich mit einem JSON-Objekt ohne Markdown-Codeblock:
     .replace(/\s*```\s*$/i, "")        // schließende Fence
     .trim();
 
-  let parsed: { category: AnlageVCategory; confidence: number; reason: string };
+  let parsed: { category: string; confidence: number; reason: string };
   try {
     parsed = JSON.parse(cleaned) as typeof parsed;
   } catch {
@@ -268,10 +309,24 @@ Antworte ausschließlich mit einem JSON-Objekt ohne Markdown-Codeblock:
 
   const category = parsed.category;
 
+  // Resolve tax-deductible and Anlage-V from DB categories if available
+  if (dbCategories && dbCategories.length > 0) {
+    const dbCat = dbCategories.find((c) => c.label === category);
+    const anlageVZeile = dbCat?.anlage_v ? parseInt(dbCat.anlage_v.match(/(\d+)/)?.[1] ?? "") || null : null;
+    return {
+      category,
+      is_tax_deductible: dbCat ? dbCat.typ === "ausgabe" : false,
+      anlage_v_zeile:    anlageVZeile,
+      confidence:        parsed.confidence,
+      reason:            parsed.reason,
+    };
+  }
+
+  // Fallback: old static lookups
   return {
     category,
-    is_tax_deductible: TAX_DEDUCTIBLE[category] ?? false,
-    anlage_v_zeile:    ANLAGE_V_ZEILEN[category] ?? null,
+    is_tax_deductible: TAX_DEDUCTIBLE[category as AnlageVCategory] ?? false,
+    anlage_v_zeile:    ANLAGE_V_ZEILEN[category as AnlageVCategory] ?? null,
     confidence:        parsed.confidence,
     reason:            parsed.reason,
   };
@@ -295,12 +350,13 @@ export type BatchCategorizeResult = {
 export async function categorizeTransactions(
   transactions: CategorizeInput[],
   onProgress?: (done: number, total: number) => void,
+  dbCategories?: DbCategoryForPrompt[],
 ): Promise<BatchCategorizeResult[]> {
   const results: BatchCategorizeResult[] = [];
 
   for (let i = 0; i < transactions.length; i++) {
     try {
-      const result = await categorizeTransaction(transactions[i]);
+      const result = await categorizeTransaction(transactions[i], dbCategories);
       results.push({ index: i, result, error: null });
     } catch (err) {
       results.push({

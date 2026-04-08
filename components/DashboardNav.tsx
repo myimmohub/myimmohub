@@ -204,6 +204,18 @@ export default function DashboardNav() {
             KI-Postfach
           </Link>
 
+          {/* Einstellungen */}
+          <Link
+            href="/dashboard/settings"
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+              isActive("/dashboard/settings")
+                ? "text-blue-600 font-semibold dark:text-blue-500"
+                : "text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-500"
+            }`}
+          >
+            Einstellungen
+          </Link>
+
           {/* Konto-Dropdown */}
           <div className="relative" ref={kontoRef}>
             <button
@@ -329,6 +341,16 @@ export default function DashboardNav() {
             }`}
           >
             KI-Postfach
+          </Link>
+
+          <Link href="/dashboard/settings"
+            className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+              isActive("/dashboard/settings")
+                ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400"
+            }`}
+          >
+            Einstellungen
           </Link>
 
           {/* Konto-Abschnitt (mobil) */}

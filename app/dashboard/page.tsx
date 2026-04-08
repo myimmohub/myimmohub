@@ -1,15 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import {
+  calculateProfitability,
+  type ProfitabilityTransaction,
+  type ProfitabilityDbCategory,
+} from "@/lib/calculations/profitability";
+import {
+  loadCategoryLookup,
+  type CategoryLookup,
+} from "@/lib/banking/categoryLookup";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+} from "recharts";
 
 type PropertyRecord = {
   id: string;
   name: string;
   address: string;
   type: string;
+  kaufpreis: number | null;
+  afa_satz: number | null;
+  kaufdatum: string | null;
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -29,6 +44,9 @@ export default function DashboardPage() {
   const [fetchEmailResult, setFetchEmailResult] = useState<{ emails: number; attachments: number } | null>(null);
   const [fetchEmailError, setFetchEmailError] = useState<string | null>(null);
   const [propertyError, setPropertyError] = useState<string | null>(null);
+  const [allTransactions, setAllTransactions] = useState<ProfitabilityTransaction[]>([]);
+  const [catLookup, setCatLookup] = useState<CategoryLookup | null>(null);
+  const [profitMode, setProfitMode] = useState<"month" | "year">("month");
 
   useEffect(() => {
     const loadUser = async () => {
@@ -43,17 +61,29 @@ export default function DashboardPage() {
       setDisplayName(nameFromMetadata || user?.email || "Unbekannter Nutzer");
 
       if (user) {
-        const { data: propertyData, error } = await supabase
-          .from("properties")
-          .select("id, name, address, type")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
+        const [{ data: propertyData, error }, { data: txData }, lookupRes] =
+          await Promise.all([
+            supabase
+              .from("properties")
+              .select("id, name, address, type, kaufpreis, afa_satz, kaufdatum")
+              .eq("user_id", user.id)
+              .order("created_at", { ascending: false }),
+            supabase
+              .from("transactions")
+              .select("id, date, amount, category, property_id")
+              .eq("user_id", user.id)
+              .or("category.is.null,category.neq.aufgeteilt")
+              .order("date", { ascending: true }),
+            loadCategoryLookup(),
+          ]);
 
         if (error) {
           setPropertyError(error.message);
         } else {
           setProperties(propertyData || []);
         }
+        setAllTransactions((txData ?? []) as (ProfitabilityTransaction & { property_id?: string })[]);
+        setCatLookup(lookupRes);
       }
 
       setIsLoading(false);
@@ -229,6 +259,15 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
+      {/* Profitabilität Übersicht */}
+      {!isLoading && properties.length > 0 && <ProfitOverview
+        properties={properties}
+        transactions={allTransactions}
+        catLookup={catLookup}
+        mode={profitMode}
+        setMode={setProfitMode}
+      />}
+
       {/* KI-Postfach section */}
       <div className="mb-8 rounded-xl border border-slate-200 bg-white p-4 sm:p-6 dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300">KI-Postfach</h2>
@@ -290,5 +329,180 @@ export default function DashboardPage() {
         {isLoggingOut ? "Logout..." : "Logout"}
       </button>
     </main>
+  );
+}
+
+// ── Profitabilität Übersicht ──────────────────────────────────────────────────
+
+const MONTH_NAMES_SHORT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+
+const fmtEur = (n: number, showSign = false) => {
+  const abs = new Intl.NumberFormat("de-DE", {
+    style: "currency", currency: "EUR", maximumFractionDigits: 0,
+  }).format(Math.abs(n));
+  if (showSign && n > 0) return `+${abs}`;
+  if (n < 0) return `−${abs}`;
+  return abs;
+};
+
+const fmtEurStr = (n: number) =>
+  new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Math.abs(n));
+
+function ProfitOverview({
+  properties,
+  transactions,
+  catLookup,
+  mode,
+  setMode,
+}: {
+  properties: PropertyRecord[];
+  transactions: ProfitabilityTransaction[];
+  catLookup: CategoryLookup | null;
+  mode: "month" | "year";
+  setMode: (m: "month" | "year") => void;
+}) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  const dbCategories: ProfitabilityDbCategory[] | undefined = useMemo(() => {
+    if (!catLookup) return undefined;
+    return catLookup.categories.map((c) => ({
+      label: c.label, typ: c.typ, anlage_v: c.anlage_v, gruppe: c.gruppe,
+    }));
+  }, [catLookup]);
+
+  const dateRange = useMemo(() => {
+    if (mode === "year") {
+      return { von: `${currentYear}-01-01`, bis: `${currentYear}-12-31` };
+    }
+    const last = new Date(currentYear, currentMonth, 0).getDate();
+    return {
+      von: `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`,
+      bis: `${currentYear}-${String(currentMonth).padStart(2, "0")}-${String(last).padStart(2, "0")}`,
+    };
+  }, [mode, currentYear, currentMonth]);
+
+  const totals = useMemo(() => {
+    // Sum across all properties
+    const propInput = { kaufpreis: 0, afa_satz: 0 };
+    return calculateProfitability(transactions, propInput, dateRange, dbCategories);
+  }, [transactions, dateRange, dbCategories]);
+
+  // Monthly bar chart for the year
+  const barData = useMemo(() => {
+    // Old einnahmen slugs for fallback
+    const oldEinnahmen = new Set([
+      "miete_einnahmen_wohnen", "miete_einnahmen_gewerbe",
+      "nebenkosten_einnahmen", "mietsicherheit_einnahme", "sonstige_einnahmen",
+    ]);
+
+    return Array.from({ length: 12 }, (_, i) => {
+      const m = i + 1;
+      const von = `${currentYear}-${String(m).padStart(2, "0")}-01`;
+      const last = new Date(currentYear, m, 0).getDate();
+      const bis = `${currentYear}-${String(m).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+
+      let einnahmen = 0;
+      let ausgaben = 0;
+      for (const tx of transactions) {
+        if (tx.date < von || tx.date > bis || !tx.category || tx.category === "aufgeteilt") continue;
+        const amount = Number(tx.amount);
+        let isEinnahme = false;
+        if (catLookup) {
+          const db = catLookup.byLabel.get(tx.category);
+          if (db) isEinnahme = db.typ === "einnahme";
+          else isEinnahme = oldEinnahmen.has(tx.category);
+        } else {
+          isEinnahme = oldEinnahmen.has(tx.category);
+        }
+        if (isEinnahme) einnahmen += amount;
+        else ausgaben += Math.abs(amount);
+      }
+
+      return {
+        name: MONTH_NAMES_SHORT[i],
+        Einnahmen: Math.round(einnahmen),
+        Ausgaben: Math.round(-ausgaben),
+      };
+    });
+  }, [transactions, currentYear, catLookup]);
+
+  const periodLabel = mode === "year"
+    ? `${currentYear}`
+    : `${MONTH_NAMES_SHORT[currentMonth - 1]} ${currentYear}`;
+
+  return (
+    <div className="mb-8 rounded-xl border border-slate-200 bg-white p-4 sm:p-6 dark:border-slate-800 dark:bg-slate-900">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
+          Profitabilität Gesamt
+        </h2>
+        <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-800">
+          <button
+            type="button"
+            onClick={() => setMode("month")}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+              mode === "month"
+                ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100"
+                : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
+            }`}
+          >
+            Monat
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("year")}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+              mode === "year"
+                ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100"
+                : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
+            }`}
+          >
+            Jahr
+          </button>
+        </div>
+      </div>
+
+      <p className="mb-3 text-xs text-slate-400 dark:text-slate-500">
+        {periodLabel} · alle Immobilien
+      </p>
+
+      {/* KPI Cards */}
+      <div className="mb-4 grid grid-cols-3 gap-3">
+        <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Einnahmen</p>
+          <p className="mt-1 text-base font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{fmtEur(totals.einnahmen)}</p>
+        </div>
+        <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Ausgaben</p>
+          <p className="mt-1 text-base font-bold tabular-nums text-red-600 dark:text-red-400">{fmtEur(totals.ausgaben)}</p>
+        </div>
+        <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Cashflow</p>
+          <p className={`mt-1 text-base font-bold tabular-nums ${
+            totals.cashflow_brutto >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+          }`}>{fmtEur(totals.cashflow_brutto, true)}</p>
+        </div>
+      </div>
+
+      {/* Mini chart */}
+      {mode === "year" && (
+        <div className="mt-2">
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={barData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#94a3b8" }} />
+              <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
+              <Tooltip
+                formatter={(value, name) => [fmtEurStr(Number(value)), String(name)]}
+                contentStyle={{ fontSize: 11, borderRadius: 8, border: "1px solid #e2e8f0" }}
+              />
+              <Bar dataKey="Einnahmen" fill="#10b981" radius={[2, 2, 0, 0]} />
+              <Bar dataKey="Ausgaben" fill="#ef4444" radius={[2, 2, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
   );
 }

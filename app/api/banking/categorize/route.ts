@@ -3,9 +3,7 @@ import { getUser } from "@/lib/supabase/getUser";
 import { serviceRoleClient } from "@/lib/supabase/queries";
 import {
   categorizeTransaction,
-  ANLAGE_V_ZEILEN,
-  TAX_DEDUCTIBLE,
-  type AnlageVCategory,
+  type DbCategoryForPrompt,
 } from "@/lib/banking/categorizeTransaction";
 
 // 31 sequenzielle Claude-Calls × ~3 s = ~90 s — Timeout explizit hochsetzen
@@ -63,6 +61,16 @@ export async function POST(request: Request) {
     );
   }
 
+  // ── Kategorien aus DB laden (für dynamischen KI-Prompt) ───────────────────
+  let dbCategories: DbCategoryForPrompt[] = [];
+  const { data: catData } = await db
+    .from("categories")
+    .select("label, icon, gruppe, typ, anlage_v, description")
+    .is("deleted_at", null)
+    .order("gruppe")
+    .order("label");
+  if (catData) dbCategories = catData as DbCategoryForPrompt[];
+
   // ── KI-Kategorisierung sequenziell ────────────────────────────────────────
   // Sequenziell statt parallel, um Rate-Limits zu respektieren.
   // Fehler einzelner Transaktionen unterbrechen den Batch nicht.
@@ -72,22 +80,23 @@ export async function POST(request: Request) {
 
   for (const tx of transactions) {
     try {
-      const result = await categorizeTransaction({
-        date:        tx.date as string,
-        amount:      Number(tx.amount),
-        description: tx.description as string | null,
-        counterpart: tx.counterpart as string | null,
-      });
-
-      const cat = result.category as AnlageVCategory;
+      const result = await categorizeTransaction(
+        {
+          date:        tx.date as string,
+          amount:      Number(tx.amount),
+          description: tx.description as string | null,
+          counterpart: tx.counterpart as string | null,
+        },
+        dbCategories.length > 0 ? dbCategories : undefined,
+      );
 
       const { error: updateError } = await db
         .from("transactions")
         .update({
-          category:          cat,
+          category:          result.category,
           confidence:        result.confidence,
-          is_tax_deductible: TAX_DEDUCTIBLE[cat] ?? null,
-          anlage_v_zeile:    ANLAGE_V_ZEILEN[cat] ?? null,
+          is_tax_deductible: result.is_tax_deductible,
+          anlage_v_zeile:    result.anlage_v_zeile,
         })
         .eq("id", tx.id);
 
@@ -100,7 +109,7 @@ export async function POST(request: Request) {
     } catch (err) {
       errors++;
       const msg = err instanceof Error ? err.message : String(err);
-      firstError ??= msg; // Ersten Fehler für Diagnose merken
+      firstError ??= msg;
     }
   }
 

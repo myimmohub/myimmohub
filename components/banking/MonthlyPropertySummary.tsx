@@ -2,10 +2,10 @@
 
 import { useMemo } from "react";
 import {
-  ANLAGE_V_CATEGORY_LABELS,
   ANLAGE_V_ZEILEN,
   type AnlageVCategory,
 } from "@/lib/banking/categorizeTransaction";
+import type { CategoryLookup } from "@/lib/banking/categoryLookup";
 
 // ── Typen ─────────────────────────────────────────────────────────────────────
 
@@ -30,36 +30,25 @@ type Props = {
   month: string;
   /** Ob ein Skeleton-Loader angezeigt werden soll */
   loading?: boolean;
+  /** Kategorie-Lookup aus der DB (optional — Fallback auf alte Konstanten) */
+  catLookup?: CategoryLookup | null;
 };
 
 // ── Kategorie-Gruppen ─────────────────────────────────────────────────────────
 
-const EINNAHMEN_SET = new Set<AnlageVCategory>([
-  "miete_einnahmen_wohnen",
-  "miete_einnahmen_gewerbe",
-  "nebenkosten_einnahmen",
-  "mietsicherheit_einnahme",
-  "sonstige_einnahmen",
+// Old slugs for backward compatibility
+const OLD_EINNAHMEN_SET = new Set<string>([
+  "miete_einnahmen_wohnen", "miete_einnahmen_gewerbe",
+  "nebenkosten_einnahmen", "mietsicherheit_einnahme", "sonstige_einnahmen",
 ]);
 
-// Reihenfolge und Bezeichnung der Ausgaben-Zeilen
-const AUSGABEN_ROWS: { key: AnlageVCategory; label: string }[] = [
-  { key: "schuldzinsen",           label: "Schuldzinsen"          },
-  { key: "tilgung_kredit",         label: "Tilgung"               },
-  { key: "erhaltungsaufwand",      label: "Instandhaltung"        },
-  { key: "betriebskosten",         label: "Betriebskosten"        },
-  { key: "versicherungen",         label: "Versicherung"          },
-  { key: "grundsteuer",            label: "Grundsteuer"           },
-  { key: "verwaltungskosten",      label: "Verwaltung"            },
-  { key: "reinigung",              label: "Reinigung / Garten"    },
-  { key: "maklerkosten",           label: "Maklerkosten"          },
-  { key: "fahrtkosten",            label: "Fahrtkosten"           },
-  { key: "rechtskosten",           label: "Rechts- / Gerichtskosten" },
-  { key: "geldbeschaffungskosten", label: "Geldbeschaffungskosten" },
-  { key: "sonstiges_werbungskosten", label: "Sonst. Werbungskosten" },
-  { key: "mietsicherheit_ausgabe", label: "Kaution zurückgezahlt" },
-  { key: "sonstiges_nicht_absetzbar", label: "Sonstiges"          },
-];
+function isEinnahme(cat: string, catLookup?: CategoryLookup | null): boolean {
+  if (catLookup) {
+    const dbCat = catLookup.byLabel.get(cat);
+    if (dbCat) return dbCat.typ === "einnahme";
+  }
+  return OLD_EINNAHMEN_SET.has(cat);
+}
 
 // ── Hilfsfunktionen ───────────────────────────────────────────────────────────
 
@@ -94,7 +83,7 @@ function monthLabel(key: string) {
 
 // ── Aggregations-Hook ─────────────────────────────────────────────────────────
 
-function useSummary(transactions: SummaryTransaction[], propertyId: string | null, month: string) {
+function useSummary(transactions: SummaryTransaction[], propertyId: string | null, month: string, catLookup?: CategoryLookup | null) {
   return useMemo(() => {
     const inMonth = transactions.filter((t) => {
       if (propertyId && t.property_id !== propertyId) return false;
@@ -109,14 +98,14 @@ function useSummary(transactions: SummaryTransaction[], propertyId: string | nul
 
     function aggregate(txs: SummaryTransaction[]) {
       let einnahmen = 0;
-      const ausgaben: Partial<Record<AnlageVCategory, number>> = {};
+      const ausgaben: Record<string, number> = {};
       let ausgabenTotal = 0;
 
       for (const tx of txs) {
-        const cat = tx.category as AnlageVCategory | null;
+        const cat = tx.category;
         const amount = Number(tx.amount);
         if (!cat) continue;
-        if (EINNAHMEN_SET.has(cat)) {
+        if (isEinnahme(cat, catLookup)) {
           einnahmen += amount;
         } else {
           ausgaben[cat] = (ausgaben[cat] ?? 0) + Math.abs(amount);
@@ -133,7 +122,7 @@ function useSummary(transactions: SummaryTransaction[], propertyId: string | nul
       txCount: inMonth.length,
       hasPrev: inPrev.length > 0,
     };
-  }, [transactions, propertyId, month]);
+  }, [transactions, propertyId, month, catLookup]);
 }
 
 // ── Komponente ────────────────────────────────────────────────────────────────
@@ -144,15 +133,25 @@ export function MonthlyPropertySummary({
   propertyName,
   month,
   loading = false,
+  catLookup,
 }: Props) {
-  const { current, previous, hasPrev } = useSummary(transactions, propertyId, month);
+  const { current, previous, hasPrev } = useSummary(transactions, propertyId, month, catLookup);
 
   const cashflowDelta = current.cashflow - previous.cashflow;
   const cashflowUp    = cashflowDelta > 0;
   const cashflowSame  = Math.abs(cashflowDelta) < 0.01;
 
-  // Nur Ausgaben-Zeilen anzeigen die > 0 sind
-  const ausgabenRows = AUSGABEN_ROWS.filter(({ key }) => (current.ausgaben[key] ?? 0) > 0);
+  // Build ausgaben rows from actual data
+  const ausgabenRows = Object.entries(current.ausgaben)
+    .filter(([, amount]) => amount > 0)
+    .sort(([, a], [, b]) => b - a)
+    .map(([cat, amount]) => {
+      const dbCat = catLookup?.byLabel.get(cat);
+      const anlageV = dbCat?.anlage_v ?? (ANLAGE_V_ZEILEN[cat as AnlageVCategory] ? `Z. ${ANLAGE_V_ZEILEN[cat as AnlageVCategory]}` : null);
+      const isDeductible = dbCat ? dbCat.typ === "ausgabe" : !["tilgung_kredit", "mietsicherheit_ausgabe", "sonstiges_nicht_absetzbar"].includes(cat);
+      const label = dbCat ? `${dbCat.icon} ${dbCat.label}` : cat;
+      return { key: cat, label, amount, anlageV, isDeductible };
+    });
 
   if (loading) return <SummarySkeleton />;
 
@@ -229,20 +228,17 @@ export function MonthlyPropertySummary({
             <p className="text-sm text-slate-400 dark:text-slate-500">Keine Ausgaben</p>
           ) : (
             <div className="space-y-2">
-              {ausgabenRows.map(({ key, label }) => {
-                const amount = current.ausgaben[key] ?? 0;
+              {ausgabenRows.map(({ key, label, amount, anlageV, isDeductible }) => {
                 const prevAmount = previous.ausgaben[key] ?? 0;
-                const zeile = ANLAGE_V_ZEILEN[key];
-                const isDeductible = !["tilgung_kredit", "mietsicherheit_ausgabe", "sonstiges_nicht_absetzbar"].includes(key);
 
                 return (
                   <div key={key}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className="truncate text-sm text-slate-700 dark:text-slate-300">{label}</span>
-                        {zeile && isDeductible && (
+                        {anlageV && isDeductible && (
                           <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-500 dark:bg-blue-950/40 dark:text-blue-400">
-                            Z. {zeile}
+                            {anlageV}
                           </span>
                         )}
                         {!isDeductible && (

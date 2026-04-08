@@ -3,11 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { ANLAGE_V_CATEGORY_LABELS, type AnlageVCategory } from "@/lib/banking/categorizeTransaction";
 import {
-  ANLAGE_V_CATEGORY_LABELS,
-  ALL_ANLAGE_V_CATEGORIES,
-  type AnlageVCategory,
-} from "@/lib/banking/categorizeTransaction";
+  loadCategoryLookup,
+  getCategoryVariant as getCategoryVariantFromLookup,
+  type CategoryLookup,
+  type BadgeVariant,
+} from "@/lib/banking/categoryLookup";
 
 // ── Typen ─────────────────────────────────────────────────────────────────────
 
@@ -28,23 +30,6 @@ type Transaction = {
 type Property = { id: string; name: string };
 
 // ── Kategorie-Gruppen ─────────────────────────────────────────────────────────
-
-const EINNAHMEN_SET = new Set<string>([
-  "miete_einnahmen_wohnen", "miete_einnahmen_gewerbe",
-  "nebenkosten_einnahmen", "mietsicherheit_einnahme", "sonstige_einnahmen",
-]);
-const NICHT_ABSETZBAR_SET = new Set<string>([
-  "tilgung_kredit", "mietsicherheit_ausgabe", "sonstiges_nicht_absetzbar",
-]);
-
-type BadgeVariant = "einnahmen" | "werbungskosten" | "nicht_absetzbar" | "unbekannt";
-
-function getCategoryVariant(cat: string | null): BadgeVariant {
-  if (!cat) return "unbekannt";
-  if (EINNAHMEN_SET.has(cat)) return "einnahmen";
-  if (NICHT_ABSETZBAR_SET.has(cat)) return "nicht_absetzbar";
-  return "werbungskosten";
-}
 
 const BADGE: Record<BadgeVariant, string> = {
   einnahmen:       "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400",
@@ -81,6 +66,7 @@ export default function BankingPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [properties, setProperties]     = useState<Property[]>([]);
   const [loading, setLoading]           = useState(true);
+  const [catLookup, setCatLookup]       = useState<CategoryLookup | null>(null);
 
   // Filter-State
   const [filterMonth, setFilterMonth]       = useState<string>("");   // "YYYY-MM" oder ""
@@ -117,6 +103,12 @@ export default function BankingPage() {
       const txs = (txData as unknown as Transaction[]) ?? [];
       setTransactions(txs);
       setProperties(propData ?? []);
+
+      // Kategorien aus DB laden
+      try {
+        const lookup = await loadCategoryLookup();
+        setCatLookup(lookup);
+      } catch { /* Fallback */ }
 
       // Standard: aktueller Monat vorauswählen
       const currentMonth = getMonthKey(new Date().toISOString());
@@ -317,23 +309,18 @@ export default function BankingPage() {
             className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           >
             <option value="">Alle Kategorien</option>
-            <optgroup label="Einnahmen">
-              {ALL_ANLAGE_V_CATEGORIES.filter((c) => EINNAHMEN_SET.has(c)).map((c) => (
-                <option key={c} value={c}>{ANLAGE_V_CATEGORY_LABELS[c]}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Werbungskosten">
-              {ALL_ANLAGE_V_CATEGORIES
-                .filter((c) => !EINNAHMEN_SET.has(c) && !NICHT_ABSETZBAR_SET.has(c))
-                .map((c) => (
-                  <option key={c} value={c}>{ANLAGE_V_CATEGORY_LABELS[c]}</option>
-                ))}
-            </optgroup>
-            <optgroup label="Nicht absetzbar">
-              {ALL_ANLAGE_V_CATEGORIES.filter((c) => NICHT_ABSETZBAR_SET.has(c)).map((c) => (
-                <option key={c} value={c}>{ANLAGE_V_CATEGORY_LABELS[c]}</option>
-              ))}
-            </optgroup>
+            {catLookup && catLookup.grouped.length > 0
+              ? catLookup.grouped.map((g) => (
+                  <optgroup key={g.gruppe} label={g.gruppe}>
+                    {g.items.map((c) => (
+                      <option key={c.id} value={c.label}>{c.icon} {c.label}</option>
+                    ))}
+                  </optgroup>
+                ))
+              : Object.entries(ANLAGE_V_CATEGORY_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))
+            }
           </select>
 
           {/* Immobilie */}
@@ -423,7 +410,7 @@ export default function BankingPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {filtered.map((tx) => {
-                    const variant = getCategoryVariant(tx.category);
+                    const variant = getCategoryVariantFromLookup(tx.category, catLookup ?? undefined);
                     return (
                       <tr key={tx.id} className="transition hover:bg-slate-50 dark:hover:bg-slate-800/30">
                         {/* Datum */}
@@ -457,7 +444,9 @@ export default function BankingPage() {
                           {tx.category ? (
                             <div className="flex flex-col gap-0.5">
                               <span className={`inline-flex w-fit items-center rounded-md px-2 py-0.5 text-xs font-medium ${BADGE[variant]}`}>
-                                {ANLAGE_V_CATEGORY_LABELS[tx.category as AnlageVCategory] ?? tx.category}
+                                {catLookup?.byLabel.get(tx.category!)
+                                  ? `${catLookup.byLabel.get(tx.category!)!.icon} ${tx.category}`
+                                  : (ANLAGE_V_CATEGORY_LABELS[tx.category as AnlageVCategory] ?? tx.category)}
                               </span>
                               {tx.anlage_v_zeile && (
                                 <span className="text-[10px] text-slate-400 dark:text-slate-500">

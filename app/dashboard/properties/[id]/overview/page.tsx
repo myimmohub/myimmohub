@@ -291,13 +291,39 @@ export default function PropertyOverviewPage() {
                 Nur der Gebäudeanteil ist AfA-fähig (§ 7 Abs. 4 EStG). Grund und Boden ist nicht abschreibbar (§ 11d EStDV). Inventar kann separat als GWG abgesetzt werden (§ 6 Abs. 2 EStG).
               </p>
               <FormRow label="Gebäudeanteil (€) · AfA-Basis">
-                <Input value={editGebaeudewert} onChange={setEditGebaeudewert} type="number" placeholder="z. B. 280000" />
+                <Input
+                  value={editGebaeudewert}
+                  onChange={(v) => {
+                    setEditGebaeudewert(v);
+                    // Auto-Berechnung: Grundwert = Kaufpreis - Gebäudewert - Inventar
+                    const kp = Number(editKaufpreis);
+                    if (kp > 0 && v) {
+                      const rest = kp - Number(v) - Number(editInventarwert || 0);
+                      if (rest >= 0) setEditGrundwert(String(Math.round(rest)));
+                    }
+                  }}
+                  type="number"
+                  placeholder="z. B. 280000"
+                />
               </FormRow>
               <FormRow label="Grundstücksanteil (€) · nicht abschreibbar">
                 <Input value={editGrundwert} onChange={setEditGrundwert} type="number" placeholder="z. B. 60000" />
               </FormRow>
               <FormRow label="Inventarwert (€) · separat absetzbar">
-                <Input value={editInventarwert} onChange={setEditInventarwert} type="number" placeholder="z. B. 10000" />
+                <Input
+                  value={editInventarwert}
+                  onChange={(v) => {
+                    setEditInventarwert(v);
+                    // Auto-Berechnung: Grundwert = Kaufpreis - Gebäudewert - Inventar
+                    const kp = Number(editKaufpreis);
+                    if (kp > 0 && editGebaeudewert) {
+                      const rest = kp - Number(editGebaeudewert) - Number(v || 0);
+                      if (rest >= 0) setEditGrundwert(String(Math.round(rest)));
+                    }
+                  }}
+                  type="number"
+                  placeholder="z. B. 10000"
+                />
               </FormRow>
               {/* Summen-Validierung */}
               {editKaufpreis && (editGebaeudewert || editGrundwert || editInventarwert) && (() => {

@@ -5,11 +5,16 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import {
   ANLAGE_V_CATEGORY_LABELS,
-  ALL_ANLAGE_V_CATEGORIES,
   ANLAGE_V_ZEILEN,
   TAX_DEDUCTIBLE,
   type AnlageVCategory,
 } from "@/lib/banking/categorizeTransaction";
+import {
+  loadCategoryLookup,
+  getCategoryVariant as getCategoryVariantFromLookup,
+  type CategoryLookup,
+  type BadgeVariant,
+} from "@/lib/banking/categoryLookup";
 import ReceiptButton from "@/components/banking/ReceiptButton";
 
 // ── Typen ─────────────────────────────────────────────────────────────────────
@@ -36,23 +41,6 @@ type SplitDraft = { interestAmount: string; principalAmount: string };
 type ViewMode = "list" | "grouped" | "kreditraten";
 
 // ── Kategorie-Gruppen ─────────────────────────────────────────────────────────
-
-const EINNAHMEN_SET = new Set<string>([
-  "miete_einnahmen_wohnen", "miete_einnahmen_gewerbe",
-  "nebenkosten_einnahmen",  "mietsicherheit_einnahme", "sonstige_einnahmen",
-]);
-const NICHT_ABSETZBAR_SET = new Set<string>([
-  "tilgung_kredit", "mietsicherheit_ausgabe", "sonstiges_nicht_absetzbar",
-]);
-
-type BadgeVariant = "einnahmen" | "werbungskosten" | "nicht_absetzbar" | "unbekannt";
-
-function getCategoryVariant(cat: string | null): BadgeVariant {
-  if (!cat) return "unbekannt";
-  if (EINNAHMEN_SET.has(cat)) return "einnahmen";
-  if (NICHT_ABSETZBAR_SET.has(cat)) return "nicht_absetzbar";
-  return "werbungskosten";
-}
 
 const BADGE: Record<BadgeVariant, string> = {
   einnahmen:       "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400",
@@ -83,8 +71,31 @@ const fmtDate = (iso: string) =>
 // ── Kategorie-Dropdown (wiederverwendbar) ─────────────────────────────────────
 
 function CategorySelect({
-  value, onChange, className = "",
-}: { value: string; onChange: (v: string) => void; className?: string }) {
+  value, onChange, className = "", catLookup,
+}: { value: string; onChange: (v: string) => void; className?: string; catLookup: CategoryLookup | null }) {
+  // DB categories grouped
+  if (catLookup && catLookup.categories.length > 0) {
+    return (
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 ${className}`}
+      >
+        <option value="">— Keine Kategorie —</option>
+        {catLookup.grouped.map((g) => (
+          <optgroup key={g.gruppe} label={g.gruppe}>
+            {g.items.map((c) => (
+              <option key={c.id} value={c.label}>
+                {c.icon} {c.label}{c.anlage_v ? ` (${c.anlage_v})` : ""}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    );
+  }
+
+  // Fallback: old hardcoded categories (if DB not yet seeded)
   return (
     <select
       value={value}
@@ -92,26 +103,9 @@ function CategorySelect({
       className={`rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 ${className}`}
     >
       <option value="">— Keine Kategorie —</option>
-      <optgroup label="Einnahmen">
-        {ALL_ANLAGE_V_CATEGORIES.filter((c) => EINNAHMEN_SET.has(c)).map((c) => (
-          <option key={c} value={c}>{ANLAGE_V_CATEGORY_LABELS[c]}</option>
-        ))}
-      </optgroup>
-      <optgroup label="Werbungskosten (absetzbar)">
-        {ALL_ANLAGE_V_CATEGORIES
-          .filter((c) => !EINNAHMEN_SET.has(c) && !NICHT_ABSETZBAR_SET.has(c))
-          .map((c) => (
-            <option key={c} value={c}>
-              {ANLAGE_V_CATEGORY_LABELS[c]}
-              {ANLAGE_V_ZEILEN[c] ? ` (Z. ${ANLAGE_V_ZEILEN[c]})` : ""}
-            </option>
-          ))}
-      </optgroup>
-      <optgroup label="Nicht absetzbar">
-        {ALL_ANLAGE_V_CATEGORIES.filter((c) => NICHT_ABSETZBAR_SET.has(c)).map((c) => (
-          <option key={c} value={c}>{ANLAGE_V_CATEGORY_LABELS[c]}</option>
-        ))}
-      </optgroup>
+      {Object.entries(ANLAGE_V_CATEGORY_LABELS).map(([key, label]) => (
+        <option key={key} value={key}>{label}</option>
+      ))}
     </select>
   );
 }
@@ -123,6 +117,7 @@ export default function BankingReviewPage() {
   const [properties, setProperties]     = useState<Property[]>([]);
   const [loading, setLoading]           = useState(true);
   const [confirmed, setConfirmed]       = useState<Set<string>>(new Set());
+  const [catLookup, setCatLookup]       = useState<CategoryLookup | null>(null);
 
   // View-Modus
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -179,6 +174,12 @@ export default function BankingReviewPage() {
     setLoading(true);
     setLoadError(null);
     setBatchResult(null);
+
+    // Kategorien aus DB laden
+    try {
+      const lookup = await loadCategoryLookup();
+      setCatLookup(lookup);
+    } catch { /* Fallback auf alte Konstanten */ }
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -245,6 +246,51 @@ export default function BankingReviewPage() {
 
   useEffect(() => { void loadData(); }, [loadData]);
 
+  // ── Kategorie-Helfer (DB-first, Fallback auf alte Konstanten) ──────────────
+  const getCatLabel = useCallback((cat: string | null): string => {
+    if (!cat) return "Nicht kategorisiert";
+    if (catLookup) {
+      const dbCat = catLookup.byLabel.get(cat);
+      if (dbCat) return `${dbCat.icon} ${dbCat.label}`;
+    }
+    return ANLAGE_V_CATEGORY_LABELS[cat as AnlageVCategory] ?? cat;
+  }, [catLookup]);
+
+  const getCatAnlageV = useCallback((cat: string | null): string | null => {
+    if (!cat) return null;
+    if (catLookup) {
+      const dbCat = catLookup.byLabel.get(cat);
+      if (dbCat) return dbCat.anlage_v;
+    }
+    const z = ANLAGE_V_ZEILEN[cat as AnlageVCategory];
+    return z != null ? `Z. ${z}` : null;
+  }, [catLookup]);
+
+  const getCatTaxDeductible = useCallback((cat: string | null): boolean | null => {
+    if (!cat) return null;
+    if (catLookup) {
+      const dbCat = catLookup.byLabel.get(cat);
+      if (dbCat) return dbCat.typ === "ausgabe";
+    }
+    return TAX_DEDUCTIBLE[cat as AnlageVCategory] ?? null;
+  }, [catLookup]);
+
+  const getCatAnlageVZeile = useCallback((cat: string | null): number | null => {
+    if (!cat) return null;
+    if (catLookup) {
+      const dbCat = catLookup.byLabel.get(cat);
+      if (dbCat && dbCat.anlage_v) {
+        const match = dbCat.anlage_v.match(/(\d+)/);
+        return match ? parseInt(match[1]) : null;
+      }
+    }
+    return ANLAGE_V_ZEILEN[cat as AnlageVCategory] ?? null;
+  }, [catLookup]);
+
+  const getVariant = useCallback((cat: string | null): BadgeVariant => {
+    return getCategoryVariantFromLookup(cat, catLookup ?? undefined);
+  }, [catLookup]);
+
   // Nach Unsplit: Split-Dialog auf dem Original-Eintrag öffnen sobald er geladen ist
   useEffect(() => {
     if (!pendingSplitId || transactions.length === 0) return;
@@ -307,12 +353,11 @@ export default function BankingReviewPage() {
     setSaveError(null);
 
     const updates = batchEligible.map((tx) => {
-      const cat = tx.category as AnlageVCategory;
       return supabase
         .from("transactions")
         .update({
-          is_tax_deductible: TAX_DEDUCTIBLE[cat] ?? null,
-          anlage_v_zeile:    ANLAGE_V_ZEILEN[cat] ?? null,
+          is_tax_deductible: getCatTaxDeductible(tx.category) ?? null,
+          anlage_v_zeile:    getCatAnlageVZeile(tx.category) ?? null,
           is_confirmed:      true,
         })
         .eq("id", tx.id);
@@ -376,8 +421,8 @@ export default function BankingReviewPage() {
       const payload: Record<string, unknown> = {};
       if (bulkCategory) {
         payload.category          = cat;
-        payload.is_tax_deductible = TAX_DEDUCTIBLE[cat] ?? null;
-        payload.anlage_v_zeile    = ANLAGE_V_ZEILEN[cat] ?? null;
+        payload.is_tax_deductible = getCatTaxDeductible(cat) ?? null;
+        payload.anlage_v_zeile    = getCatAnlageVZeile(cat) ?? null;
         payload.is_confirmed      = true;
       }
       if (bulkPropertyId !== "") {
@@ -437,8 +482,8 @@ export default function BankingReviewPage() {
     const { error } = await supabase
       .from("transactions")
       .update({
-        is_tax_deductible: TAX_DEDUCTIBLE[cat] ?? null,
-        anlage_v_zeile:    ANLAGE_V_ZEILEN[cat] ?? null,
+        is_tax_deductible: getCatTaxDeductible(cat) ?? null,
+        anlage_v_zeile:    getCatAnlageVZeile(cat) ?? null,
         is_confirmed:      true,
       })
       .eq("id", tx.id);
@@ -447,7 +492,7 @@ export default function BankingReviewPage() {
     setConfirmed((prev) => new Set(prev).add(tx.id));
     setTransactions((prev) =>
       prev.map((t) => t.id === tx.id
-        ? { ...t, is_tax_deductible: TAX_DEDUCTIBLE[cat] ?? null, anlage_v_zeile: ANLAGE_V_ZEILEN[cat] ?? null, is_confirmed: true }
+        ? { ...t, is_tax_deductible: getCatTaxDeductible(cat) ?? null, anlage_v_zeile: getCatAnlageVZeile(cat) ?? null, is_confirmed: true }
         : t),
     );
   };
@@ -467,8 +512,8 @@ export default function BankingReviewPage() {
     // Erweiterte Felder nur hinzufügen wenn die Spalten laut loadData existieren
     const hasExtendedColumns = !loadError?.includes("fehlen noch");
     if (hasExtendedColumns && cat) {
-      updatePayload.is_tax_deductible = TAX_DEDUCTIBLE[cat] ?? null;
-      updatePayload.anlage_v_zeile    = ANLAGE_V_ZEILEN[cat] ?? null;
+      updatePayload.is_tax_deductible = getCatTaxDeductible(cat) ?? null;
+      updatePayload.anlage_v_zeile    = getCatAnlageVZeile(cat) ?? null;
       updatePayload.is_confirmed      = true;
     }
 
@@ -485,8 +530,8 @@ export default function BankingReviewPage() {
     setTransactions((prev) =>
       prev.map((t) => t.id === txId
         ? { ...t, category: cat || null, property_id: editPropertyId || null,
-            is_tax_deductible: cat ? (TAX_DEDUCTIBLE[cat] ?? null) : null,
-            anlage_v_zeile:    cat ? (ANLAGE_V_ZEILEN[cat] ?? null) : null,
+            is_tax_deductible: cat ? (getCatTaxDeductible(cat) ?? null) : null,
+            anlage_v_zeile:    cat ? (getCatAnlageVZeile(cat) ?? null) : null,
             is_confirmed:      !!cat }
         : t),
     );
@@ -514,8 +559,8 @@ export default function BankingReviewPage() {
       property_id: groupPropertyId || null,
     };
     if (hasExtendedColumns) {
-      groupPayload.is_tax_deductible = TAX_DEDUCTIBLE[cat] ?? null;
-      groupPayload.anlage_v_zeile    = ANLAGE_V_ZEILEN[cat] ?? null;
+      groupPayload.is_tax_deductible = getCatTaxDeductible(cat) ?? null;
+      groupPayload.anlage_v_zeile    = getCatAnlageVZeile(cat) ?? null;
     }
 
     const updates = txIds.map((id) =>
@@ -536,8 +581,8 @@ export default function BankingReviewPage() {
       setTransactions((prev) =>
         prev.map((t) => successIds.includes(t.id)
           ? { ...t, category: cat, property_id: groupPropertyId || null,
-              is_tax_deductible: TAX_DEDUCTIBLE[cat] ?? null,
-              anlage_v_zeile:    ANLAGE_V_ZEILEN[cat] ?? null }
+              is_tax_deductible: getCatTaxDeductible(cat) ?? null,
+              anlage_v_zeile:    getCatAnlageVZeile(cat) ?? null }
           : t),
       );
       setConfirmed((prev) => {
@@ -565,8 +610,8 @@ export default function BankingReviewPage() {
       is_confirmed: true,
     };
     if (hasExtendedColumns) {
-      payload.is_tax_deductible = TAX_DEDUCTIBLE[cat] ?? null;
-      payload.anlage_v_zeile    = ANLAGE_V_ZEILEN[cat] ?? null;
+      payload.is_tax_deductible = getCatTaxDeductible(cat) ?? null;
+      payload.anlage_v_zeile    = getCatAnlageVZeile(cat) ?? null;
     }
 
     const allIds = displayedTxs.map((t) => t.id);
@@ -585,8 +630,8 @@ export default function BankingReviewPage() {
         prev.map((t) =>
           successIds.includes(t.id)
             ? { ...t, category: cat, property_id: globalGroupPropertyId || null,
-                is_tax_deductible: TAX_DEDUCTIBLE[cat] ?? null,
-                anlage_v_zeile: ANLAGE_V_ZEILEN[cat] ?? null,
+                is_tax_deductible: getCatTaxDeductible(cat) ?? null,
+                anlage_v_zeile: getCatAnlageVZeile(cat) ?? null,
                 is_confirmed: true }
             : t,
         ),
@@ -674,7 +719,7 @@ export default function BankingReviewPage() {
     const isSaving    = savingId === tx.id;
     const isDone      = confirmed.has(tx.id);
     const isCredit    = looksLikeCredit(tx);
-    const variant     = getCategoryVariant(tx.category);
+    const variant     = getVariant(tx.category);
     const isSplitChild = !!tx.split_from_transaction_id;
     const isExpanded  = expandedId === tx.id;
     const isLearned   = tx.confidence === 0.95;
@@ -759,11 +804,11 @@ export default function BankingReviewPage() {
             {tx.category ? (
               <div className="flex flex-col gap-1">
                 <span className={`inline-flex w-fit items-center rounded-md px-2 py-0.5 text-xs font-medium ${BADGE[variant]}`}>
-                  {ANLAGE_V_CATEGORY_LABELS[tx.category as AnlageVCategory] ?? tx.category}
+                  {getCatLabel(tx.category)}
                 </span>
-                {tx.anlage_v_zeile && (
+                {getCatAnlageV(tx.category) && (
                   <span className="text-[10px] text-slate-400 dark:text-slate-500">
-                    Anlage V · Z. {tx.anlage_v_zeile}
+                    Anlage V · {getCatAnlageV(tx.category)}
                   </span>
                 )}
               </div>
@@ -897,7 +942,7 @@ export default function BankingReviewPage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="flex-1">
                   <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Kategorie</label>
-                  <CategorySelect value={editCategory} onChange={setEditCategory} className="w-full" />
+                  <CategorySelect value={editCategory} onChange={setEditCategory} className="w-full" catLookup={catLookup} />
                 </div>
                 {properties.length > 0 && (
                   <div className="flex-1">
@@ -1236,7 +1281,7 @@ export default function BankingReviewPage() {
               <div className="flex flex-1 flex-wrap items-end gap-2">
                 <div className="min-w-[200px] flex-1">
                   <label className="mb-1 block text-xs font-medium text-blue-700 dark:text-blue-300">Kategorie (optional)</label>
-                  <CategorySelect value={bulkCategory} onChange={setBulkCategory} className="w-full" />
+                  <CategorySelect value={bulkCategory} onChange={setBulkCategory} className="w-full" catLookup={catLookup} />
                 </div>
                 {properties.length > 0 && (
                   <div className="min-w-[160px] flex-1">
@@ -1407,7 +1452,7 @@ export default function BankingReviewPage() {
                                 <label className="mb-1 block text-xs font-medium text-slate-500">
                                   Kategorie für alle {groupTxs.length} Transaktionen
                                 </label>
-                                <CategorySelect value={groupCategory} onChange={setGroupCategory} className="w-full" />
+                                <CategorySelect value={groupCategory} onChange={setGroupCategory} className="w-full" catLookup={catLookup} />
                               </div>
                               {properties.length > 0 && (
                                 <div className="flex-1">
