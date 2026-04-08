@@ -47,13 +47,13 @@ export async function POST(request: Request) {
   // Load categories
   const { data: categories } = await supabase
     .from("categories")
-    .select("label, typ, anlage_v");
+    .select("label, typ, anlage_v, gruppe");
 
   const calculated = calculateTaxFromTransactions(
     (txData ?? []) as { date: string; amount: number; category: string | null; anlage_v_zeile: number | null }[],
     prop as { kaufpreis: number | null; gebaeudewert: number | null; baujahr: number | null; afa_satz: number | null; kaufdatum: string | null; address: string | null; type: string | null },
     tax_year,
-    (categories ?? []) as { label: string; typ: string; anlage_v: string | null }[],
+    (categories ?? []) as { label: string; typ: string; anlage_v: string | null; gruppe: string }[],
   );
 
   // Upsert: nur berechnete Felder setzen, manuelle Werte nicht überschreiben

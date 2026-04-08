@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { TAX_FIELDS, TAX_FIELD_GROUPS } from "@/lib/tax/fieldMeta";
@@ -26,6 +26,7 @@ const fmtVal = (val: unknown, type: string) => {
 
 export default function TaxYearPage() {
   const { id, year: yearParam } = useParams<{ id: string; year: string }>();
+  const router = useRouter();
   const taxYear = Number(yearParam);
 
   const [property, setProperty] = useState<Property | null>(null);
@@ -36,6 +37,8 @@ export default function TaxYearPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [calculating, setCalculating] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -115,6 +118,16 @@ export default function TaxYearPage() {
     setSaving(false);
   };
 
+  const handleDelete = async () => {
+    if (!taxData) return;
+    setDeleting(true);
+    const res = await fetch(`/api/tax/${taxData.id}`, { method: "DELETE" });
+    if (res.ok) {
+      router.push(`/dashboard/properties/${id}/tax`);
+    }
+    setDeleting(false);
+  };
+
   // Count filled fields
   const filledCount = taxData
     ? TAX_FIELDS.filter((f) => (taxData as unknown as Record<string, unknown>)[f.key] != null).length
@@ -148,12 +161,21 @@ export default function TaxYearPage() {
           </div>
           <div className="flex gap-2">
             {taxData && (
-              <Link
-                href={`/dashboard/properties/${id}/tax/${taxYear}/export`}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
-              >
-                Export
-              </Link>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40"
+                >
+                  Löschen
+                </button>
+                <Link
+                  href={`/dashboard/properties/${id}/tax/${taxYear}/export`}
+                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+                >
+                  Export
+                </Link>
+              </>
             )}
             {!editing && (
               <button
@@ -246,6 +268,34 @@ export default function TaxYearPage() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="mx-4 w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Steuerdaten löschen?</h3>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                Alle Daten für das Steuerjahr {taxYear} werden unwiderruflich gelöscht.
+              </p>
+              <div className="mt-5 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDelete()}
+                  disabled={deleting}
+                  className="flex-1 rounded-lg bg-red-600 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-60"
+                >
+                  {deleting ? "Lösche…" : "Endgültig löschen"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </section>

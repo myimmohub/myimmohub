@@ -205,18 +205,6 @@ export default function DashboardNav() {
             KI-Postfach
           </Link>
 
-          {/* Einstellungen */}
-          <Link
-            href="/dashboard/settings"
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-              isActive("/dashboard/settings")
-                ? "text-blue-600 font-semibold dark:text-blue-500"
-                : "text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-500"
-            }`}
-          >
-            Einstellungen
-          </Link>
-
           {/* Konto-Dropdown */}
           <div className="relative" ref={kontoRef}>
             <button
@@ -260,6 +248,42 @@ export default function DashboardNav() {
               </div>
             )}
           </div>
+
+          {/* Rechner (öffentlich) */}
+          <Link
+            href="/tools"
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+              isActive("/tools")
+                ? "text-blue-600 font-semibold dark:text-blue-500"
+                : "text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-500"
+            }`}
+          >
+            Rechner
+          </Link>
+
+          {/* Wissen */}
+          <Link
+            href="/wissen/steuertipps-immobilienkauf"
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+              isActive("/wissen")
+                ? "text-blue-600 font-semibold dark:text-blue-500"
+                : "text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-500"
+            }`}
+          >
+            Wissen
+          </Link>
+
+          {/* Einstellungen — ganz rechts */}
+          <Link
+            href="/dashboard/settings"
+            className={`ml-auto rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+              isActive("/dashboard/settings")
+                ? "text-blue-600 font-semibold dark:text-blue-500"
+                : "text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-500"
+            }`}
+          >
+            Einstellungen
+          </Link>
         </nav>
 
         {/* Burger-Button (mobil) */}
@@ -344,16 +368,6 @@ export default function DashboardNav() {
             KI-Postfach
           </Link>
 
-          <Link href="/dashboard/settings"
-            className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-              isActive("/dashboard/settings")
-                ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
-                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400"
-            }`}
-          >
-            Einstellungen
-          </Link>
-
           {/* Konto-Abschnitt (mobil) */}
           <div className="mt-1">
             <p className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
@@ -376,6 +390,41 @@ export default function DashboardNav() {
                 {link.label}
               </Link>
             ))}
+          </div>
+
+          {/* Rechner & Wissen */}
+          <div className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+            <Link href="/tools"
+              className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                isActive("/tools")
+                  ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400"
+              }`}
+            >
+              Rechner
+            </Link>
+            <Link href="/wissen/steuertipps-immobilienkauf"
+              className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                isActive("/wissen")
+                  ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400"
+              }`}
+            >
+              Wissen
+            </Link>
+          </div>
+
+          {/* Einstellungen — ganz unten */}
+          <div className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+            <Link href="/dashboard/settings"
+              className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                isActive("/dashboard/settings")
+                  ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400"
+              }`}
+            >
+              Einstellungen
+            </Link>
           </div>
         </nav>
       )}

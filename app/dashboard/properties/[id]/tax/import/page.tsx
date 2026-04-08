@@ -53,9 +53,16 @@ export default function TaxImportPage() {
     setProgress(10);
 
     try {
-      // Read file as base64
-      const buffer = await file.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+      // Read file as base64 (chunk-basiert, um Stack Overflow bei großen PDFs zu vermeiden)
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          // data:application/pdf;base64,XXXX → nur den Base64-Teil
+          resolve(dataUrl.split(",")[1]);
+        };
+        reader.readAsDataURL(file);
+      });
       setProgress(30);
 
       const res = await fetch("/api/tax/import", {

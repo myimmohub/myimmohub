@@ -1,8 +1,10 @@
 /**
  * Berechnet tax_data-Felder aus vorhandenen Transaktionen.
  *
- * Liest kategorisierte Transaktionen einer Immobilie für ein Steuerjahr
- * und aggregiert sie nach Anlage-V-Zeilen.
+ * Mapping-Strategie:
+ * 1. Kategorie-Label → tax_data-Feld (primär, über CATEGORY_TO_FIELD)
+ * 2. Kategorie-Gruppe → tax_data-Feld (Fallback für unbekannte Labels)
+ * 3. anlage_v_zeile auf der Transaktion (Legacy-Fallback)
  */
 
 import type { TaxData } from "@/types/tax";
@@ -29,40 +31,125 @@ type DbCategory = {
   label: string;
   typ: string;
   anlage_v: string | null;
+  gruppe: string;
 };
 
-/**
- * Mapping: Anlage-V-Zeile (Nummer) → tax_data-Feld.
- * Mehrere Zeilen können auf dasselbe Feld aggregiert werden.
- */
-const ZEILE_TO_INCOME_FIELD: Record<number, keyof TaxData> = {
+// ── Direktes Mapping: Kategorie-Label → tax_data-Feld ───────────────────────
+
+const CATEGORY_TO_FIELD: Record<string, keyof TaxData> = {
+  // Einnahmen
+  "Mieteinnahmen":                    "rent_income",
+  "Ferienvermietung – Einnahmen":     "rent_income",
+  "Nebenkostenerstattungen":          "operating_costs_income",
+  "Sonstige Einnahmen":               "other_income",
+
+  // Gebäude
+  "Grundsteuer":                      "property_tax",
+  "Versicherungen":                   "insurance",
+  "Hausverwaltung / WEG-Kosten":      "hoa_fees",
+
+  // Instandhaltung
+  "Handwerkerleistungen":             "maintenance_costs",
+  "Hausmeisterdienste":               "maintenance_costs",
+  "Materialkosten":                   "maintenance_costs",
+
+  // Betriebskosten
+  "Energieversorgung":                "other_expenses",
+  "Wasser & Abwasser":               "water_sewage",
+  "Müllentsorgung":                   "waste_disposal",
+  "Internet / Telefon / TV":          "other_expenses",
+
+  // Finanzierung
+  "Kreditzinsen / Schuldzinsen":      "loan_interest",
+  "Kontoführungsgebühren":            "bank_fees",
+
+  // Verwaltung
+  "Steuerberatung / Rechtskosten":    "other_expenses",
+  "Inserate & Vermarktung":           "other_expenses",
+  "Fahrtkosten":                      "other_expenses",
+  "Bürokosten / Verwaltungsaufwand":  "other_expenses",
+
+  // Einrichtung
+  "Einrichtung / Möbel":             "other_expenses",
+  "Haushaltsbedarf / Kleinausstattung": "other_expenses",
+
+  // Ferienimmobilie
+  "Kurtaxe / Tourismusabgaben":       "other_expenses",
+  "Plattformprovisionen / Agentur":   "other_expenses",
+  "Reinigungskosten (Gästewechsel)":  "other_expenses",
+  "Schlüsselübergabe / Check-in-Service": "other_expenses",
+  "Gästewäsche / Bettwäsche-Service": "other_expenses",
+  "Ferienhausverwaltung vor Ort":     "property_management",
+  "Verbrauchsmaterialien für Gäste":  "other_expenses",
+  "GEMA / Rundfunkbeitrag":           "other_expenses",
+};
+
+// ── Fallback: Gruppe → tax_data-Feld ────────────────────────────────────────
+
+const GRUPPE_TO_FIELD: Record<string, keyof TaxData> = {
+  "Einnahmen":       "other_income",
+  "Gebäude":         "other_expenses",
+  "Instandhaltung":  "maintenance_costs",
+  "Betriebskosten":  "other_expenses",
+  "Einrichtung":     "other_expenses",
+  "Finanzierung":    "loan_interest",
+  "Ferienimmobilie": "other_expenses",
+  "Verwaltung":      "other_expenses",
+  "Sonstiges":       "other_expenses",
+};
+
+// ── Fallback: Zeile → tax_data-Feld (für Legacy-Transaktionen mit anlage_v_zeile) ──
+
+const ZEILE_TO_FIELD: Record<number, keyof TaxData> = {
   9:  "rent_income",
   10: "deposits_received",
   11: "rent_prior_year",
   13: "operating_costs_income",
   14: "other_income",
-};
-
-const ZEILE_TO_EXPENSE_FIELD: Record<number, keyof TaxData> = {
   17: "loan_interest",
   19: "property_tax",
   20: "hoa_fees",
   21: "insurance",
   26: "water_sewage",
   28: "waste_disposal",
+  33: "depreciation_building",
   35: "property_management",
   37: "bank_fees",
   40: "maintenance_costs",
-  45: "insurance",          // Versicherungen auch über Z. 45
-  46: "property_management", // Verwaltungskosten auch über Z. 46
-  47: "property_tax",       // Grundsteuer auch über Z. 47
-  48: "insurance",          // Betriebskosten → Versicherung
+  45: "insurance",
+  46: "property_management",
+  47: "property_tax",
+  48: "other_expenses",
   53: "other_expenses",
+};
+
+// ── Alte Slug-Kategorien (Abwärtskompatibilität) ────────────────────────────
+
+const OLD_SLUG_TO_FIELD: Record<string, keyof TaxData> = {
+  "miete_einnahmen_wohnen":    "rent_income",
+  "miete_einnahmen_gewerbe":   "rent_income",
+  "nebenkosten_einnahmen":     "operating_costs_income",
+  "mietsicherheit_einnahme":   "deposits_received",
+  "sonstige_einnahmen":        "other_income",
+  "schuldzinsen":              "loan_interest",
+  "grundsteuer":               "property_tax",
+  "versicherungen":            "insurance",
+  "erhaltungsaufwand":         "maintenance_costs",
+  "verwaltungskosten":         "property_management",
+  "betriebskosten":            "other_expenses",
+  "geldbeschaffungskosten":    "bank_fees",
+  "reinigung":                 "other_expenses",
+  "maklerkosten":              "other_expenses",
+  "fahrtkosten":               "other_expenses",
+  "rechtskosten":              "other_expenses",
+  "sonstiges_werbungskosten":  "other_expenses",
+  "tilgung_kredit":            "other_expenses",
+  "mietsicherheit_ausgabe":    "other_expenses",
+  "sonstiges_nicht_absetzbar": "other_expenses",
 };
 
 /**
  * Berechnet AfA basierend auf Property-Daten.
- * Nutzt die bestehende Logik: Gebäudewert × AfA-Satz.
  */
 export function calculateDepreciation(property: PropertyForTax): number {
   const afaBasis = (property.gebaeudewert != null && property.gebaeudewert > 0)
@@ -71,10 +158,8 @@ export function calculateDepreciation(property: PropertyForTax): number {
 
   if (afaBasis <= 0) return 0;
 
-  // AfA-Satz bestimmen
-  let satz = property.afa_satz ?? 0; // dezimal
+  let satz = property.afa_satz ?? 0;
   if (satz === 0 && property.baujahr) {
-    // Fallback: automatisch nach Baujahr (§ 7 Abs. 4 EStG)
     if (property.baujahr < 1925) satz = 0.025;
     else if (property.baujahr <= 2022) satz = 0.02;
     else satz = 0.03;
@@ -84,13 +169,34 @@ export function calculateDepreciation(property: PropertyForTax): number {
 }
 
 /**
- * Mapping von DB-Kategorie-Label → anlage_v → Zeilen-Nummer.
- * z.B. "Z. 35" → 35, "Z. 9 / 10 / 11" → 9 (erste Zeile).
+ * Bestimmt das tax_data-Feld für eine Transaktion.
+ * Priorität: Label → Gruppe → anlage_v_zeile → Fallback
  */
-function parseZeile(anlageV: string | null): number | null {
-  if (!anlageV) return null;
-  const match = anlageV.match(/Z\.\s*(\d+)/);
-  return match ? parseInt(match[1], 10) : null;
+function resolveField(
+  cat: string,
+  anlageVZeile: number | null,
+  dbCatMap: Map<string, DbCategory>,
+): keyof TaxData | null {
+  // 1. Direkt über Label
+  if (CATEGORY_TO_FIELD[cat]) return CATEGORY_TO_FIELD[cat];
+
+  // 2. Alte Slugs
+  if (OLD_SLUG_TO_FIELD[cat]) return OLD_SLUG_TO_FIELD[cat];
+
+  // 3. Über DB-Kategorie Gruppe
+  const dbCat = dbCatMap.get(cat);
+  if (dbCat) {
+    // "nicht absetzbar" → überspringen
+    if (dbCat.anlage_v === "nicht absetzbar") return null;
+    if (GRUPPE_TO_FIELD[dbCat.gruppe]) return GRUPPE_TO_FIELD[dbCat.gruppe];
+  }
+
+  // 4. anlage_v_zeile auf der Transaktion
+  if (anlageVZeile && ZEILE_TO_FIELD[anlageVZeile]) {
+    return ZEILE_TO_FIELD[anlageVZeile];
+  }
+
+  return null;
 }
 
 /**
@@ -110,14 +216,11 @@ export function calculateTaxFromTransactions(
     (t) => t.date >= von && t.date <= bis && t.category != null && t.category !== "aufgeteilt",
   );
 
-  // DB-Kategorien als Map: label → Zeile
-  const catZeileMap = new Map<string, number>();
-  const catTypMap = new Map<string, string>();
+  // DB-Kategorien als Map: label → DbCategory
+  const dbCatMap = new Map<string, DbCategory>();
   if (dbCategories) {
     for (const cat of dbCategories) {
-      const zeile = parseZeile(cat.anlage_v);
-      if (zeile) catZeileMap.set(cat.label, zeile);
-      catTypMap.set(cat.label, cat.typ);
+      dbCatMap.set(cat.label, cat);
     }
   }
 
@@ -128,29 +231,12 @@ export function calculateTaxFromTransactions(
     const amount = Number(tx.amount);
     const cat = tx.category!;
 
-    // Zeile bestimmen: erst aus Transaktion, dann aus DB-Kategorie
-    let zeile = tx.anlage_v_zeile;
-    if (!zeile && catZeileMap.has(cat)) {
-      zeile = catZeileMap.get(cat)!;
-    }
-    if (!zeile) continue;
+    const fieldKey = resolveField(cat, tx.anlage_v_zeile, dbCatMap);
+    if (!fieldKey) continue; // nicht absetzbar oder nicht zuordbar
 
-    // Einnahme oder Ausgabe?
-    const typ = catTypMap.get(cat);
-    const isEinnahme = typ === "einnahme" || amount > 0;
-
-    let fieldKey: string | undefined;
-    if (isEinnahme) {
-      fieldKey = ZEILE_TO_INCOME_FIELD[zeile] as string | undefined;
-    }
-    if (!fieldKey) {
-      fieldKey = ZEILE_TO_EXPENSE_FIELD[zeile] as string | undefined;
-    }
-    if (!fieldKey && isEinnahme) {
-      fieldKey = "other_income";
-    } else if (!fieldKey) {
-      fieldKey = "other_expenses";
-    }
+    // Einnahme → positiv addieren, Ausgabe → abs addieren
+    const dbCat = dbCatMap.get(cat);
+    const isEinnahme = dbCat ? dbCat.typ === "einnahme" : amount > 0;
 
     result[fieldKey] = (result[fieldKey] ?? 0) + (isEinnahme ? amount : Math.abs(amount));
   }

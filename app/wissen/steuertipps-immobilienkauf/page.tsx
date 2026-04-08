@@ -379,14 +379,6 @@ export default function SteuertippsPage() {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900 py-8 px-4">
       <div className="max-w-2xl mx-auto space-y-6">
 
-        {/* Back */}
-        <Link
-          href="/tools"
-          className="inline-flex items-center gap-1 text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
-        >
-          ← Kostenlose Tools
-        </Link>
-
         {/* Hero */}
         <div>
           <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 leading-tight">

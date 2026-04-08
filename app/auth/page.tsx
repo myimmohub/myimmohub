@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
 export default function AuthPage() {
@@ -181,6 +182,44 @@ export default function AuthPage() {
                 ? "Noch kein Konto? Jetzt registrieren"
                 : "Du hast bereits ein Konto? Zum Login"}
             </button>
+          </div>
+
+          {/* Kostenlose Tools & Wissen */}
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              Auch ohne Konto nutzbar
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <Link
+                href="/tools"
+                className="group flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-blue-300 hover:bg-blue-50/50 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-blue-700 dark:hover:bg-blue-950/30"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                  </svg>
+                </span>
+                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Rechner</span>
+                <span className="text-xs leading-snug text-slate-500 dark:text-slate-400">
+                  Rendite, Kredit, Nebenkosten & Spekulationssteuer
+                </span>
+              </Link>
+              <Link
+                href="/wissen/steuertipps-immobilienkauf"
+                className="group flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/30"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0z" />
+                  </svg>
+                </span>
+                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Steuertipps</span>
+                <span className="text-xs leading-snug text-slate-500 dark:text-slate-400">
+                  9 Tipps zum Steuern sparen beim Immobilienkauf
+                </span>
+              </Link>
+            </div>
           </div>
         </section>
       </div>
