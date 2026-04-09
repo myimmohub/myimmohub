@@ -233,6 +233,7 @@ export default function BankingReviewPage() {
   const [filterText, setFilterText]       = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterProperty, setFilterProperty] = useState("");
+  const [filterYear, setFilterYear]       = useState("");
   const [sortCol, setSortCol]             = useState<SortCol>("date");
   const [sortDir, setSortDir]             = useState<SortDir>("desc");
 
@@ -403,10 +404,23 @@ export default function BankingReviewPage() {
     [transactions],
   );
 
+  // Verfügbare Jahre aus Transaktionen
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    for (const tx of transactions) {
+      if (tx.date) years.add(tx.date.substring(0, 4));
+    }
+    return [...years].sort((a, b) => b.localeCompare(a)); // neueste zuerst
+  }, [transactions]);
+
   // Anzuzeigende Transaktionen je nach View-Modus + Filter + Sortierung
   const displayedTxs = useMemo(() => {
     let txs = viewMode === "kreditraten" ? unsplitCredits : transactions;
 
+    // Jahr-Filter
+    if (filterYear) {
+      txs = txs.filter((tx) => tx.date?.startsWith(filterYear));
+    }
     // Text-Filter (Beschreibung + Auftraggeber)
     if (filterText.trim()) {
       const q = filterText.toLowerCase();
@@ -436,7 +450,7 @@ export default function BankingReviewPage() {
     });
 
     return txs;
-  }, [viewMode, transactions, unsplitCredits, filterText, filterCategory, filterProperty, sortCol, sortDir]);
+  }, [viewMode, transactions, unsplitCredits, filterYear, filterText, filterCategory, filterProperty, sortCol, sortDir]);
 
   // Gruppiert nach Auftraggeber (für Grouped-View)
   const grouped = useMemo<[string, Transaction[]][]>(() => {
@@ -1546,7 +1560,16 @@ export default function BankingReviewPage() {
                   <tr className="border-b border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
                     <td />
                     <td className="px-2 py-1.5">
-                      {/* Datum-Filter entfällt, stattdessen leer lassen */}
+                      {availableYears.length > 1 && (
+                        <select
+                          value={filterYear}
+                          onChange={(e) => setFilterYear(e.target.value)}
+                          className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        >
+                          <option value="">Alle Jahre</option>
+                          {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                      )}
                     </td>
                     <td className="px-2 py-1.5" />
                     <td className="px-2 py-1.5">
@@ -1580,10 +1603,10 @@ export default function BankingReviewPage() {
                       )}
                     </td>
                     <td className="px-2 py-1.5 text-right">
-                      {(filterText || filterCategory || filterProperty) && (
+                      {(filterYear || filterText || filterCategory || filterProperty) && (
                         <button
                           type="button"
-                          onClick={() => { setFilterText(""); setFilterCategory(""); setFilterProperty(""); }}
+                          onClick={() => { setFilterYear(""); setFilterText(""); setFilterCategory(""); setFilterProperty(""); }}
                           className="text-[10px] text-slate-400 underline underline-offset-2 hover:text-slate-600 dark:hover:text-slate-300"
                         >
                           zurücksetzen

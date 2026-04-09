@@ -170,24 +170,33 @@ export function calculateDepreciation(property: PropertyForTax): number {
 
 /**
  * Bestimmt das tax_data-Feld für eine Transaktion.
- * Priorität: Label → Gruppe → anlage_v_zeile → Fallback
+ * Priorität: Label → Alte Slugs → anlage_v-Zeile aus DB → Gruppe → anlage_v_zeile auf TX
  */
 function resolveField(
   cat: string,
   anlageVZeile: number | null,
   dbCatMap: Map<string, DbCategory>,
 ): keyof TaxData | null {
-  // 1. Direkt über Label
+  // 1. Direkt über Label (hardcoded Mapping)
   if (CATEGORY_TO_FIELD[cat]) return CATEGORY_TO_FIELD[cat];
 
   // 2. Alte Slugs
   if (OLD_SLUG_TO_FIELD[cat]) return OLD_SLUG_TO_FIELD[cat];
 
-  // 3. Über DB-Kategorie Gruppe
   const dbCat = dbCatMap.get(cat);
   if (dbCat) {
     // "nicht absetzbar" → überspringen
     if (dbCat.anlage_v === "nicht absetzbar") return null;
+
+    // 3. anlage_v-Zeile aus der DB-Kategorie (präzisestes Mapping, z. B. "Z. 19" → property_tax)
+    if (dbCat.anlage_v) {
+      const zeileNum = parseInt(dbCat.anlage_v.replace("Z. ", "").trim(), 10);
+      if (!isNaN(zeileNum) && ZEILE_TO_FIELD[zeileNum]) {
+        return ZEILE_TO_FIELD[zeileNum];
+      }
+    }
+
+    // 4. Fallback: Gruppe → generisches Feld
     if (GRUPPE_TO_FIELD[dbCat.gruppe]) return GRUPPE_TO_FIELD[dbCat.gruppe];
   }
 
