@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePropertyId } from "../layout";
 
 type Partner = {
@@ -35,6 +35,11 @@ export default function GbrPage() {
   const [newAnteil, setNewAnteil] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [addingPartner, setAddingPartner] = useState(false);
+
+  // PDF upload
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!propertyId) return;
@@ -95,6 +100,73 @@ export default function GbrPage() {
     void loadData();
   };
 
+  const handlePdfUpload = async (file: File) => {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          // Strip "data:application/pdf;base64," prefix
+          resolve(result.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const res = await fetch("/api/settings/gbr/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pdf_base64: base64 }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "Extraktion fehlgeschlagen");
+      }
+
+      const extracted = await res.json() as {
+        name?: string;
+        steuernummer?: string;
+        finanzamt?: string;
+        partner?: { name: string; anteil: number; email?: string | null }[];
+      };
+
+      // Prefill form with extracted data (keep existing values if extracted is empty)
+      if (data) {
+        setData({
+          ...data,
+          name: extracted.name || data.name,
+          steuernummer: extracted.steuernummer || data.steuernummer,
+          finanzamt: extracted.finanzamt || data.finanzamt,
+        });
+      }
+
+      // Show extracted partners as preview (they need to be saved + added manually)
+      if (extracted.partner && extracted.partner.length > 0) {
+        setExtractedPartners(extracted.partner);
+      }
+    } catch (err) {
+      setUploadError((err as Error).message);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const [extractedPartners, setExtractedPartners] = useState<
+    { name: string; anteil: number; email?: string | null }[]
+  >([]);
+
+  const applyExtractedPartner = (idx: number) => {
+    const p = extractedPartners[idx];
+    setNewName(p.name);
+    setNewAnteil(String(p.anteil));
+    setNewEmail(p.email ?? "");
+    setExtractedPartners((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   if (!propertyId) {
     return <p className="py-8 text-center text-sm text-slate-400">Bitte zuerst eine Immobilie anlegen.</p>;
   }
@@ -111,6 +183,72 @@ export default function GbrPage() {
 
   return (
     <div className="space-y-6">
+      {/* PDF-Upload für Gesellschaftervertrag */}
+      <section className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-4 transition dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              Gesellschaftervertrag hochladen
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+              GbR-Name, Steuernummer, Finanzamt und Partner werden automatisch extrahiert
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handlePdfUpload(file);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
+            >
+              {uploading ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Extrahiere…
+                </span>
+              ) : (
+                "PDF hochladen"
+              )}
+            </button>
+          </div>
+        </div>
+        {uploadError && (
+          <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+            {uploadError}
+          </p>
+        )}
+        {extractedPartners.length > 0 && (
+          <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50/50 p-3 dark:border-blue-800 dark:bg-blue-950/20">
+            <p className="mb-2 text-xs font-semibold text-blue-700 dark:text-blue-400">
+              Erkannte Partner — klicke zum Übernehmen:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {extractedPartners.map((p, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => applyExtractedPartner(idx)}
+                  className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-blue-400 hover:bg-blue-50 dark:border-blue-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-blue-950/30"
+                >
+                  <span className="font-medium">{p.name}</span>
+                  <span className="ml-1.5 text-slate-400">({p.anteil} %)</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* GbR Stammdaten */}
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
         <h3 className="mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100">GbR-Stammdaten</h3>

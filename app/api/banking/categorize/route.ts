@@ -37,8 +37,13 @@ export async function POST(request: Request) {
     .select("id, date, amount, description, counterpart")
     .eq("user_id", user.id);
 
-  if (!force) {
+  const fixOld = url.searchParams.get("fixold") === "true";
+
+  if (!force && !fixOld) {
     query = query.is("category", null);
+  } else if (fixOld) {
+    // Nur Transaktionen mit alten Kategorienamen (enthalten "(Anlage V")
+    query = query.like("category", "%(Anlage V%");
   } else {
     query = query.or("category.is.null,category.neq.aufgeteilt");
   }

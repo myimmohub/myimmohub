@@ -141,7 +141,14 @@ export default function SteuerPage() {
 
       {/* AfA */}
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
-        <h3 className="mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100">Abschreibung (AfA)</h3>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Abschreibung (AfA)</h3>
+          {data.ak_gebaeude && (
+            <span className="text-xs text-slate-400 dark:text-slate-500">
+              Vorausgefüllt aus Immobiliendaten · überschreibbar
+            </span>
+          )}
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">

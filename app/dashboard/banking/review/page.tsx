@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import {
@@ -68,45 +68,112 @@ const fmt     = (n: number) =>
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 
-// ── Kategorie-Dropdown (wiederverwendbar) ─────────────────────────────────────
+// ── Kategorie-Suche (durchsuchbares Dropdown) ────────────────────────────────
 
 function CategorySelect({
   value, onChange, className = "", catLookup,
 }: { value: string; onChange: (v: string) => void; className?: string; catLookup: CategoryLookup | null }) {
-  // DB categories grouped
-  if (catLookup && catLookup.categories.length > 0) {
-    return (
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 ${className}`}
-      >
-        <option value="">— Keine Kategorie —</option>
-        {catLookup.grouped.map((g) => (
-          <optgroup key={g.gruppe} label={g.gruppe}>
-            {g.items.map((c) => (
-              <option key={c.id} value={c.label}>
-                {c.icon} {c.label}{c.anlage_v ? ` (${c.anlage_v})` : ""}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
-    );
-  }
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
-  // Fallback: old hardcoded categories (if DB not yet seeded)
+  // All options as flat list
+  const allOptions: { value: string; label: string; gruppe: string }[] = useMemo(() => {
+    if (catLookup && catLookup.categories.length > 0) {
+      return catLookup.grouped.flatMap((g) =>
+        g.items.map((c) => ({
+          value: c.label,
+          label: `${c.icon} ${c.label}${c.anlage_v ? ` · ${c.anlage_v}` : ""}`,
+          gruppe: g.gruppe,
+        }))
+      );
+    }
+    return Object.entries(ANLAGE_V_CATEGORY_LABELS).map(([key, label]) => ({
+      value: key, label, gruppe: "",
+    }));
+  }, [catLookup]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return allOptions;
+    const q = search.toLowerCase();
+    return allOptions.filter((o) =>
+      o.value.toLowerCase().includes(q) || o.label.toLowerCase().includes(q) || o.gruppe.toLowerCase().includes(q)
+    );
+  }, [allOptions, search]);
+
+  const displayLabel = value
+    ? allOptions.find((o) => o.value === value)?.label ?? value
+    : "— Keine Kategorie —";
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={`rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 ${className}`}
-    >
-      <option value="">— Keine Kategorie —</option>
-      {Object.entries(ANLAGE_V_CATEGORY_LABELS).map(([key, label]) => (
-        <option key={key} value={key}>{label}</option>
-      ))}
-    </select>
+    <div ref={ref} className={`relative ${className}`}>
+      <button
+        type="button"
+        onClick={() => { setOpen((v) => !v); setSearch(""); }}
+        className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-900 transition hover:border-blue-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+      >
+        <span className="truncate">{displayLabel}</span>
+        <svg xmlns="http://www.w3.org/2000/svg" className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+          {/* Suchfeld */}
+          <div className="border-b border-slate-100 p-2 dark:border-slate-800">
+            <input
+              autoFocus
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Suchen…"
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-900 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            />
+          </div>
+          {/* Optionen */}
+          <div className="max-h-56 overflow-y-auto py-1">
+            <button
+              type="button"
+              onClick={() => { onChange(""); setOpen(false); setSearch(""); }}
+              className="w-full px-3 py-2 text-left text-sm text-slate-400 transition hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              — Keine Kategorie —
+            </button>
+            {filtered.length === 0 ? (
+              <p className="px-3 py-2 text-xs text-slate-400">Keine Treffer</p>
+            ) : (
+              filtered.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => { onChange(opt.value); setOpen(false); setSearch(""); }}
+                  className={`w-full px-3 py-2 text-left text-sm transition hover:bg-blue-50 dark:hover:bg-blue-950/30 ${
+                    opt.value === value
+                      ? "bg-blue-50 font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                      : "text-slate-700 dark:text-slate-300"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -159,6 +226,20 @@ export default function BankingReviewPage() {
 
   // Detail-Expansion (Verwendungszweck)
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Spalten-Filter & Sortierung
+  type SortCol = "date" | "amount" | "counterpart" | "category" | "property";
+  type SortDir = "asc" | "desc";
+  const [filterText, setFilterText]       = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterProperty, setFilterProperty] = useState("");
+  const [sortCol, setSortCol]             = useState<SortCol>("date");
+  const [sortDir, setSortDir]             = useState<SortDir>("desc");
+
+  const toggleSort = (col: SortCol) => {
+    if (sortCol === col) setSortDir((d) => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  };
 
   // Mehrfachauswahl
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -322,11 +403,40 @@ export default function BankingReviewPage() {
     [transactions],
   );
 
-  // Anzuzeigende Transaktionen je nach View-Modus
+  // Anzuzeigende Transaktionen je nach View-Modus + Filter + Sortierung
   const displayedTxs = useMemo(() => {
-    if (viewMode === "kreditraten") return unsplitCredits;
-    return transactions;
-  }, [viewMode, transactions, unsplitCredits]);
+    let txs = viewMode === "kreditraten" ? unsplitCredits : transactions;
+
+    // Text-Filter (Beschreibung + Auftraggeber)
+    if (filterText.trim()) {
+      const q = filterText.toLowerCase();
+      txs = txs.filter((tx) =>
+        (tx.description ?? "").toLowerCase().includes(q) ||
+        (tx.counterpart ?? "").toLowerCase().includes(q)
+      );
+    }
+    // Kategorie-Filter
+    if (filterCategory) {
+      txs = txs.filter((tx) => (tx.category ?? "").toLowerCase().includes(filterCategory.toLowerCase()));
+    }
+    // Immobilien-Filter
+    if (filterProperty) {
+      txs = txs.filter((tx) => tx.property_id === filterProperty);
+    }
+
+    // Sortierung
+    txs = [...txs].sort((a, b) => {
+      let cmp = 0;
+      if (sortCol === "date")       cmp = a.date.localeCompare(b.date);
+      else if (sortCol === "amount") cmp = Number(a.amount) - Number(b.amount);
+      else if (sortCol === "counterpart") cmp = (a.counterpart ?? "").localeCompare(b.counterpart ?? "");
+      else if (sortCol === "category")    cmp = (a.category ?? "").localeCompare(b.category ?? "");
+      else if (sortCol === "property")    cmp = (a.property?.name ?? "").localeCompare(b.property?.name ?? "");
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+
+    return txs;
+  }, [viewMode, transactions, unsplitCredits, filterText, filterCategory, filterProperty, sortCol, sortDir]);
 
   // Gruppiert nach Auftraggeber (für Grouped-View)
   const grouped = useMemo<[string, Transaction[]][]>(() => {
@@ -391,11 +501,17 @@ export default function BankingReviewPage() {
     [transactions],
   );
 
-  const handleAiCategorize = async (force = false) => {
+  const oldCategoryCount = useMemo(
+    () => transactions.filter((tx) => tx.category && /\(Anlage V/i.test(tx.category)).length,
+    [transactions],
+  );
+
+  const handleAiCategorize = async (mode: "new" | "force" | "fixold" = "new") => {
     setAiCategorizing(true);
     setAiResult(null);
     setSaveError(null);
-    const res = await fetch(`/api/banking/categorize${force ? "?force=true" : ""}`, {
+    const params = mode === "force" ? "?force=true" : mode === "fixold" ? "?fixold=true" : "";
+    const res = await fetch(`/api/banking/categorize${params}`, {
       method: "POST",
     });
     setAiCategorizing(false);
@@ -1075,7 +1191,7 @@ export default function BankingReviewPage() {
             {/* KI-Kategorisierung */}
             <button
               type="button"
-              onClick={() => void handleAiCategorize()}
+              onClick={() => void handleAiCategorize("new")}
               disabled={uncategorizedCount === 0 || aiCategorizing}
               title={
                 uncategorizedCount === 0
@@ -1100,6 +1216,25 @@ export default function BankingReviewPage() {
                 </span>
               )}
             </button>
+
+            {/* Alte Kategorien korrigieren */}
+            {oldCategoryCount > 0 && (
+              <button
+                type="button"
+                onClick={() => void handleAiCategorize("fixold")}
+                disabled={aiCategorizing}
+                title={`${oldCategoryCount} Transaktionen mit veralteten Kategorien neu zuordnen`}
+                className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400 dark:hover:bg-amber-950/70"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                </svg>
+                Alte Kategorien korrigieren
+                <span className="rounded-full bg-amber-200 px-1.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-300">
+                  {oldCategoryCount}
+                </span>
+              </button>
+            )}
 
             {/* Alle bestätigen */}
             <div className="relative">
@@ -1375,6 +1510,7 @@ export default function BankingReviewPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
+                  {/* Sortierbare Spaltenköpfe */}
                   <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
                     <th className="w-10 px-3 py-3">
                       <input
@@ -1382,20 +1518,78 @@ export default function BankingReviewPage() {
                         className="h-4 w-4 rounded border-slate-300 text-slate-900 dark:border-slate-600"
                         checked={displayedTxs.length > 0 && displayedTxs.every((t) => selectedIds.has(t.id))}
                         onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedIds(new Set(displayedTxs.map((t) => t.id)));
-                          } else {
-                            setSelectedIds(new Set());
-                          }
+                          if (e.target.checked) setSelectedIds(new Set(displayedTxs.map((t) => t.id)));
+                          else setSelectedIds(new Set());
                         }}
                       />
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Datum</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500">Betrag</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Beschreibung</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Kategorie</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">Immobilie</th>
+                    {(["date", "amount", "counterpart", "category", "property"] as const).map((col) => {
+                      const labels: Record<string, string> = { date: "Datum", amount: "Betrag", counterpart: "Beschreibung", category: "Kategorie", property: "Immobilie" };
+                      const isRight = col === "amount";
+                      const active = sortCol === col;
+                      return (
+                        <th key={col} className={`px-4 py-3 text-xs font-medium text-slate-500 ${isRight ? "text-right" : "text-left"}`}>
+                          <button
+                            type="button"
+                            onClick={() => toggleSort(col)}
+                            className={`inline-flex items-center gap-1 transition hover:text-slate-800 dark:hover:text-slate-200 ${active ? "font-semibold text-slate-800 dark:text-slate-200" : ""}`}
+                          >
+                            {labels[col]}
+                            <span className="text-[10px]">{active ? (sortDir === "asc" ? "▲" : "▼") : "⇅"}</span>
+                          </button>
+                        </th>
+                      );
+                    })}
                     <th className="px-4 py-3 text-right text-xs font-medium text-slate-500">Aktionen</th>
+                  </tr>
+                  {/* Filter-Zeile */}
+                  <tr className="border-b border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+                    <td />
+                    <td className="px-2 py-1.5">
+                      {/* Datum-Filter entfällt, stattdessen leer lassen */}
+                    </td>
+                    <td className="px-2 py-1.5" />
+                    <td className="px-2 py-1.5">
+                      <input
+                        type="text"
+                        value={filterText}
+                        onChange={(e) => setFilterText(e.target.value)}
+                        placeholder="Suchen…"
+                        className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                      />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input
+                        type="text"
+                        value={filterCategory}
+                        onChange={(e) => setFilterCategory(e.target.value)}
+                        placeholder="Filtern…"
+                        className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                      />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      {properties.length > 0 && (
+                        <select
+                          value={filterProperty}
+                          onChange={(e) => setFilterProperty(e.target.value)}
+                          className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        >
+                          <option value="">Alle</option>
+                          {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      )}
+                    </td>
+                    <td className="px-2 py-1.5 text-right">
+                      {(filterText || filterCategory || filterProperty) && (
+                        <button
+                          type="button"
+                          onClick={() => { setFilterText(""); setFilterCategory(""); setFilterProperty(""); }}
+                          className="text-[10px] text-slate-400 underline underline-offset-2 hover:text-slate-600 dark:hover:text-slate-300"
+                        >
+                          zurücksetzen
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 </thead>
 

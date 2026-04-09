@@ -70,6 +70,7 @@ export default function PropertyOverviewPage() {
   const [editGebaeudewert, setEditGebaeudewert] = useState("");
   const [editGrundwert, setEditGrundwert]       = useState("");
   const [editInventarwert, setEditInventarwert] = useState("");
+  const [grundwertManual, setGrundwertManual]   = useState(false); // true wenn Grundwert manuell geändert
 
   useEffect(() => {
     const load = async () => {
@@ -106,7 +107,20 @@ export default function PropertyOverviewPage() {
     setEditGebaeudewert(p.gebaeudewert?.toString() ?? "");
     setEditGrundwert(p.grundwert?.toString() ?? "");
     setEditInventarwert(p.inventarwert?.toString() ?? "");
+    setGrundwertManual(false);
   };
+
+  // Auto-Berechnung: Grundwert = Kaufpreis - Gebäudewert - Inventar
+  useEffect(() => {
+    if (grundwertManual) return;
+    const kp = Number(editKaufpreis);
+    if (kp > 0 && editGebaeudewert) {
+      const rest = kp - Number(editGebaeudewert) - Number(editInventarwert || 0);
+      if (rest >= 0) {
+        setEditGrundwert(String(Math.round(rest)));
+      }
+    }
+  }, [editKaufpreis, editGebaeudewert, editInventarwert, grundwertManual]);
 
   const handleSave = async () => {
     if (!property) return;
@@ -293,34 +307,23 @@ export default function PropertyOverviewPage() {
               <FormRow label="Gebäudeanteil (€) · AfA-Basis">
                 <Input
                   value={editGebaeudewert}
-                  onChange={(v) => {
-                    setEditGebaeudewert(v);
-                    // Auto-Berechnung: Grundwert = Kaufpreis - Gebäudewert - Inventar
-                    const kp = Number(editKaufpreis);
-                    if (kp > 0 && v) {
-                      const rest = kp - Number(v) - Number(editInventarwert || 0);
-                      if (rest >= 0) setEditGrundwert(String(Math.round(rest)));
-                    }
-                  }}
+                  onChange={(v) => { setEditGebaeudewert(v); setGrundwertManual(false); }}
                   type="number"
                   placeholder="z. B. 280000"
                 />
               </FormRow>
               <FormRow label="Grundstücksanteil (€) · nicht abschreibbar">
-                <Input value={editGrundwert} onChange={setEditGrundwert} type="number" placeholder="z. B. 60000" />
+                <Input
+                  value={editGrundwert}
+                  onChange={(v) => { setEditGrundwert(v); setGrundwertManual(true); }}
+                  type="number"
+                  placeholder="z. B. 60000"
+                />
               </FormRow>
               <FormRow label="Inventarwert (€) · separat absetzbar">
                 <Input
                   value={editInventarwert}
-                  onChange={(v) => {
-                    setEditInventarwert(v);
-                    // Auto-Berechnung: Grundwert = Kaufpreis - Gebäudewert - Inventar
-                    const kp = Number(editKaufpreis);
-                    if (kp > 0 && editGebaeudewert) {
-                      const rest = kp - Number(editGebaeudewert) - Number(v || 0);
-                      if (rest >= 0) setEditGrundwert(String(Math.round(rest)));
-                    }
-                  }}
+                  onChange={(v) => { setEditInventarwert(v); setGrundwertManual(false); }}
                   type="number"
                   placeholder="z. B. 10000"
                 />

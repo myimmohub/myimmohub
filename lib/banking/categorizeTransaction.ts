@@ -161,6 +161,12 @@ export type DbCategoryForPrompt = {
 
 // ── Prompt-Bausteine ─────────────────────────────────────────────────────────
 
+// Erkennt alte Kategorien, bei denen "(Anlage V" im Label selbst steht
+// (Altformat z.B. "Energieversorgung (Anlage V Z. 48)").
+function isOldStyleLabel(label: string): boolean {
+  return /\(Anlage V/i.test(label);
+}
+
 function buildDynamicCategoryBlock(cats: DbCategoryForPrompt[]): string {
   const grouped = new Map<string, DbCategoryForPrompt[]>();
   for (const cat of cats) {
@@ -169,8 +175,13 @@ function buildDynamicCategoryBlock(cats: DbCategoryForPrompt[]): string {
   }
   const lines: string[] = [];
   for (const [gruppe, items] of grouped) {
+    // Wenn in dieser Gruppe neue Kategorien (ohne Anlage-V im Label) vorhanden sind,
+    // Altformat-Kategorien ausblenden — Claude sieht so nur eine Option pro Konzept.
+    const hasNewStyle = items.some((c) => !isOldStyleLabel(c.label));
+    const filtered = hasNewStyle ? items.filter((c) => !isOldStyleLabel(c.label)) : items;
+
     lines.push(`\n${gruppe}:`);
-    for (const cat of items) {
+    for (const cat of filtered) {
       const anlage = cat.anlage_v ? ` (Anlage V ${cat.anlage_v})` : "";
       const desc = cat.description ? ` – ${cat.description}` : "";
       lines.push(`- ${cat.label}${anlage}${desc}`);

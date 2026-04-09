@@ -19,17 +19,43 @@ export async function GET(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json(data ?? {
-    property_id: propertyId,
-    objekttyp: "dauervermietung",
-    eigennutzung_tage: 0,
-    gesamt_tage: 365,
-    kleinunternehmer: false,
-    option_ust: false,
-    ak_gebaeude: null,
-    baujahr: null,
-    afa_satz: "2",
-  });
+  // If no tax_settings exist yet, prefill from property data
+  if (!data) {
+    const { data: prop } = await db
+      .from("properties")
+      .select("gebaeudewert, kaufpreis, baujahr, afa_satz")
+      .eq("id", propertyId)
+      .single();
+
+    const akGebaeude = prop?.gebaeudewert ?? prop?.kaufpreis ?? null;
+    const baujahr = prop?.baujahr ?? null;
+    // Determine AfA rate from property or by Baujahr
+    let afaSatz = "2";
+    if (prop?.afa_satz != null) {
+      // afa_satz is stored as decimal (e.g. 0.02) in properties
+      const pct = prop.afa_satz * 100;
+      if (pct === 3) afaSatz = "3";
+      else if (pct === 2.5) afaSatz = "2.5";
+      else afaSatz = "2";
+    } else if (baujahr) {
+      if (baujahr < 1925) afaSatz = "2.5";
+      else if (baujahr >= 2023) afaSatz = "3";
+    }
+
+    return NextResponse.json({
+      property_id: propertyId,
+      objekttyp: "dauervermietung",
+      eigennutzung_tage: 0,
+      gesamt_tage: 365,
+      kleinunternehmer: false,
+      option_ust: false,
+      ak_gebaeude: akGebaeude,
+      baujahr,
+      afa_satz: afaSatz,
+    });
+  }
+
+  return NextResponse.json(data);
 }
 
 export async function POST(request: Request) {
