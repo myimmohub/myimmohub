@@ -509,7 +509,7 @@ export default function BankingImportPage() {
                   Transaktionen automatisch kategorisieren?
                 </p>
                 <p className="mt-0.5 text-xs text-purple-600 dark:text-purple-400">
-                  Die KI ordnet jeder Transaktion eine Anlage-V-Kategorie zu. Du kannst die Vorschläge danach prüfen und korrigieren.
+                  Die KI ordnet jeder Transaktion automatisch eine Kategorie zu. Du kannst die Vorschläge danach prüfen und korrigieren.
                 </p>
                 {aiCategorized !== null && (
                   <p className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
