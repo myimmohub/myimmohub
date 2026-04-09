@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 import { usePropertyId } from "../layout";
 
 type TaxSettings = {
@@ -10,14 +12,25 @@ type TaxSettings = {
   gesamt_tage: number;
   kleinunternehmer: boolean;
   option_ust: boolean;
-  ak_gebaeude: number | null;
-  baujahr: number | null;
-  afa_satz: string;
 };
+
+type PropertyAfa = {
+  id: string;
+  name: string;
+  gebaeudewert: number | null;
+  kaufpreis: number | null;
+  baujahr: number | null;
+  afa_satz: number | null;
+  afa_jahresbetrag: number | null;
+};
+
+const fmtEur = (n: number) =>
+  new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
 export default function SteuerPage() {
   const propertyId = usePropertyId();
   const [data, setData] = useState<TaxSettings | null>(null);
+  const [propAfa, setPropAfa] = useState<PropertyAfa | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -25,8 +38,16 @@ export default function SteuerPage() {
   const loadData = useCallback(async () => {
     if (!propertyId) return;
     setLoading(true);
-    const res = await fetch(`/api/settings/tax?property_id=${propertyId}`);
+    const [res, { data: prop }] = await Promise.all([
+      fetch(`/api/settings/tax?property_id=${propertyId}`),
+      supabase
+        .from("properties")
+        .select("id, name, gebaeudewert, kaufpreis, baujahr, afa_satz, afa_jahresbetrag")
+        .eq("id", propertyId)
+        .single(),
+    ]);
     if (res.ok) setData(await res.json());
+    if (prop) setPropAfa(prop as PropertyAfa);
     setLoading(false);
   }, [propertyId]);
 
@@ -139,71 +160,64 @@ export default function SteuerPage() {
         </div>
       </section>
 
-      {/* AfA */}
+      {/* AfA — Read-only aus Steckbrief */}
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Abschreibung (AfA)</h3>
-          {data.ak_gebaeude && (
-            <span className="text-xs text-slate-400 dark:text-slate-500">
-              Vorausgefüllt aus Immobiliendaten · überschreibbar
-            </span>
-          )}
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
-              Anschaffungskosten Gebäude
-            </label>
-            <div className="relative">
-              <input
-                type="number"
-                min={0}
-                value={data.ak_gebaeude ?? ""}
-                onChange={(e) => update("ak_gebaeude", e.target.value ? parseFloat(e.target.value) : null)}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 pr-8 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                placeholder="0,00"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">&euro;</span>
-            </div>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Baujahr</label>
-            <input
-              type="number"
-              min={1800}
-              max={2030}
-              value={data.baujahr ?? ""}
-              onChange={(e) => update("baujahr", e.target.value ? parseInt(e.target.value) : null)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              placeholder="z.B. 1995"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">AfA-Satz</label>
-            <select
-              value={data.afa_satz}
-              onChange={(e) => update("afa_satz", e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+          {propertyId && (
+            <Link
+              href={`/dashboard/properties/${propertyId}/overview`}
+              className="text-xs text-blue-600 transition hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
             >
-              <option value="2">2 % (§ 7 Abs. 4 Nr. 2a EStG – ab 1925)</option>
-              <option value="2.5">2,5 % (§ 7 Abs. 4 Nr. 2b EStG – vor 1925)</option>
-              <option value="3">3 % (§ 7 Abs. 4 Nr. 1 EStG – ab 2023)</option>
-              <option value="sonder">Sonder-AfA (§ 7b EStG)</option>
-            </select>
-          </div>
-          {data.ak_gebaeude && data.afa_satz !== "sonder" && (
-            <div className="flex items-end">
-              <div className="rounded-lg bg-blue-50 px-4 py-3 dark:bg-blue-950/30">
-                <p className="text-xs text-blue-600 dark:text-blue-400">Jährliche AfA</p>
-                <p className="text-lg font-semibold text-blue-700 dark:text-blue-300">
-                  {new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(
-                    data.ak_gebaeude * (parseFloat(data.afa_satz) / 100)
-                  )}
-                </p>
-              </div>
-            </div>
+              Im Steckbrief bearbeiten →
+            </Link>
           )}
         </div>
+        {propAfa && (propAfa.gebaeudewert ?? propAfa.kaufpreis) ? (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
+              <p className="text-xs text-slate-500 dark:text-slate-400">AfA-Basis (Gebäudeanteil)</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {fmtEur(propAfa.gebaeudewert ?? propAfa.kaufpreis ?? 0)}
+              </p>
+            </div>
+            <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
+              <p className="text-xs text-slate-500 dark:text-slate-400">AfA-Satz</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {propAfa.afa_satz != null
+                  ? `${(propAfa.afa_satz * 100).toFixed(1).replace(".", ",")} %`
+                  : "—"}
+              </p>
+            </div>
+            <div className="rounded-lg bg-blue-50 px-4 py-3 dark:bg-blue-950/30">
+              <p className="text-xs text-blue-600 dark:text-blue-400">Jährliche AfA</p>
+              <p className="mt-1 text-sm font-semibold text-blue-700 dark:text-blue-300">
+                {propAfa.afa_jahresbetrag != null
+                  ? fmtEur(propAfa.afa_jahresbetrag)
+                  : propAfa.afa_satz != null && (propAfa.gebaeudewert ?? propAfa.kaufpreis)
+                  ? fmtEur((propAfa.gebaeudewert ?? propAfa.kaufpreis ?? 0) * propAfa.afa_satz)
+                  : "—"}
+              </p>
+            </div>
+            {propAfa.baujahr && (
+              <div className="rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Baujahr</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{propAfa.baujahr}</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-slate-200 p-4 dark:border-slate-700">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Noch keine AfA-Daten hinterlegt.{" "}
+              {propertyId && (
+                <Link href={`/dashboard/properties/${propertyId}/overview`} className="text-blue-600 underline underline-offset-2 hover:text-blue-700 dark:text-blue-400">
+                  Jetzt im Steckbrief eintragen →
+                </Link>
+              )}
+            </p>
+          </div>
+        )}
       </section>
 
       {/* Save */}
