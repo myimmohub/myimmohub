@@ -343,7 +343,7 @@ Antworte ausschließlich mit einem JSON-Objekt ohne Markdown-Codeblock:
   };
 }
 
-// ── Batch-Funktion ────────────────────────────────────────────────────────────
+// ── Batch-Funktion (mehrere TX in einem API-Call) ─────────────────────────────
 
 export type BatchCategorizeResult = {
   index: number;
@@ -352,11 +352,111 @@ export type BatchCategorizeResult = {
 };
 
 /**
- * Kategorisiert mehrere Transaktionen nacheinander (sequenziell, um Rate-Limits
- * zu respektieren). Fehler einzelner Zeilen brechen den Batch nicht ab.
+ * Kategorisiert mehrere Transaktionen in EINEM einzigen Claude-API-Call.
+ * Deutlich günstiger als Einzel-Calls, da die Kategorienliste nur einmal gesendet wird.
  *
- * @param transactions - Array von Transaktionen
- * @param onProgress   - Optionaler Callback nach jeder verarbeiteten Transaktion
+ * Max. ~10 Transaktionen pro Batch empfohlen (Antwort-JSON bleibt überschaubar).
+ */
+export async function categorizeTransactionBatch(
+  transactions: CategorizeInput[],
+  dbCategories?: DbCategoryForPrompt[],
+): Promise<CategorizeResult[]> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY nicht gesetzt.");
+  if (transactions.length === 0) return [];
+
+  const categoryBlock = dbCategories && dbCategories.length > 0
+    ? buildDynamicCategoryBlock(dbCategories)
+    : buildLegacyCategoryBlock();
+
+  // Nummerierte Transaktionsliste aufbauen
+  const txLines = transactions.map((tx, i) => {
+    const amt = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(tx.amount);
+    const dir = tx.amount >= 0 ? "Einnahme" : "Ausgabe";
+    return `[${i + 1}] Datum: ${tx.date} | Betrag: ${amt} (${dir}) | Verwendungszweck: ${tx.description ?? "—"} | Auftraggeber/Empfänger: ${tx.counterpart ?? "—"}`;
+  }).join("\n");
+
+  const prompt = `Du bist ein deutscher Steuerexperte für Vermieter. Kategorisiere die folgenden ${transactions.length} Immobilien-Transaktionen.
+
+TRANSAKTIONEN:
+${txLines}
+
+VERFÜGBARE KATEGORIEN:
+${categoryBlock}
+
+SONDERREGELN:
+1. Kreditrate (Annuität): Enthält der Verwendungszweck "Rate", "Annuität", "Darlehen" o.Ä., wähle "Kreditzinsen / Schuldzinsen" und weise in reason auf mögliche Zins/Tilgungs-Aufteilung hin.
+2. Grundsteuer vs. Grunderwerbsteuer: Laufende Grundsteuer (wiederkehrend) → "Grundsteuer". Einmalige Grunderwerbsteuer beim Kauf → nicht laufende Kosten.
+3. Wähle immer die spezifischste passende Kategorie.
+
+WICHTIG: "category" MUSS exakt einem der Kategorienamen entsprechen (Groß-/Kleinschreibung beachten).
+
+Antworte ausschließlich mit einem JSON-Array mit exakt ${transactions.length} Objekten in derselben Reihenfolge wie die Transaktionen. Kein Markdown:
+[
+  {"category": "<exakter Kategoriename>", "confidence": <0.0-1.0>, "reason": "<max. 8 Wörter>"},
+  ...
+]`;
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 256 * transactions.length, // ~256 Tokens pro Ergebnis-Objekt
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Claude API Fehler ${response.status}: ${text.slice(0, 300)}`);
+  }
+
+  const data = (await response.json()) as { content?: Array<{ type?: string; text?: string }> };
+  const raw = data.content?.filter((b) => b.type === "text").map((b) => b.text).join("") ?? "";
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+
+  let parsed: Array<{ category: string; confidence: number; reason: string }>;
+  try {
+    parsed = JSON.parse(cleaned) as typeof parsed;
+    if (!Array.isArray(parsed)) throw new Error("Kein Array");
+  } catch {
+    throw new Error(`categorizeTransactionBatch: Ungültiges JSON: ${cleaned.slice(0, 300)}`);
+  }
+
+  // Ergebnisse zusammenbauen — fehlende Einträge mit Fallback befüllen
+  return transactions.map((_, i) => {
+    const p = parsed[i];
+    if (!p?.category) return {
+      category:          "sonstiges_nicht_absetzbar",
+      is_tax_deductible: false,
+      anlage_v_zeile:    null,
+      confidence:        0,
+      reason:            "Keine KI-Antwort",
+    };
+    const category = p.category;
+    if (dbCategories && dbCategories.length > 0) {
+      const dbCat = dbCategories.find((c) => c.label === category);
+      const anlageVZeile = dbCat?.anlage_v ? parseInt(dbCat.anlage_v.match(/(\d+)/)?.[1] ?? "") || null : null;
+      return { category, is_tax_deductible: dbCat ? dbCat.typ === "ausgabe" : false, anlage_v_zeile: anlageVZeile, confidence: p.confidence, reason: p.reason };
+    }
+    return {
+      category,
+      is_tax_deductible: TAX_DEDUCTIBLE[category as AnlageVCategory] ?? false,
+      anlage_v_zeile:    ANLAGE_V_ZEILEN[category as AnlageVCategory] ?? null,
+      confidence:        p.confidence,
+      reason:            p.reason,
+    };
+  });
+}
+
+/**
+ * Kategorisiert mehrere Transaktionen nacheinander (sequenziell, Einzel-Calls).
+ * @deprecated Nutze stattdessen den Batch-Loop in der Route (chunked + retry).
  */
 export async function categorizeTransactions(
   transactions: CategorizeInput[],

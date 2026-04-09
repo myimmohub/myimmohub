@@ -2,12 +2,25 @@ import { NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/getUser";
 import { serviceRoleClient } from "@/lib/supabase/queries";
 import {
-  categorizeTransaction,
+  categorizeTransactionBatch,
   type DbCategoryForPrompt,
 } from "@/lib/banking/categorizeTransaction";
 
-// 31 sequenzielle Claude-Calls × ~3 s = ~90 s — Timeout explizit hochsetzen
+// Batch-Verarbeitung: N Batches × ~3 s — deutlich schneller als Einzel-Calls
 export const maxDuration = 300;
+
+/** Hilfsfunktion: Array in Chunks aufteilen */
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
+
+/** Wartet ms Millisekunden */
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Anzahl Transaktionen pro Batch-Call (5 = gute Balance aus Speed & Zuverlässigkeit) */
+const BATCH_SIZE = 5;
 
 type CategorizeResponse = {
   total: number;
@@ -76,24 +89,54 @@ export async function POST(request: Request) {
     .order("label");
   if (catData) dbCategories = catData as DbCategoryForPrompt[];
 
-  // ── KI-Kategorisierung sequenziell ────────────────────────────────────────
-  // Sequenziell statt parallel, um Rate-Limits zu respektieren.
-  // Fehler einzelner Transaktionen unterbrechen den Batch nicht.
+  // ── KI-Kategorisierung in Batches ─────────────────────────────────────────
+  // Mehrere Transaktionen pro API-Call → weniger Token-Overhead, deutlich schneller.
+  // Bei 429-Fehler: 60 s warten und Batch einmal wiederholen.
   let categorized = 0;
   let errors = 0;
   let firstError: string | null = null;
 
-  for (const tx of transactions) {
-    try {
-      const result = await categorizeTransaction(
-        {
-          date:        tx.date as string,
-          amount:      Number(tx.amount),
-          description: tx.description as string | null,
-          counterpart: tx.counterpart as string | null,
-        },
-        dbCategories.length > 0 ? dbCategories : undefined,
-      );
+  const chunks = chunkArray(transactions, BATCH_SIZE);
+
+  for (const chunk of chunks) {
+    const inputs = chunk.map((tx) => ({
+      date:        tx.date as string,
+      amount:      Number(tx.amount),
+      description: tx.description as string | null,
+      counterpart: tx.counterpart as string | null,
+    }));
+
+    let results: Awaited<ReturnType<typeof categorizeTransactionBatch>> | null = null;
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        results = await categorizeTransactionBatch(
+          inputs,
+          dbCategories.length > 0 ? dbCategories : undefined,
+        );
+        break; // Erfolg → kein Retry nötig
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const is429 = msg.includes("429");
+        if (is429 && attempt === 0) {
+          // Rate-Limit: 60 s warten und nochmal versuchen
+          await sleep(60_000);
+          continue;
+        }
+        // Kein Retry mehr möglich → gesamten Chunk als Fehler markieren
+        errors += chunk.length;
+        firstError ??= msg;
+        break;
+      }
+    }
+
+    if (!results) continue;
+
+    // DB-Updates für jeden Treffer im Chunk
+    for (let i = 0; i < chunk.length; i++) {
+      const tx = chunk[i];
+      const result = results[i];
+      if (!result) { errors++; continue; }
 
       const { error: updateError } = await db
         .from("transactions")
@@ -111,10 +154,6 @@ export async function POST(request: Request) {
       } else {
         categorized++;
       }
-    } catch (err) {
-      errors++;
-      const msg = err instanceof Error ? err.message : String(err);
-      firstError ??= msg;
     }
   }
 
