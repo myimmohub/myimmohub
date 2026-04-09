@@ -68,6 +68,8 @@ export default function TaxOverviewPage() {
 
   const currentYear = new Date().getFullYear();
   const existingYears = new Set(entries.map((e) => e.tax_year));
+  const availableYears = Array.from({ length: 10 }, (_, i) => currentYear - 1 - i).filter((y) => !existingYears.has(y));
+  const [calcYear, setCalcYear] = useState<number>(availableYears[0] ?? currentYear - 1);
 
   if (loading) return <Skeleton />;
 
@@ -103,21 +105,35 @@ export default function TaxOverviewPage() {
           </div>
         </div>
 
-        {/* Quick-Calculate for current/last year */}
-        {!existingYears.has(currentYear - 1) && (
-          <button
-            type="button"
-            onClick={() => void handleCalculate(currentYear - 1)}
-            disabled={calculating}
-            className="w-full rounded-xl border-2 border-dashed border-slate-300 bg-white p-6 text-center transition hover:border-blue-400 hover:bg-blue-50/50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-600"
-          >
+        {/* Calculate from transactions */}
+        {availableYears.length > 0 && (
+          <div className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-5 transition dark:border-slate-700 dark:bg-slate-900">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              {calculating ? "Berechne…" : `Steuerjahr ${currentYear - 1} aus Transaktionen berechnen`}
+              Steuerjahr aus Transaktionen berechnen
             </p>
-            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+            <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
               Werte werden automatisch aus kategorisierten Buchungen ermittelt
             </p>
-          </button>
+            <div className="mt-3 flex items-center gap-3">
+              <select
+                value={calcYear}
+                onChange={(e) => setCalcYear(Number(e.target.value))}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
+              >
+                {availableYears.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => void handleCalculate(calcYear)}
+                disabled={calculating}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
+              >
+                {calculating ? "Berechne…" : "Berechnen"}
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Entries */}
