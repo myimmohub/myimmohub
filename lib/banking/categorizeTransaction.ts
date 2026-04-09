@@ -318,7 +318,19 @@ Antworte ausschließlich mit einem JSON-Objekt ohne Markdown-Codeblock:
     );
   }
 
-  const category = parsed.category;
+  // Normalisierung: Modell kann altes Label-Format halluzinieren
+  // z. B. "Energieversorgung (Anlage V Z. 48)" → "Energieversorgung"
+  const rawCategory = parsed.category;
+  let category = rawCategory;
+  if (dbCategories && dbCategories.length > 0) {
+    if (!dbCategories.some((c) => c.label === rawCategory)) {
+      // Kein exakter Treffer → Präfix-Suche
+      const match = dbCategories.find(
+        (c) => rawCategory.startsWith(c.label) || c.label.startsWith(rawCategory),
+      );
+      if (match) category = match.label;
+    }
+  }
 
   // Resolve tax-deductible and Anlage-V from DB categories if available
   if (dbCategories && dbCategories.length > 0) {
@@ -397,6 +409,9 @@ Antworte ausschließlich mit einem JSON-Array mit exakt ${transactions.length} O
   ...
 ]`;
 
+  // Großzügiger Puffer: Deutsch tokenisiert ineffizienter als Englisch (~3-4 Zeichen/Token)
+  const maxTokens = Math.max(600 * transactions.length, 2048);
+
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -406,7 +421,7 @@ Antworte ausschließlich mit einem JSON-Array mit exakt ${transactions.length} O
     },
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 256 * transactions.length, // ~256 Tokens pro Ergebnis-Objekt
+      max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     }),
   });
@@ -418,7 +433,13 @@ Antworte ausschließlich mit einem JSON-Array mit exakt ${transactions.length} O
 
   const data = (await response.json()) as { content?: Array<{ type?: string; text?: string }> };
   const raw = data.content?.filter((b) => b.type === "text").map((b) => b.text).join("") ?? "";
-  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+
+  // JSON-Array extrahieren: Modell schreibt manchmal Präambel-Text vor dem Array
+  const arrayStart = raw.indexOf("[");
+  const arrayEnd   = raw.lastIndexOf("]");
+  const cleaned    = arrayStart !== -1 && arrayEnd > arrayStart
+    ? raw.slice(arrayStart, arrayEnd + 1)
+    : raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 
   let parsed: Array<{ category: string; confidence: number; reason: string }>;
   try {
@@ -428,17 +449,36 @@ Antworte ausschließlich mit einem JSON-Array mit exakt ${transactions.length} O
     throw new Error(`categorizeTransactionBatch: Ungültiges JSON: ${cleaned.slice(0, 300)}`);
   }
 
-  // Ergebnisse zusammenbauen — fehlende Einträge mit Fallback befüllen
+  // Gültige Label-Menge aufbauen — für Validierung & Normalisierung
+  const validLabels = new Set(dbCategories?.map((c) => c.label) ?? []);
+
+  /**
+   * Normalisiert ein Kategorie-Label aus der KI-Antwort:
+   * 1. Exakter Match → unverändert
+   * 2. Präfix-Match: KI gibt alten Namen zurück (z. B. "Grundsteuer (Anlage V Z. 47)"),
+   *    suche DB-Kategorie, deren Label darin enthalten ist
+   * 3. Kein Match → null (Fallback auf Einzel-Call nötig)
+   */
+  function normalizeCategory(raw: string): string | null {
+    if (!dbCategories || dbCategories.length === 0) return raw; // Legacymodus
+    if (validLabels.has(raw)) return raw;
+    // Altes Label enthält neues als Präfix? z. B. "Grundsteuer (Anlage V Z. 47)"
+    for (const dbCat of dbCategories) {
+      if (raw.startsWith(dbCat.label) || dbCat.label.startsWith(raw)) return dbCat.label;
+    }
+    return null; // unbekanntes Label
+  }
+
+  // Ergebnisse zusammenbauen
   return transactions.map((_, i) => {
     const p = parsed[i];
     if (!p?.category) return {
-      category:          "sonstiges_nicht_absetzbar",
-      is_tax_deductible: false,
-      anlage_v_zeile:    null,
-      confidence:        0,
-      reason:            "Keine KI-Antwort",
+      category: "sonstiges_nicht_absetzbar", is_tax_deductible: false,
+      anlage_v_zeile: null, confidence: 0, reason: "Keine KI-Antwort",
     };
-    const category = p.category;
+
+    const category = normalizeCategory(p.category) ?? p.category;
+
     if (dbCategories && dbCategories.length > 0) {
       const dbCat = dbCategories.find((c) => c.label === category);
       const anlageVZeile = dbCat?.anlage_v ? parseInt(dbCat.anlage_v.match(/(\d+)/)?.[1] ?? "") || null : null;

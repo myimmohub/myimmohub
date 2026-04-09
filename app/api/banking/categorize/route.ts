@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/getUser";
 import { serviceRoleClient } from "@/lib/supabase/queries";
 import {
+  categorizeTransaction,
   categorizeTransactionBatch,
   type DbCategoryForPrompt,
 } from "@/lib/banking/categorizeTransaction";
@@ -122,6 +123,18 @@ export async function POST(request: Request) {
           // Rate-Limit: 60 s warten und nochmal versuchen
           await sleep(60_000);
           continue;
+        }
+        if (attempt === 0 && !is429) {
+          // Bei JSON-Fehler: Fallback auf Einzel-Calls für diesen Chunk
+          const singleResults = await Promise.allSettled(
+            inputs.map((inp) =>
+              categorizeTransaction(inp, dbCategories.length > 0 ? dbCategories : undefined),
+            ),
+          );
+          results = singleResults.map((r) =>
+            r.status === "fulfilled" ? r.value : null,
+          ) as Awaited<ReturnType<typeof categorizeTransactionBatch>>;
+          break;
         }
         // Kein Retry mehr möglich → gesamten Chunk als Fehler markieren
         errors += chunk.length;
