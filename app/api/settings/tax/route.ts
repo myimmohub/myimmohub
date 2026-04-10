@@ -47,6 +47,7 @@ export async function GET(request: Request) {
       objekttyp: "dauervermietung",
       eigennutzung_tage: 0,
       gesamt_tage: 365,
+      rental_share_override_pct: null,
       kleinunternehmer: false,
       option_ust: false,
       ak_gebaeude: akGebaeude,

@@ -10,6 +10,7 @@ type TaxSettings = {
   objekttyp: string;
   eigennutzung_tage: number;
   gesamt_tage: number;
+  rental_share_override_pct?: number | null;
   kleinunternehmer: boolean;
   option_ust: boolean;
 };
@@ -34,6 +35,7 @@ export default function SteuerPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!propertyId) return;
@@ -51,11 +53,14 @@ export default function SteuerPage() {
     setLoading(false);
   }, [propertyId]);
 
-  useEffect(() => { void loadData(); }, [loadData]);
+  useEffect(() => {
+    void Promise.resolve().then(loadData);
+  }, [loadData]);
 
   const handleSave = async () => {
     if (!data) return;
     setSaving(true);
+    setSaveError(null);
     const res = await fetch("/api/settings/tax", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -65,6 +70,9 @@ export default function SteuerPage() {
     if (res.ok) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    } else {
+      const result = await res.json().catch(() => null) as { error?: string } | null;
+      setSaveError(result?.error ?? "Speichern fehlgeschlagen.");
     }
   };
 
@@ -83,6 +91,8 @@ export default function SteuerPage() {
   const update = (key: keyof TaxSettings, value: unknown) =>
     setData({ ...data, [key]: value });
 
+  const autoRentalShare = Math.max(0, Math.min(1, 1 - data.eigennutzung_tage / Math.max(1, data.gesamt_tage)));
+
   return (
     <div className="space-y-6">
       {/* Objekttyp */}
@@ -97,9 +107,9 @@ export default function SteuerPage() {
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             >
               <option value="dauervermietung">Dauervermietung</option>
-              <option value="kurzzeit">Kurzzeitvermietung</option>
+              <option value="ferienwohnung_teil">Ferienwohnung mit Eigennutzung</option>
+              <option value="ferienwohnung_voll">Ferienwohnung ohne Eigennutzung</option>
               <option value="gewerbe">Gewerbevermietung</option>
-              <option value="gemischt">Gemischt</option>
             </select>
           </div>
           <div>
@@ -127,6 +137,27 @@ export default function SteuerPage() {
               onChange={(e) => update("gesamt_tage", parseInt(e.target.value) || 365)}
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
+              Vermietungsanteil FE/FB (optional)
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.01}
+              value={data.rental_share_override_pct != null ? (data.rental_share_override_pct * 100).toString() : ""}
+              onChange={(e) => {
+                const raw = e.target.value.trim();
+                update("rental_share_override_pct", raw === "" ? null : (parseFloat(raw.replace(",", ".")) / 100));
+              }}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              placeholder={`${(autoRentalShare * 100).toFixed(2).replace(".", ",")}`}
+            />
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+              Leer lassen für Automatik aus Eigennutzung: {(autoRentalShare * 100).toFixed(2).replace(".", ",")} %
+            </p>
           </div>
         </div>
       </section>
@@ -232,6 +263,11 @@ export default function SteuerPage() {
         {saved && (
           <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
             Gespeichert!
+          </span>
+        )}
+        {saveError && (
+          <span className="text-sm font-medium text-red-600 dark:text-red-400">
+            {saveError}
           </span>
         )}
       </div>

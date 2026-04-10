@@ -80,13 +80,17 @@ function CategorySelect({
   // All options as flat list
   const allOptions: { value: string; label: string; gruppe: string }[] = useMemo(() => {
     if (catLookup && catLookup.categories.length > 0) {
-      return catLookup.grouped.flatMap((g) =>
+      const options = catLookup.grouped.flatMap((g) =>
         g.items.map((c) => ({
           value: c.label,
           label: `${c.icon} ${c.label}${c.anlage_v ? ` · ${c.anlage_v}` : ""}`,
           gruppe: g.gruppe,
         }))
       );
+
+      // DB-Inhalte koennen vereinzelt doppelte Labels enthalten. Da die Auswahl
+      // im Review auf dem Label basiert, zeigen wir jeden Wert nur einmal an.
+      return options.filter((opt, index, arr) => arr.findIndex((item) => item.value === opt.value) === index);
     }
     return Object.entries(ANLAGE_V_CATEGORY_LABELS).map(([key, label]) => ({
       value: key, label, gruppe: "",

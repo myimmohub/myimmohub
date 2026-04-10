@@ -8,6 +8,29 @@ import { TAX_FIELDS, TAX_FIELD_GROUPS } from "@/lib/tax/fieldMeta";
 import type { TaxData, TaxConfidence } from "@/types/tax";
 
 type Property = { id: string; name: string };
+type ImportedPartnerPreview = {
+  name: string;
+  anteil_pct?: number | null;
+  email?: string | null;
+  special_expenses?: number | null;
+  note?: string | null;
+};
+type SupplementalPreview = {
+  gbr_name: string | null;
+  gbr_steuernummer: string | null;
+  gbr_finanzamt: string | null;
+  feststellungserklaerung: boolean | null;
+  teilweise_eigennutzung: boolean | null;
+  eigennutzung_tage: number | null;
+  gesamt_tage: number | null;
+  rental_share_override_pct: number | null;
+  partners: ImportedPartnerPreview[];
+};
+type ImportResult = {
+  fields: TaxData;
+  confidence: Record<string, TaxConfidence>;
+  supplemental_data?: SupplementalPreview;
+};
 
 const CONFIDENCE_COLORS: Record<TaxConfidence | "null", { dot: string; label: string }> = {
   high:   { dot: "bg-emerald-500", label: "Sicher" },
@@ -32,7 +55,7 @@ export default function TaxImportPage() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ fields: TaxData; confidence: Record<string, TaxConfidence> } | null>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
   const [saving, setSaving] = useState(false);
   const [existingId, setExistingId] = useState<string | null>(null);
 
@@ -90,7 +113,7 @@ export default function TaxImportPage() {
         return;
       }
 
-      setResult({ fields: data.fields, confidence: data.confidence });
+      setResult({ fields: data.fields, confidence: data.confidence, supplemental_data: data.supplemental_data });
       setProgress(100);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unbekannter Fehler.");
@@ -121,7 +144,7 @@ export default function TaxImportPage() {
           Steuerbescheid importieren
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Lade einen Steuerbescheid oder ELSTER-PDF hoch. Die KI extrahiert die Anlage-V-Felder automatisch.
+          Lade einen Steuerbescheid oder ELSTER-PDF für {property?.name ?? "die Immobilie"} hoch. Die KI extrahiert Anlage V sowie GbR-, FE- und FB-relevante Angaben automatisch.
         </p>
 
         {!result ? (
@@ -230,6 +253,105 @@ export default function TaxImportPage() {
               );
             })}
 
+            {result.supplemental_data && (
+              <>
+                {(result.supplemental_data.gbr_name ||
+                  result.supplemental_data.gbr_steuernummer ||
+                  result.supplemental_data.gbr_finanzamt ||
+                  result.supplemental_data.feststellungserklaerung != null ||
+                  result.supplemental_data.teilweise_eigennutzung != null ||
+                  result.supplemental_data.eigennutzung_tage != null ||
+                  result.supplemental_data.gesamt_tage != null ||
+                  result.supplemental_data.rental_share_override_pct != null) && (
+                  <div className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                        GbR / FE Zusatzdaten
+                      </h3>
+                    </div>
+                    <div className="divide-y divide-slate-100 px-5 dark:divide-slate-800">
+                      <PreviewRow label="GbR-Name" value={result.supplemental_data.gbr_name} />
+                      <PreviewRow label="Steuernummer" value={result.supplemental_data.gbr_steuernummer} />
+                      <PreviewRow label="Finanzamt" value={result.supplemental_data.gbr_finanzamt} />
+                      <PreviewRow
+                        label="Feststellungserklärung"
+                        value={
+                          result.supplemental_data.feststellungserklaerung == null
+                            ? null
+                            : result.supplemental_data.feststellungserklaerung ? "Ja" : "Nein"
+                        }
+                      />
+                      <PreviewRow
+                        label="Teilweise Eigennutzung"
+                        value={
+                          result.supplemental_data.teilweise_eigennutzung == null
+                            ? null
+                            : result.supplemental_data.teilweise_eigennutzung ? "Ja" : "Nein"
+                        }
+                      />
+                      <PreviewRow
+                        label="Eigennutzungstage"
+                        value={result.supplemental_data.eigennutzung_tage != null ? String(result.supplemental_data.eigennutzung_tage) : null}
+                      />
+                      <PreviewRow
+                        label="Gesamttage"
+                        value={result.supplemental_data.gesamt_tage != null ? String(result.supplemental_data.gesamt_tage) : null}
+                      />
+                      <PreviewRow
+                        label="Vermietungsanteil manuell"
+                        value={
+                          result.supplemental_data.rental_share_override_pct != null
+                            ? `${(result.supplemental_data.rental_share_override_pct * 100).toFixed(2).replace(".", ",")} %`
+                            : null
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {result.supplemental_data.partners.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                        Partner / FB-Zuordnung
+                      </h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
+                            <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Name</th>
+                            <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">Anteil</th>
+                            <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">Sonder-WK</th>
+                            <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Hinweis</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {result.supplemental_data.partners.map((partner, index) => (
+                            <tr key={`${partner.name}-${index}`}>
+                              <td className="px-4 py-3 text-slate-900 dark:text-slate-100">
+                                <p className="font-medium">{partner.name}</p>
+                                <p className="text-xs text-slate-400 dark:text-slate-500">{partner.email || "Keine E-Mail"}</p>
+                              </td>
+                              <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">
+                                {partner.anteil_pct != null ? `${partner.anteil_pct.toFixed(2)} %` : "—"}
+                              </td>
+                              <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">
+                                {partner.special_expenses != null ? fmtVal(partner.special_expenses, "numeric") : "—"}
+                              </td>
+                              <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                                {partner.note || "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
             <div className="flex gap-3">
               <button
                 type="button"
@@ -251,5 +373,15 @@ export default function TaxImportPage() {
         )}
       </section>
     </main>
+  );
+}
+
+function PreviewRow({ label, value }: { label: string; value: string | null }) {
+  if (value == null || value === "") return null;
+  return (
+    <div className="flex items-center justify-between py-2.5">
+      <span className="text-sm text-slate-600 dark:text-slate-400">{label}</span>
+      <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{value}</span>
+    </div>
   );
 }

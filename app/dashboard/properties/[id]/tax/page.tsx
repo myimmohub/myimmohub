@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { calculateTaxTotals } from "@/lib/tax/gbrTaxReport";
 import type { TaxData } from "@/types/tax";
 
 type Property = { id: string; name: string; address: string | null };
+type GbrSettingsSummary = { id?: string; feststellungserklaerung: boolean; gbr_partner: { id: string; anteil: number }[] };
 
 const fmtEur = (n: number | null) =>
   n == null ? "—" : n.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -15,6 +17,7 @@ export default function TaxOverviewPage() {
   const { id } = useParams<{ id: string }>();
   const [property, setProperty] = useState<Property | null>(null);
   const [entries, setEntries] = useState<TaxData[]>([]);
+  const [gbrSettings, setGbrSettings] = useState<GbrSettingsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [calculating, setCalculating] = useState(false);
 
@@ -23,13 +26,18 @@ export default function TaxOverviewPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [{ data: prop }, taxRes] = await Promise.all([
+      const [{ data: prop }, taxRes, gbrRes] = await Promise.all([
         supabase.from("properties").select("id, name, address").eq("id", id).eq("user_id", user.id).single(),
         fetch(`/api/tax?property_id=${id}`),
+        fetch(`/api/settings/gbr?property_id=${id}`),
       ]);
 
       setProperty(prop as Property | null);
       if (taxRes.ok) setEntries(await taxRes.json());
+      if (gbrRes.ok) {
+        const gbr = await gbrRes.json() as GbrSettingsSummary;
+        if (gbr.id) setGbrSettings(gbr);
+      }
       setLoading(false);
     };
     void load();
@@ -90,7 +98,7 @@ export default function TaxOverviewPage() {
           <div className="flex items-end justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-                Steuererklärung (Anlage V)
+                Steuererklärung {gbrSettings ? "(Anlage V + FE/FB)" : "(Anlage V)"}
               </h1>
               <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
                 {property?.name}{property?.address ? ` · ${property.address}` : ""}
@@ -149,10 +157,11 @@ export default function TaxOverviewPage() {
         ) : (
           <div className="space-y-3">
             {entries.map((entry) => {
-              const einnahmen = (entry.rent_income ?? 0) + (entry.operating_costs_income ?? 0) + (entry.other_income ?? 0) + (entry.deposits_received ?? 0);
-              const wk = (entry.loan_interest ?? 0) + (entry.property_tax ?? 0) + (entry.hoa_fees ?? 0) + (entry.insurance ?? 0) + (entry.maintenance_costs ?? 0) + (entry.property_management ?? 0) + (entry.bank_fees ?? 0) + (entry.other_expenses ?? 0) + (entry.water_sewage ?? 0) + (entry.waste_disposal ?? 0);
-              const afa = (entry.depreciation_building ?? 0) + (entry.depreciation_outdoor ?? 0) + (entry.depreciation_fixtures ?? 0);
-              const ergebnis = einnahmen - wk - afa;
+              const totals = calculateTaxTotals(entry);
+              const einnahmen = totals.totalIncome;
+              const wk = totals.totalExpenses;
+              const afa = totals.depreciationTotal;
+              const ergebnis = totals.result;
 
               const sourceLabel = entry.import_source === "pdf_import" ? "PDF-Import"
                 : entry.import_source === "calculated" ? "Berechnet"
@@ -167,9 +176,18 @@ export default function TaxOverviewPage() {
                         <span>Einnahmen: {fmtEur(einnahmen)}</span>
                         <span>WK: {fmtEur(wk)}</span>
                         <span>AfA: {fmtEur(afa)}</span>
+                        {gbrSettings && <span>FE/FB bereit</span>}
                       </div>
                     </Link>
                     <div className="flex items-center gap-3">
+                      {gbrSettings && (
+                        <Link
+                          href={`/dashboard/properties/${id}/tax/${entry.tax_year}/gbr`}
+                          className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+                        >
+                          FE/FB
+                        </Link>
+                      )}
                       <div className="text-right">
                         <p className={`text-sm font-semibold tabular-nums ${ergebnis < 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-900 dark:text-slate-100"}`}>
                           {fmtEur(ergebnis)}

@@ -10,6 +10,14 @@ type Partner = {
   email: string | null;
 };
 
+type PartnerTaxValue = {
+  id: string;
+  gbr_partner_id: string;
+  tax_year: number;
+  special_expenses: number;
+  note?: string | null;
+};
+
 type GbrSettings = {
   id?: string;
   property_id: string;
@@ -29,6 +37,7 @@ export default function GbrPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // New partner form
   const [newName, setNewName] = useState("");
@@ -40,6 +49,13 @@ export default function GbrPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [partnerError, setPartnerError] = useState<string | null>(null);
+  const [partnerTaxYear, setPartnerTaxYear] = useState(new Date().getFullYear() - 1);
+  const [partnerTaxValues, setPartnerTaxValues] = useState<Record<string, string>>({});
+  const [partnerTaxNotes, setPartnerTaxNotes] = useState<Record<string, string>>({});
+  const [loadingPartnerTax, setLoadingPartnerTax] = useState(false);
+  const [savingPartnerTaxId, setSavingPartnerTaxId] = useState<string | null>(null);
+  const [partnerTaxMessage, setPartnerTaxMessage] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!propertyId) return;
@@ -51,9 +67,48 @@ export default function GbrPage() {
 
   useEffect(() => { void loadData(); }, [loadData]);
 
+  const loadPartnerTaxData = useCallback(async (year: number, partners: Partner[]) => {
+    if (!propertyId || partners.length === 0) {
+      setPartnerTaxValues({});
+      setPartnerTaxNotes({});
+      return;
+    }
+
+    setLoadingPartnerTax(true);
+    const res = await fetch(`/api/settings/gbr/partner-tax?property_id=${propertyId}&tax_year=${year}`);
+    if (!res.ok) {
+      setLoadingPartnerTax(false);
+      return;
+    }
+
+    const rows = await res.json() as PartnerTaxValue[];
+    const byPartnerId = new Map(rows.map((row) => [row.gbr_partner_id, row]));
+    setPartnerTaxValues(
+      Object.fromEntries(partners.map((partner) => [
+        partner.id,
+        byPartnerId.get(partner.id)?.special_expenses
+          ? String(byPartnerId.get(partner.id)?.special_expenses)
+          : "",
+      ])),
+    );
+    setPartnerTaxNotes(
+      Object.fromEntries(partners.map((partner) => [
+        partner.id,
+        byPartnerId.get(partner.id)?.note ?? "",
+      ])),
+    );
+    setLoadingPartnerTax(false);
+  }, [propertyId]);
+
+  useEffect(() => {
+    if (!data) return;
+    void loadPartnerTaxData(partnerTaxYear, data.gbr_partner);
+  }, [data, partnerTaxYear, loadPartnerTaxData]);
+
   const handleSave = async () => {
     if (!data) return;
     setSaving(true);
+    setSaveError(null);
     const res = await fetch("/api/settings/gbr", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -65,28 +120,57 @@ export default function GbrPage() {
       if (!data.id) setData({ ...data, id: result.id });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    } else {
+      const result = await res.json().catch(() => null) as { error?: string } | null;
+      setSaveError(result?.error ?? "GbR-Einstellungen konnten nicht gespeichert werden.");
     }
   };
 
-  const addPartner = async () => {
-    if (!data?.id || !newName.trim() || !newAnteil) return;
+  const createPartner = async ({
+    name,
+    anteil,
+    email,
+  }: {
+    name: string;
+    anteil: number;
+    email?: string;
+  }) => {
+    if (!data?.id || !name.trim() || Number.isNaN(anteil)) return false;
+
+    setPartnerError(null);
     setAddingPartner(true);
     const res = await fetch("/api/settings/gbr/partner", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         gbr_settings_id: data.id,
-        name: newName.trim(),
-        anteil: parseFloat(newAnteil),
-        email: newEmail.trim() || undefined,
+        name: name.trim(),
+        anteil,
+        email: email?.trim() || undefined,
       }),
     });
     setAddingPartner(false);
+
     if (res.ok) {
+      void loadData();
+      return true;
+    }
+    const result = await res.json().catch(() => null) as { error?: string } | null;
+    setPartnerError(result?.error ?? "Partner konnte nicht gespeichert werden.");
+    return false;
+  };
+
+  const addPartner = async () => {
+    if (!newName.trim() || !newAnteil) return;
+    const created = await createPartner({
+      name: newName,
+      anteil: parseFloat(newAnteil),
+      email: newEmail,
+    });
+    if (created) {
       setNewName("");
       setNewAnteil("");
       setNewEmail("");
-      void loadData();
     }
   };
 
@@ -161,10 +245,54 @@ export default function GbrPage() {
 
   const applyExtractedPartner = (idx: number) => {
     const p = extractedPartners[idx];
-    setNewName(p.name);
-    setNewAnteil(String(p.anteil));
-    setNewEmail(p.email ?? "");
-    setExtractedPartners((prev) => prev.filter((_, i) => i !== idx));
+    if (!data?.id) {
+      setNewName(p.name);
+      setNewAnteil(String(p.anteil));
+      setNewEmail(p.email ?? "");
+      return;
+    }
+
+    void (async () => {
+      const created = await createPartner({
+        name: p.name,
+        anteil: p.anteil,
+        email: p.email ?? undefined,
+      });
+      if (created) {
+        setExtractedPartners((prev) => prev.filter((_, i) => i !== idx));
+      }
+    })();
+  };
+
+  const savePartnerTax = async (partnerId: string) => {
+    if (!propertyId) return;
+    setSavingPartnerTaxId(partnerId);
+    setPartnerTaxMessage(null);
+
+    const rawValue = partnerTaxValues[partnerId]?.trim() ?? "";
+    const specialExpenses = rawValue === "" ? 0 : parseFloat(rawValue.replace(",", "."));
+
+    const res = await fetch("/api/settings/gbr/partner-tax", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        property_id: propertyId,
+        gbr_partner_id: partnerId,
+        tax_year: partnerTaxYear,
+        special_expenses: Number.isNaN(specialExpenses) ? 0 : specialExpenses,
+        note: partnerTaxNotes[partnerId]?.trim() || null,
+      }),
+    });
+
+    setSavingPartnerTaxId(null);
+    if (!res.ok) {
+      const result = await res.json().catch(() => null) as { error?: string } | null;
+      setPartnerTaxMessage(result?.error ?? "Sonderwerbungskosten konnten nicht gespeichert werden.");
+      return;
+    }
+
+    setPartnerTaxMessage("Jahreswerte gespeichert.");
+    setTimeout(() => setPartnerTaxMessage(null), 2000);
   };
 
   if (!propertyId) {
@@ -342,6 +470,11 @@ export default function GbrPage() {
             Gespeichert!
           </span>
         )}
+        {saveError && (
+          <span className="text-sm font-medium text-red-600 dark:text-red-400">
+            {saveError}
+          </span>
+        )}
       </div>
 
       {/* Partner */}
@@ -393,6 +526,12 @@ export default function GbrPage() {
           </div>
         )}
 
+        {partnerError && (
+          <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+            {partnerError}
+          </p>
+        )}
+
         {/* Add partner form */}
         {data.id ? (
           <div className="rounded-lg border border-dashed border-slate-200 p-3 dark:border-slate-700">
@@ -436,6 +575,91 @@ export default function GbrPage() {
           </p>
         )}
       </section>
+
+      {/* Jahreswerte fuer FE/FB */}
+      {data.gbr_partner.length > 0 && (
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Jahreswerte vor der Berechnung</h3>
+              <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                Hier pflegst du Sonderwerbungskosten je Partner schon vor FE/FB-Berechnung und Export.
+              </p>
+            </div>
+            <select
+              value={partnerTaxYear}
+              onChange={(e) => setPartnerTaxYear(Number(e.target.value))}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            >
+              {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+
+          {partnerTaxMessage && (
+            <p className="mb-4 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+              {partnerTaxMessage}
+            </p>
+          )}
+
+          {loadingPartnerTax ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {data.gbr_partner.map((partner) => (
+                <div key={partner.id} className="rounded-lg border border-slate-100 p-4 dark:border-slate-800">
+                  <div className="grid gap-3 lg:grid-cols-[1.2fr_140px_1fr_120px]">
+                    <div>
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{partner.name}</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
+                        {partner.anteil.toFixed(2)} % {partner.email ? `· ${partner.email}` : ""}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
+                        Sonder-WK
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={partnerTaxValues[partner.id] ?? ""}
+                        onChange={(e) => setPartnerTaxValues((prev) => ({ ...prev, [partner.id]: e.target.value }))}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-right text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                        placeholder="0,00"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
+                        Notiz
+                      </label>
+                      <input
+                        type="text"
+                        value={partnerTaxNotes[partner.id] ?? ""}
+                        onChange={(e) => setPartnerTaxNotes((prev) => ({ ...prev, [partner.id]: e.target.value }))}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                        placeholder="z.B. Steuerberater"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={() => void savePartnerTax(partner.id)}
+                        disabled={savingPartnerTaxId === partner.id}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        {savingPartnerTaxId === partner.id ? "..." : "Speichern"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

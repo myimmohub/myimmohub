@@ -73,3 +73,74 @@ export interface TaxFieldMeta {
   category: "obj" | "ein" | "wk" | "afa" | "sonder";
   type: "text" | "numeric" | "integer" | "date";
 }
+
+export interface GbrPartnerTaxBreakdown {
+  partner_id: string;
+  partner_name: string;
+  email: string | null;
+  anteil_pct: number;
+  rent_income: number;
+  deposits_received: number;
+  rent_prior_year: number;
+  operating_costs_income: number;
+  other_income: number;
+  total_income: number;
+  loan_interest: number;
+  property_tax: number;
+  hoa_fees: number;
+  insurance: number;
+  water_sewage: number;
+  waste_disposal: number;
+  property_management: number;
+  bank_fees: number;
+  maintenance_costs: number;
+  other_expenses: number;
+  total_expenses: number;
+  depreciation_total: number;
+  special_deductions_total: number;
+  partner_special_expenses: number;
+  result_before_partner_adjustments: number;
+  result: number;
+}
+
+export interface GbrPartnerTaxData {
+  id: string;
+  gbr_partner_id: string;
+  tax_year: number;
+  special_expenses: number;
+  note?: string | null;
+}
+
+export interface GbrTaxReport {
+  tax_year: number;
+  property_id: string;
+  property_name: string | null;
+  property_address: string | null;
+  is_gbr: boolean;
+  warnings: string[];
+  tax_data: TaxData;
+  gbr: {
+    name: string;
+    steuernummer: string;
+    finanzamt: string;
+    feststellungserklaerung: boolean;
+    sonder_werbungskosten: boolean;
+    teilweise_eigennutzung: boolean;
+    partner_count: number;
+    partner_total_share_pct: number;
+    eigennutzung_tage: number;
+    gesamt_tage: number;
+    rental_share_pct: number;
+    rental_share_source: "auto" | "override";
+  };
+  fe: {
+    total_income: number;
+    total_expenses: number;
+    depreciation_total: number;
+    special_deductions_total: number;
+    collective_result: number;
+    partner_special_expenses_total: number;
+    final_result: number;
+  };
+  fb: GbrPartnerTaxBreakdown[];
+}

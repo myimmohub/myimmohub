@@ -5,9 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { TAX_FIELDS, TAX_FIELD_GROUPS } from "@/lib/tax/fieldMeta";
+import { calculateTaxTotals } from "@/lib/tax/gbrTaxReport";
 import type { TaxData, TaxConfidence } from "@/types/tax";
 
 type Property = { id: string; name: string; address: string | null };
+type GbrSettingsSummary = { id?: string; feststellungserklaerung: boolean; gbr_partner: { id: string; anteil: number }[] };
 
 const CONFIDENCE_DOT: Record<TaxConfidence | "null", string> = {
   high:   "bg-emerald-500",
@@ -31,6 +33,7 @@ export default function TaxYearPage() {
 
   const [property, setProperty] = useState<Property | null>(null);
   const [taxData, setTaxData] = useState<TaxData | null>(null);
+  const [gbrSettings, setGbrSettings] = useState<GbrSettingsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
@@ -45,14 +48,19 @@ export default function TaxYearPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [{ data: prop }, { data: entries }] = await Promise.all([
+      const [{ data: prop }, { data: entries }, gbrRes] = await Promise.all([
         supabase.from("properties").select("id, name, address").eq("id", id).eq("user_id", user.id).single(),
         supabase.from("tax_data").select("*").eq("property_id", id).eq("tax_year", taxYear).limit(1),
+        fetch(`/api/settings/gbr?property_id=${id}`),
       ]);
 
       setProperty(prop as Property | null);
       if (entries && entries.length > 0) {
         setTaxData(entries[0] as TaxData);
+      }
+      if (gbrRes.ok) {
+        const gbr = await gbrRes.json() as GbrSettingsSummary;
+        if (gbr.id) setGbrSettings(gbr);
       }
       setLoading(false);
     };
@@ -133,6 +141,7 @@ export default function TaxYearPage() {
     ? TAX_FIELDS.filter((f) => (taxData as unknown as Record<string, unknown>)[f.key] != null).length
     : 0;
   const missingCount = TAX_FIELDS.length - filledCount;
+  const gbrTotals = taxData ? calculateTaxTotals(taxData) : null;
 
   if (loading) return <Skeleton />;
 
@@ -157,11 +166,20 @@ export default function TaxYearPage() {
               {property?.name}
               {taxData ? ` · ${filledCount}/${TAX_FIELDS.length} Felder ausgefüllt` : ""}
               {missingCount > 0 && taxData ? ` · ${missingCount} fehlen` : ""}
+              {gbrSettings ? " · GbR-Feststellung verfügbar" : ""}
             </p>
           </div>
           <div className="flex gap-2">
             {taxData && (
               <>
+                {gbrSettings && (
+                  <Link
+                    href={`/dashboard/properties/${id}/tax/${taxYear}/gbr`}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+                  >
+                    FE/FB
+                  </Link>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(true)}
@@ -198,6 +216,24 @@ export default function TaxYearPage() {
           </div>
         ) : taxData && (
           <div className="space-y-4">
+            {gbrSettings && gbrTotals && (
+              <div className="rounded-xl border border-blue-200 bg-white px-5 py-4 shadow-sm dark:border-blue-900 dark:bg-slate-900">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">GbR-Feststellungserklärung</p>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                      Anlage FE/FB wird automatisch aus dieser Anlage V und den Partneranteilen abgeleitet.
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-semibold tabular-nums ${gbrTotals.result < 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-900 dark:text-slate-100"}`}>
+                      {fmtVal(gbrTotals.result, "numeric")}
+                    </p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">Festzustellendes Ergebnis</p>
+                  </div>
+                </div>
+              </div>
+            )}
             {TAX_FIELD_GROUPS.map(({ key: cat, label: groupLabel }) => {
               const fields = TAX_FIELDS.filter((f) => f.category === cat);
 

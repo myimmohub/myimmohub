@@ -33,7 +33,9 @@ export async function POST(request: Request) {
     property_id?: string | null;
   };
 
-  if (!body.label || !body.gruppe || !body.typ || !body.anlage_v) {
+  const label = body.label?.trim();
+
+  if (!label || !body.gruppe || !body.typ || !body.anlage_v) {
     return NextResponse.json({ error: "Pflichtfelder fehlen." }, { status: 400 });
   }
 
@@ -41,7 +43,7 @@ export async function POST(request: Request) {
   const { data, error } = await db
     .from("categories")
     .insert({
-      label: body.label,
+      label,
       icon: body.icon || "📌",
       gruppe: body.gruppe,
       typ: body.typ,
@@ -56,6 +58,11 @@ export async function POST(request: Request) {
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    if (error.code === "23505") {
+      return NextResponse.json({ error: `Die Kategorie "${label}" existiert bereits.` }, { status: 409 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json(data);
 }
