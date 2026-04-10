@@ -10,6 +10,7 @@ import {
   type CategoryLookup,
   type BadgeVariant,
 } from "@/lib/banking/categoryLookup";
+import { createXlsxBlob } from "@/lib/export/xlsx";
 
 // ── Typen ─────────────────────────────────────────────────────────────────────
 
@@ -162,6 +163,78 @@ export default function BankingPage() {
     });
   }, [transactions, filterMonth, filterCategory, filterProperty, search]);
 
+  const handleExcelExport = () => {
+    if (filtered.length === 0) return;
+
+    const rows = filtered.map((tx) => {
+      const variant = getCategoryVariantFromLookup(tx.category, catLookup ?? undefined);
+      const mappedCategory = tx.category
+        ? catLookup?.byLabel.get(tx.category)
+          ? `${catLookup.byLabel.get(tx.category)!.icon} ${tx.category}`
+          : (ANLAGE_V_CATEGORY_LABELS[tx.category as AnlageVCategory] ?? tx.category)
+        : "—";
+
+      return {
+        datum: tx.date,
+        anzeigeDatum: fmtDate(tx.date),
+        betrag: Number(tx.amount),
+        richtung: Number(tx.amount) >= 0 ? "Einnahme" : "Ausgabe",
+        counterpart: tx.counterpart ?? "",
+        beschreibung: tx.description ?? "",
+        kategorie: mappedCategory,
+        mapping: variant,
+        anlageV: tx.anlage_v_zeile ? `Zeile ${tx.anlage_v_zeile}` : "",
+        steuerlich: tx.is_tax_deductible == null ? "" : tx.is_tax_deductible ? "Ja" : "Nein",
+        bestaetigt: tx.is_confirmed ? "Ja" : "Nein",
+        immobilie: tx.property?.name ?? "",
+        monat: getMonthKey(tx.date),
+      };
+    });
+
+    const blob = createXlsxBlob({
+      name: "Transaktionen",
+      columns: [
+        "Datum",
+        "Anzeige-Datum",
+        "Betrag",
+        "Richtung",
+        "Empfänger / Gegenpartei",
+        "Beschreibung",
+        "Kategorie",
+        "Mapping",
+        "Anlage V",
+        "Steuerlich absetzbar",
+        "Bestätigt",
+        "Immobilie",
+        "Monat",
+      ],
+      rows: rows.map((row) => [
+        row.datum,
+        row.anzeigeDatum,
+        row.betrag,
+        row.richtung,
+        row.counterpart,
+        row.beschreibung,
+        row.kategorie,
+        row.mapping,
+        row.anlageV,
+        row.steuerlich,
+        row.bestaetigt,
+        row.immobilie,
+        row.monat,
+      ]),
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const monthSuffix = filterMonth || "alle-monate";
+    link.href = url;
+    link.download = `banking-transaktionen-${monthSuffix}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10 dark:bg-slate-950">
@@ -178,6 +251,14 @@ export default function BankingPage() {
             </p>
           </div>
           <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleExcelExport}
+              disabled={filtered.length === 0}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              Excel exportieren
+            </button>
             <Link
               href="/dashboard/banking/review"
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
