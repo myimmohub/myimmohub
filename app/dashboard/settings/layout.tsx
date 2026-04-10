@@ -1,16 +1,12 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { PropertyContext } from "./property-context";
 
 type Property = { id: string; name: string };
-
-const PropertyContext = createContext<string>("");
-export function usePropertyId() {
-  return useContext(PropertyContext);
-}
 
 const TABS = [
   { href: "/dashboard/settings", label: "Kategorien" },

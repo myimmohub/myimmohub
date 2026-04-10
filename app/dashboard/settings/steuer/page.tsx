@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { usePropertyId } from "../layout";
+import { usePropertyId } from "../property-context";
 
 type TaxSettings = {
   property_id: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { usePropertyId } from "../layout";
+import { usePropertyId } from "../property-context";
 
 type Nutzungsdauern = Record<string, number>;
 

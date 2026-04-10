@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { type DocumentCategory, CATEGORY_LABELS, ALL_CATEGORIES } from "@/lib/ai/categories";
 import { ALLOWED_TYPES, sanitizeFileName } from "@/lib/constants";
@@ -56,7 +56,6 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function DocumentsPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -78,9 +77,9 @@ export default function DocumentsPage() {
   const [filterProperty, setFilterProperty] = useState("");
 
   useEffect(() => {
-    const tab = searchParams.get("tab");
+    const tab = new URLSearchParams(window.location.search).get("tab");
     if (tab === "eingang") setActiveTab("eingang");
-  }, [searchParams]);
+  }, []);
 
   useEffect(() => {
     const load = async () => {

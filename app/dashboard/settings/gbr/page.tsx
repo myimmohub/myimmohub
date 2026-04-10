@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePropertyId } from "../layout";
+import { usePropertyId } from "../property-context";
 
 type Partner = {
   id: string;
