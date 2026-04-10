@@ -1,34 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { type DocumentCategory, CATEGORY_LABELS } from "@/lib/ai/categories";
+import { type DocumentCategory, CATEGORY_LABELS, ALL_CATEGORIES } from "@/lib/ai/categories";
 import { ALLOWED_TYPES, sanitizeFileName } from "@/lib/constants";
 
 type UploadStep = "idle" | "uploading" | "analysing" | "done" | "error";
-
-const STEP_LABELS: Record<UploadStep, string> = {
-  idle: "",
-  uploading: "Wird hochgeladen…",
-  analysing: "KI analysiert…",
-  done: "Fertig – weiterleitung zum Eingang…",
-  error: "",
-};
-
-const CATEGORY_COLORS: Record<DocumentCategory, string> = {
-  miete: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
-  rechnung_handwerk: "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300",
-  rechnung_verwaltung: "bg-yellow-50 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-300",
-  versicherung: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300",
-  nebenkostenabrechnung: "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300",
-  zinsen: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300",
-  sonstiges: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
-};
+type DocumentsTab = "eingang" | "alle";
+type UploadTab = "file" | "mail" | "csv";
 
 type PropertyRef = { id: string; name: string };
 
-type Document = {
+type DocumentItem = {
   id: string;
   file_name: string;
   original_filename: string | null;
@@ -43,6 +28,20 @@ type Document = {
   properties: PropertyRef | null;
 };
 
+type InboxItem = {
+  id: string;
+  file_name: string;
+  original_filename: string;
+  category: DocumentCategory | null;
+  amount: number | null;
+  document_date: string | null;
+  counterpart: string | null;
+  suggested_property_id: string | null;
+  ai_confidence: number | null;
+  email_from: string | null;
+  email_subject: string | null;
+};
+
 const STATUS_LABELS: Record<string, string> = {
   confirmed: "Bestätigt",
   pending_review: "Prüfen",
@@ -51,39 +50,79 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   confirmed: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
-  pending_review: "bg-yellow-50 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-300",
+  pending_review: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
   pending_analysis: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
 };
 
 export default function DocumentsPage() {
   const router = useRouter();
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const searchParams = useSearchParams();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [inboxItems, setInboxItems] = useState<InboxItem[]>([]);
+  const [properties, setProperties] = useState<PropertyRef[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [search, setSearch] = useState("");
-  const [filterCategory, setFilterCategory] = useState<DocumentCategory | "">("");
-  const [filterProperty, setFilterProperty] = useState<string>("");
-
-  // Upload-Modal
+  const [activeTab, setActiveTab] = useState<DocumentsTab>("alle");
+  const [uploadTab, setUploadTab] = useState<UploadTab>("file");
   const [modalOpen, setModalOpen] = useState(false);
   const [uploadStep, setUploadStep] = useState<UploadStep>("idle");
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [isFetchingEmails, setIsFetchingEmails] = useState(false);
+
+  const [search, setSearch] = useState("");
+  const [filterCategory, setFilterCategory] = useState<DocumentCategory | "">("");
+  const [filterProperty, setFilterProperty] = useState("");
 
   useEffect(() => {
-    fetch("/api/documents")
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = (await res.json()) as { error?: string };
-          throw new Error(body.error ?? "Ladefehler");
-        }
-        return res.json() as Promise<Document[]>;
-      })
-      .then((data) => setDocuments(data))
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setIsLoading(false));
+    const tab = searchParams.get("tab");
+    if (tab === "eingang") setActiveTab("eingang");
+  }, [searchParams]);
+
+  useEffect(() => {
+    const load = async () => {
+      setIsLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
+
+      const [docsRes, inboxRes, propsRes] = await Promise.all([
+        fetch("/api/documents"),
+        fetch("/api/inbox"),
+        supabase.from("properties").select("id, name").eq("user_id", user.id).order("name"),
+      ]);
+
+      if (!docsRes.ok || !inboxRes.ok) {
+        const docsBody = docsRes.ok ? null : await docsRes.json().catch(() => null) as { error?: string } | null;
+        const inboxBody = inboxRes.ok ? null : await inboxRes.json().catch(() => null) as { error?: string } | null;
+        setError(docsBody?.error ?? inboxBody?.error ?? "Dokumente konnten nicht geladen werden.");
+      } else {
+        setDocuments(await docsRes.json() as DocumentItem[]);
+        setInboxItems(await inboxRes.json() as InboxItem[]);
+      }
+
+      setProperties((propsRes.data ?? []) as PropertyRef[]);
+      setIsLoading(false);
+    };
+
+    void load();
   }, []);
+
+  const filteredDocuments = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return documents.filter((doc) => {
+      if (filterCategory && doc.category !== filterCategory) return false;
+      if (filterProperty && doc.property_id !== filterProperty) return false;
+      if (!query) return true;
+      const haystack = `${doc.original_filename ?? doc.file_name} ${doc.counterpart ?? ""} ${doc.extracted_text ?? ""}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [documents, filterCategory, filterProperty, search]);
 
   const handleFileSelected = async (file: File) => {
     if (!ALLOWED_TYPES.includes(file.type)) {
@@ -105,11 +144,9 @@ export default function DocumentsPage() {
       const { error: storageError } = await supabase.storage
         .from("documents")
         .upload(storagePath, file, { contentType: file.type, upsert: false });
-
       if (storageError) throw new Error(storageError.message);
 
       setUploadStep("analysing");
-
       const res = await fetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,318 +158,420 @@ export default function DocumentsPage() {
       });
 
       if (!res.ok) {
-        const body = (await res.json()) as { error?: string };
-        throw new Error(body.error ?? "Analyse fehlgeschlagen.");
+        const body = await res.json().catch(() => null) as { error?: string } | null;
+        throw new Error(body?.error ?? "Analyse fehlgeschlagen.");
       }
 
       setUploadStep("done");
+      setToast("Dokument hochgeladen");
       setTimeout(() => {
         setModalOpen(false);
-        setUploadStep("idle");
-        router.push("/dashboard/inbox");
-      }, 1200);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Unbekannter Fehler.");
+        router.refresh();
+      }, 800);
+    } catch (uploadErr) {
       setUploadStep("error");
+      setUploadError(uploadErr instanceof Error ? uploadErr.message : "Upload fehlgeschlagen.");
     }
   };
 
-  const openModal = () => {
-    setUploadStep("idle");
-    setUploadError(null);
-    setModalOpen(true);
-  };
-
-  const closeModal = () => {
-    if (uploadStep === "uploading" || uploadStep === "analysing") return; // kein Abbruch während Verarbeitung
-    setModalOpen(false);
-    setUploadStep("idle");
-    setUploadError(null);
-  };
-
-  // Alle einzigartigen Properties aus geladenen Dokumenten
-  const allProperties = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const doc of documents) {
-      if (doc.properties) map.set(doc.properties.id, doc.properties.name);
-    }
-    return [...map.entries()].map(([id, name]) => ({ id, name }));
-  }, [documents]);
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    return documents.filter((doc) => {
-      if (filterCategory && doc.category !== filterCategory) return false;
-      if (filterProperty && doc.property_id !== filterProperty) return false;
-      if (q) {
-        const inName = (doc.original_filename ?? doc.file_name).toLowerCase().includes(q);
-        const inText = doc.extracted_text?.toLowerCase().includes(q) ?? false;
-        if (!inName && !inText) return false;
-      }
-      return true;
+  const handleConfirmInboxItem = async (item: InboxItem) => {
+    const res = await fetch("/api/inbox", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: item.id,
+        status: "confirmed",
+        category: item.category,
+        property_id: item.suggested_property_id,
+      }),
     });
-  }, [documents, search, filterCategory, filterProperty]);
 
-  const formatDate = (iso: string | null) => {
-    if (!iso) return "—";
-    return new Date(iso).toLocaleDateString("de-DE");
+    if (!res.ok) return;
+
+    setInboxItems((current) => current.filter((doc) => doc.id !== item.id));
+    setToast("Dokument bestätigt");
+    setTimeout(() => setToast(null), 2000);
   };
 
-  const formatAmount = (amount: number | null) => {
-    if (amount === null) return "—";
-    return amount.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+  const handleFetchEmails = async () => {
+    setIsFetchingEmails(true);
+    await fetch("/api/email-fetch", { method: "POST" });
+    setIsFetchingEmails(false);
+    setToast("E-Mails wurden abgerufen");
+    setTimeout(() => setToast(null), 2000);
   };
 
-  const busy = uploadStep === "uploading" || uploadStep === "analysing";
-
-  if (isLoading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <p className="text-sm text-slate-500 dark:text-slate-400">Lade Dokumente...</p>
-      </main>
-    );
-  }
+  const propertyName = (propertyId: string | null) =>
+    propertyId ? properties.find((property) => property.id === propertyId)?.name ?? null : null;
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10 dark:bg-slate-950">
-      <section className="mx-auto w-full max-w-6xl">
-
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4">
+      <section className="mx-auto w-full max-w-6xl space-y-6">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-              Dokumente
-            </h1>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              Alle Dokumente
-            </p>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Dokumente</h1>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Eingang, Archiv und Importe an einem Ort.</p>
           </div>
           <button
             type="button"
-            onClick={openModal}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
+            onClick={() => setModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-            </svg>
-            Beleg hochladen
+            <PlusIcon className="h-4 w-4" />
+            Hochladen / Importieren
           </button>
         </div>
 
-        {/* Filter + Suche */}
-        <div className="mt-6 flex flex-wrap gap-3">
-          <input
-            type="text"
-            placeholder="Suche in Dateiname oder Text…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-500 sm:w-72"
-          />
-          <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value as DocumentCategory | "")}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+        <div className="flex gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-100 p-1 dark:border-slate-800 dark:bg-slate-800/50">
+          <button
+            type="button"
+            onClick={() => setActiveTab("eingang")}
+            className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition ${
+              activeTab === "eingang"
+                ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+                : "text-slate-500 dark:text-slate-400"
+            }`}
           >
-            <option value="">Alle Kategorien</option>
-            {(Object.keys(CATEGORY_LABELS) as DocumentCategory[]).map((cat) => (
-              <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
-            ))}
-          </select>
-          <select
-            value={filterProperty}
-            onChange={(e) => setFilterProperty(e.target.value)}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+            Eingang ({inboxItems.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("alle")}
+            className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition ${
+              activeTab === "alle"
+                ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+                : "text-slate-500 dark:text-slate-400"
+            }`}
           >
-            <option value="">Alle Immobilien</option>
-            {allProperties.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          {(search || filterCategory || filterProperty) && (
-            <button
-              type="button"
-              onClick={() => { setSearch(""); setFilterCategory(""); setFilterProperty(""); }}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
-            >
-              Filter zurücksetzen
-            </button>
-          )}
+            Alle Dokumente
+          </button>
         </div>
 
-        {error ? (
-          <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+        {error && (
+          <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
             {error}
-          </p>
-        ) : null}
+          </div>
+        )}
 
-        {/* Tabelle */}
-        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          {filtered.length === 0 ? (
-            <p className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-              {documents.length === 0 ? "Noch keine Dokumente vorhanden." : "Keine Dokumente gefunden."}
-            </p>
+        {isLoading ? (
+          <div className="space-y-3">
+            <div className="h-24 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-800" />
+            <div className="h-24 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-800" />
+          </div>
+        ) : activeTab === "eingang" ? (
+          inboxItems.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-slate-200 py-12 text-center dark:border-slate-700">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                <InboxIcon className="h-5 w-5 text-slate-400 dark:text-slate-500" />
+              </div>
+              <div>
+                <p className="font-medium text-slate-700 dark:text-slate-300">Keine Dokumente im Eingang</p>
+                <p className="mt-1 text-sm text-slate-500">Neue Belege aus Upload oder E-Mail erscheinen hier zur Bestätigung.</p>
+              </div>
+            </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="space-y-4">
+              {inboxItems.map((item) => (
+                <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-5 transition dark:border-slate-800 dark:bg-slate-900">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                        {item.original_filename ?? item.file_name}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        {item.email_from ? `${item.email_from}${item.email_subject ? ` · ${item.email_subject}` : ""}` : item.counterpart ?? "Ohne Absender"}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/dashboard/documents/${item.id}`}
+                      className="text-sm font-medium text-blue-600 transition hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      Dokument ansehen
+                    </Link>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto]">
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap gap-2">
+                        {item.category && (
+                          <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                            {CATEGORY_LABELS[item.category]}
+                          </span>
+                        )}
+                        {item.amount != null && (
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                            {item.amount.toLocaleString("de-DE", { style: "currency", currency: "EUR" })}
+                          </span>
+                        )}
+                        {propertyName(item.suggested_property_id) && (
+                          <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                            {propertyName(item.suggested_property_id)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                          <span>AI Confidence</span>
+                          <span>{Math.round((item.ai_confidence ?? 0) * 100)}%</span>
+                        </div>
+                        <div className="confidence-bar mt-2">
+                          <div className="confidence-fill" style={{ width: `${Math.round((item.ai_confidence ?? 0) * 100)}%` }} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleConfirmInboxItem(item)}
+                        className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
+                      >
+                        Bestätigen
+                      </button>
+                      <Link
+                        href={`/dashboard/documents/${item.id}`}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        Bearbeiten
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-3">
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Suche nach Datei, Absender oder Text..."
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 md:w-80"
+              />
+              <select
+                value={filterCategory}
+                onChange={(event) => setFilterCategory(event.target.value as DocumentCategory | "")}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              >
+                <option value="">Alle Kategorien</option>
+                {ALL_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>{CATEGORY_LABELS[category]}</option>
+                ))}
+              </select>
+              <select
+                value={filterProperty}
+                onChange={(event) => setFilterProperty(event.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              >
+                <option value="">Alle Immobilien</option>
+                {properties.map((property) => (
+                  <option key={property.id} value={property.id}>{property.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
                     <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Datum</th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Dateiname</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Datei</th>
                     <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Absender</th>
                     <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Kategorie</th>
                     <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">Betrag</th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Immobilie</th>
                     <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {filtered.map((doc) => (
-                    <tr
-                      key={doc.id}
-                      onClick={() => router.push(`/dashboard/documents/${doc.id}`)}
-                      className="cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800/40"
-                    >
-                      <td className="whitespace-nowrap px-4 py-3 text-slate-500 dark:text-slate-400">
-                        {formatDate(doc.document_date ?? doc.created_at)}
-                      </td>
-                      <td className="max-w-xs px-4 py-3">
-                        <p className="truncate font-medium text-slate-900 dark:text-slate-100">
+                  {filteredDocuments.map((doc) => (
+                    <tr key={doc.id} className="transition hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{formatDate(doc.document_date ?? doc.created_at)}</td>
+                      <td className="px-4 py-3">
+                        <Link href={`/dashboard/documents/${doc.id}`} className="font-medium text-slate-900 transition hover:text-blue-600 dark:text-slate-100 dark:hover:text-blue-400">
                           {doc.original_filename ?? doc.file_name}
-                        </p>
-                        {doc.extracted_text && search && doc.extracted_text.toLowerCase().includes(search.toLowerCase()) ? (
-                          <p className="mt-0.5 truncate text-xs text-slate-400 dark:text-slate-500">
-                            …{getSnippet(doc.extracted_text, search)}…
-                          </p>
-                        ) : null}
+                        </Link>
                       </td>
-                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300 truncate max-w-[160px]">
-                        {doc.counterpart ?? "—"}
-                      </td>
+                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{doc.counterpart ?? "—"}</td>
                       <td className="px-4 py-3">
                         {doc.category ? (
-                          <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${CATEGORY_COLORS[doc.category]}`}>
+                          <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
                             {CATEGORY_LABELS[doc.category]}
                           </span>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
+                        ) : "—"}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-slate-900 dark:text-slate-100">
-                        {formatAmount(doc.amount)}
-                      </td>
-                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
-                        {doc.properties?.name ?? "—"}
+                      <td className="px-4 py-3 text-right text-slate-900 dark:text-slate-100">
+                        {doc.amount == null ? "—" : doc.amount.toLocaleString("de-DE", { style: "currency", currency: "EUR" })}
                       </td>
                       <td className="px-4 py-3">
                         {doc.status ? (
-                          <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[doc.status] ?? "bg-slate-100 text-slate-500"}`}>
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[doc.status] ?? STATUS_COLORS.pending_analysis}`}>
                             {STATUS_LABELS[doc.status] ?? doc.status}
                           </span>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
+                        ) : "—"}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
 
-        {filtered.length > 0 && (
-          <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
-            {filtered.length} Dokument{filtered.length !== 1 ? "e" : ""}
-            {filtered.length !== documents.length ? ` von ${documents.length}` : ""}
-          </p>
+            <div className="space-y-3 md:hidden">
+              {filteredDocuments.map((doc) => (
+                <Link
+                  key={doc.id}
+                  href={`/dashboard/documents/${doc.id}`}
+                  className="block rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{doc.original_filename ?? doc.file_name}</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{formatDate(doc.document_date ?? doc.created_at)}</p>
+                    </div>
+                    {doc.status && (
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[doc.status] ?? STATUS_COLORS.pending_analysis}`}>
+                        {STATUS_LABELS[doc.status] ?? doc.status}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {doc.category && (
+                      <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                        {CATEGORY_LABELS[doc.category]}
+                      </span>
+                    )}
+                    {doc.amount != null && (
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                        {doc.amount.toLocaleString("de-DE", { style: "currency", currency: "EUR" })}
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
         )}
       </section>
 
-      {/* Upload-Modal */}
+      {toast && (
+        <div className="toast-enter fixed bottom-4 right-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 shadow-lg dark:bg-emerald-950/40 dark:text-emerald-300">
+          {toast}
+        </div>
+      )}
+
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                Beleg hochladen
-              </h2>
-              {!busy && (
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </button>
-              )}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-xl rounded-xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">Importieren</h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Datei, E-Mail oder CSV in denselben Dokumentenfluss aufnehmen.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Schließen
+              </button>
             </div>
 
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              PDF, JPG oder PNG — die KI klassifiziert den Beleg automatisch.
-            </p>
+            <div className="mt-5 flex gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1 dark:border-slate-800 dark:bg-slate-800/50">
+              {[
+                { id: "file", label: "Datei hochladen" },
+                { id: "mail", label: "Per E-Mail" },
+                { id: "csv", label: "CSV Import" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setUploadTab(tab.id as UploadTab)}
+                  className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
+                    uploadTab === tab.id
+                      ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+                      : "text-slate-500 dark:text-slate-400"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-            {/* Dropzone */}
-            {uploadStep === "idle" || uploadStep === "error" ? (
-              <div
-                className="mt-5 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 py-10 transition hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:border-slate-500"
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const file = e.dataTransfer.files[0];
-                  if (file) void handleFileSelected(file);
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                  Klicken oder Datei hierher ziehen
-                </p>
-                <p className="text-xs text-slate-400 dark:text-slate-500">PDF, JPG, PNG</p>
+            {uploadTab === "file" && (
+              <div className="mt-5 space-y-4">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex w-full flex-col items-center gap-3 rounded-xl border-2 border-dashed border-slate-200 py-12 text-center transition hover:border-blue-300 dark:border-slate-700"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                    <UploadIcon className="h-5 w-5 text-slate-400 dark:text-slate-500" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-slate-700 dark:text-slate-300">Datei auswählen</p>
+                    <p className="mt-1 text-sm text-slate-500">PDF, JPG oder PNG werden direkt analysiert.</p>
+                  </div>
+                </button>
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,image/jpeg,image/png"
+                  accept={ALLOWED_TYPES.join(",")}
                   className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
                     if (file) void handleFileSelected(file);
-                    e.target.value = "";
                   }}
                 />
-              </div>
-            ) : null}
-
-            {/* Fortschritt */}
-            {(uploadStep === "uploading" || uploadStep === "analysing" || uploadStep === "done") && (
-              <div className="mt-5 space-y-3">
-                <div className="flex items-center gap-3">
-                  {uploadStep !== "done" ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700 dark:border-slate-600 dark:border-t-slate-200" />
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-600" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                  <p className="text-sm text-slate-700 dark:text-slate-300">{STEP_LABELS[uploadStep]}</p>
-                </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                  <div
-                    className="h-full rounded-full bg-blue-600 transition-all duration-500 dark:bg-blue-500"
-                    style={{ width: uploadStep === "uploading" ? "40%" : uploadStep === "analysing" ? "75%" : "100%" }}
-                  />
-                </div>
+                {uploadStep !== "idle" && (
+                  <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                    {uploadStep === "uploading" && "Datei wird hochgeladen..."}
+                    {uploadStep === "analysing" && "Dokument wird analysiert..."}
+                    {uploadStep === "done" && "Upload abgeschlossen."}
+                    {uploadStep === "error" && (uploadError ?? "Upload fehlgeschlagen.")}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Fehler */}
-            {uploadStep === "error" && uploadError && (
-              <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
-                {uploadError}
-              </p>
+            {uploadTab === "mail" && (
+              <div className="mt-5 space-y-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/50">
+                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Postfach</p>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{process.env.NEXT_PUBLIC_GMAIL_USER ?? "Keine Adresse konfiguriert"}</p>
+                    {process.env.NEXT_PUBLIC_GMAIL_USER && (
+                      <button
+                        type="button"
+                        onClick={() => void navigator.clipboard.writeText(process.env.NEXT_PUBLIC_GMAIL_USER ?? "")}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        Kopieren
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleFetchEmails()}
+                  disabled={isFetchingEmails}
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {isFetchingEmails ? "Abruf läuft..." : "E-Mails jetzt abrufen"}
+                </button>
+              </div>
+            )}
+
+            {uploadTab === "csv" && (
+              <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/50">
+                <p className="text-sm text-slate-500 dark:text-slate-400">CSV-Importe für Kontoauszüge laufen weiterhin über den Banking-Bereich.</p>
+                <Link
+                  href="/dashboard/banking/import"
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
+                >
+                  Zum CSV Import
+                </Link>
+              </div>
             )}
           </div>
         </div>
@@ -441,10 +580,31 @@ export default function DocumentsPage() {
   );
 }
 
-function getSnippet(text: string, query: string): string {
-  const idx = text.toLowerCase().indexOf(query.toLowerCase());
-  if (idx === -1) return "";
-  const start = Math.max(0, idx - 30);
-  const end = Math.min(text.length, idx + query.length + 30);
-  return text.slice(start, end);
+function formatDate(value: string | null) {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString("de-DE");
+}
+
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+      <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+function UploadIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+      <path fillRule="evenodd" d="M3 14a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm7-11a1 1 0 011 1v6.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 10.586V4a1 1 0 011-1z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+function InboxIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+      <path fillRule="evenodd" d="M3 3a2 2 0 00-2 2v8a2 2 0 002 2h4.586a1 1 0 01.707.293l1 1a1 1 0 001.414 0l1-1A1 1 0 0112.414 15H17a2 2 0 002-2V5a2 2 0 00-2-2H3zm3 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+    </svg>
+  );
 }

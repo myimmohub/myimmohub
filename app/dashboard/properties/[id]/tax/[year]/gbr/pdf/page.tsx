@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import TaxYearNavigation from "@/components/tax/TaxYearNavigation";
 import type { GbrTaxReport } from "@/types/tax";
 
 const fmtEur = (value: number) =>
@@ -72,6 +73,15 @@ export default function GbrTaxPdfPage() {
             PDF herunterladen
           </button>
         </div>
+      </section>
+
+      <section className="mx-auto mb-6 max-w-5xl print-hide">
+        <TaxYearNavigation
+          propertyId={id}
+          taxYear={taxYear}
+          active="gbr-pdf"
+          hasGbr
+        />
       </section>
 
       <div className="mx-auto max-w-5xl space-y-6">

@@ -111,6 +111,63 @@ export interface GbrPartnerTaxData {
   note?: string | null;
 }
 
+export type TaxDepreciationItemType = "building" | "outdoor" | "movable_asset";
+
+export interface TaxDepreciationItem {
+  id: string;
+  property_id: string;
+  tax_year: number;
+  item_type: TaxDepreciationItemType;
+  label: string;
+  gross_annual_amount: number;
+  apply_rental_ratio: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface TaxMaintenanceDistributionItem {
+  id: string;
+  property_id: string;
+  source_year: number;
+  label: string;
+  total_amount: number;
+  classification: "maintenance_expense" | "production_cost" | "depreciation";
+  deduction_mode: "immediate" | "distributed";
+  distribution_years: number;
+  current_year_share_override?: number | null;
+  apply_rental_ratio: boolean;
+  status: "active" | "completed";
+  note?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ComputedTaxDepreciationItem extends TaxDepreciationItem {
+  tax_field: "depreciation_building" | "depreciation_outdoor" | "depreciation_fixtures";
+  deductible_amount_elster: number;
+}
+
+export interface ComputedTaxMaintenanceDistributionItem extends TaxMaintenanceDistributionItem {
+  current_year_share: number;
+  deductible_amount_elster: number;
+  affects_tax_year: boolean;
+  tax_field: "maintenance_costs" | "depreciation_building" | "depreciation_fixtures";
+  effective_classification: "maintenance_expense" | "production_cost" | "depreciation";
+  auto_switched_to_afa: boolean;
+}
+
+export interface StructuredTaxLineTotals {
+  depreciation_building: number | null;
+  depreciation_outdoor: number | null;
+  depreciation_fixtures: number | null;
+  maintenance_costs: number | null;
+}
+
+export interface StructuredTaxWarning {
+  code: "classification_required" | "distribution_is_optional" | "acquisition_related_costs";
+  message: string;
+}
+
 export interface GbrTaxReport {
   tax_year: number;
   property_id: string;
@@ -143,4 +200,10 @@ export interface GbrTaxReport {
     final_result: number;
   };
   fb: GbrPartnerTaxBreakdown[];
+  logic: {
+    depreciation_items: ComputedTaxDepreciationItem[];
+    maintenance_distributions: ComputedTaxMaintenanceDistributionItem[];
+    line_totals: StructuredTaxLineTotals;
+    warnings: StructuredTaxWarning[];
+  };
 }

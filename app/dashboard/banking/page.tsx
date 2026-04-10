@@ -183,7 +183,7 @@ export default function BankingPage() {
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
             >
               {openReview > 0 && (
-                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-500 px-1 text-xs font-bold text-white">
+                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-yellow-500 px-1 text-xs font-semibold text-white">
                   {openReview}
                 </span>
               )}
@@ -205,12 +205,6 @@ export default function BankingPage() {
             sublabel={filterMonth ? monthLabel(filterMonth) : "Gesamt"}
             value={fmt(einnahmen)}
             valueClass="text-emerald-600 dark:text-emerald-400"
-            icon={
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-              </svg>
-            }
-            iconClass="bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
             loading={loading}
           />
           <KpiCard
@@ -218,12 +212,6 @@ export default function BankingPage() {
             sublabel={filterMonth ? monthLabel(filterMonth) : "Gesamt"}
             value={fmt(ausgaben)}
             valueClass="text-red-600 dark:text-red-400"
-            icon={
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-            }
-            iconClass="bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400"
             loading={loading}
           />
           <KpiCard
@@ -231,16 +219,6 @@ export default function BankingPage() {
             sublabel={filterMonth ? monthLabel(filterMonth) : "Gesamt"}
             value={fmt(cashflow)}
             valueClass={cashflow >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}
-            icon={
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-              </svg>
-            }
-            iconClass={
-              cashflow >= 0
-                ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
-                : "bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400"
-            }
             loading={loading}
           />
           <KpiCard
@@ -248,16 +226,6 @@ export default function BankingPage() {
             sublabel="Alle Monate"
             value={String(openReview)}
             valueClass={openReview > 0 ? "text-yellow-600 dark:text-yellow-400" : "text-slate-400 dark:text-slate-500"}
-            icon={
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            }
-            iconClass={
-              openReview > 0
-                ? "bg-yellow-100 text-yellow-600 dark:bg-yellow-950/40 dark:text-yellow-400"
-                : "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
-            }
             loading={loading}
             linkHref={openReview > 0 ? "/dashboard/banking/review" : undefined}
           />
@@ -443,16 +411,14 @@ export default function BankingPage() {
                         <td className="px-4 py-3">
                           {tx.category ? (
                             <div className="flex flex-col gap-0.5">
-                              <span className={`inline-flex w-fit items-center rounded-md px-2 py-0.5 text-xs font-medium ${BADGE[variant]}`}>
+                              <span
+                                title={tx.anlage_v_zeile ? `Anlage V · Z. ${tx.anlage_v_zeile}` : undefined}
+                                className={`inline-flex w-fit items-center rounded-md px-2 py-0.5 text-xs font-medium ${BADGE[variant]}`}
+                              >
                                 {catLookup?.byLabel.get(tx.category!)
                                   ? `${catLookup.byLabel.get(tx.category!)!.icon} ${tx.category}`
                                   : (ANLAGE_V_CATEGORY_LABELS[tx.category as AnlageVCategory] ?? tx.category)}
                               </span>
-                              {tx.anlage_v_zeile && (
-                                <span className="text-[10px] text-slate-400 dark:text-slate-500">
-                                  Anlage V · Z. {tx.anlage_v_zeile}
-                                </span>
-                              )}
                             </div>
                           ) : (
                             <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
@@ -475,9 +441,9 @@ export default function BankingPage() {
                   <tfoot>
                     <tr className="border-t border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60">
                       <td className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        Summe
+                        Sichtbare Auswahl
                       </td>
-                      <td className={`px-4 py-3 text-right text-sm font-bold tabular-nums ${
+                      <td className={`px-4 py-3 text-right text-sm font-semibold tabular-nums ${
                         filtered.reduce((s, t) => s + Number(t.amount), 0) >= 0
                           ? "text-emerald-600 dark:text-emerald-400"
                           : "text-red-600 dark:text-red-400"
@@ -505,8 +471,6 @@ function KpiCard({
   sublabel,
   value,
   valueClass,
-  icon,
-  iconClass,
   loading,
   linkHref,
 }: {
@@ -514,26 +478,17 @@ function KpiCard({
   sublabel: string;
   value: string;
   valueClass: string;
-  icon: React.ReactNode;
-  iconClass: string;
   loading: boolean;
   linkHref?: string;
 }) {
   const inner = (
-    <div className="flex h-full flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">{label}</p>
-          <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">{sublabel}</p>
-        </div>
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${iconClass}`}>
-          {icon}
-        </span>
-      </div>
+    <div className="rounded-lg bg-slate-50 px-3 py-2.5 dark:bg-slate-800/50">
+      <p className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">{label}</p>
+      <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">{sublabel}</p>
       {loading ? (
         <div className="h-7 w-24 animate-pulse rounded-md bg-slate-100 dark:bg-slate-800" />
       ) : (
-        <p className={`text-xl font-bold tabular-nums leading-none ${valueClass}`}>{value}</p>
+        <p className={`mt-1 text-xl font-semibold tabular-nums leading-none ${valueClass}`}>{value}</p>
       )}
     </div>
   );

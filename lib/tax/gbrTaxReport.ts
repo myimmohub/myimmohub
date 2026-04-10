@@ -1,4 +1,13 @@
-import type { TaxData } from "@/types/tax";
+import type {
+  ComputedTaxDepreciationItem,
+  ComputedTaxMaintenanceDistributionItem,
+  StructuredTaxLineTotals,
+  StructuredTaxWarning,
+  TaxData,
+  TaxDepreciationItem,
+  TaxMaintenanceDistributionItem,
+} from "@/types/tax";
+import { computeStructuredTaxData } from "@/lib/tax/structuredTaxLogic";
 
 export type GbrPartner = {
   id: string;
@@ -85,6 +94,12 @@ export type GbrTaxReport = {
     final_result: number;
   };
   fb: GbrPartnerAllocation[];
+  logic: {
+    depreciation_items: ComputedTaxDepreciationItem[];
+    maintenance_distributions: ComputedTaxMaintenanceDistributionItem[];
+    line_totals: StructuredTaxLineTotals;
+    warnings: StructuredTaxWarning[];
+  };
 };
 
 export type GbrPartnerTaxValue = {
@@ -110,9 +125,6 @@ const PRORATED_FIELDS: (keyof TaxData)[] = [
   "insurance",
   "water_sewage",
   "waste_disposal",
-  "depreciation_building",
-  "depreciation_outdoor",
-  "depreciation_fixtures",
 ];
 
 export function calculateTaxTotals(taxData: TaxData) {
@@ -165,8 +177,18 @@ export function buildGbrTaxReport(args: {
   gbrSettings: GbrSettingsSummary | null;
   partnerTaxValues?: GbrPartnerTaxValue[];
   taxSettings?: TaxSettingsSummary | null;
+  depreciationItems?: TaxDepreciationItem[];
+  maintenanceDistributions?: TaxMaintenanceDistributionItem[];
 }): GbrTaxReport {
-  const { property, taxData, gbrSettings, partnerTaxValues = [], taxSettings } = args;
+  const {
+    property,
+    taxData,
+    gbrSettings,
+    partnerTaxValues = [],
+    taxSettings,
+    depreciationItems = [],
+    maintenanceDistributions = [],
+  } = args;
   const warnings: string[] = [];
   const partners = gbrSettings?.gbr_partner ?? [];
   const partnerTaxMap = new Map(
@@ -196,16 +218,25 @@ export function buildGbrTaxReport(args: {
     warnings.push(`Teilweise Eigennutzung aktiv: Kürzungsfaktor ${(rentalSharePct * 100).toFixed(2)} % (${rentalShareSource === "override" ? "manuell" : "automatisch"}).`);
   }
 
-  const adjustedTaxData: TaxData = { ...taxData };
+  const structured = computeStructuredTaxData({
+    taxData,
+    taxYear: taxData.tax_year,
+    rentalSharePct,
+    depreciationItems,
+    maintenanceDistributions,
+  });
+
+  const adjustedTaxData: TaxData = { ...structured.taxData };
   if (gbrSettings?.teilweise_eigennutzung) {
     const adjustedTaxDataRecord = adjustedTaxData as unknown as Record<string, unknown>;
-    const taxDataRecord = taxData as unknown as Record<string, unknown>;
+    const taxDataRecord = structured.taxData as unknown as Record<string, unknown>;
     for (const field of PRORATED_FIELDS) {
       adjustedTaxDataRecord[field] = round2(num(taxDataRecord[field] as number | null | undefined) * rentalSharePct);
     }
   }
 
   const totals = calculateTaxTotals(adjustedTaxData);
+  warnings.push(...structured.warnings.map((item) => item.message));
 
   const fb = partners.map((partner) => {
     const factor = num(partner.anteil) / 100;
@@ -275,5 +306,11 @@ export function buildGbrTaxReport(args: {
       final_result: round2(fb.reduce((sum, partner) => sum + partner.result, 0)),
     },
     fb,
+    logic: {
+      depreciation_items: structured.depreciationItems,
+      maintenance_distributions: structured.maintenanceDistributions,
+      line_totals: structured.lineTotals,
+      warnings: structured.warnings,
+    },
   };
 }

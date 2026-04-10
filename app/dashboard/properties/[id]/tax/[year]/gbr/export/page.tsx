@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import TaxYearNavigation from "@/components/tax/TaxYearNavigation";
 import type { GbrTaxReport } from "@/types/tax";
 
 const fmtEur = (value: number) =>
@@ -63,6 +64,13 @@ export default function GbrTaxExportPage() {
             {report.gbr.name || report.property_name || "GbR"}{report.property_address ? ` · ${report.property_address}` : ""}
           </p>
         </div>
+
+        <TaxYearNavigation
+          propertyId={id}
+          taxYear={taxYear}
+          active="gbr-export"
+          hasGbr
+        />
 
         <div className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 dark:border-blue-800 dark:bg-blue-950/30">
           <p className="text-sm font-medium text-blue-800 dark:text-blue-300">Hilfsansicht für FE/FB</p>

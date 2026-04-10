@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import TaxYearNavigation from "@/components/tax/TaxYearNavigation";
 import type { GbrTaxReport } from "@/types/tax";
 
 const fmtEur = (value: number) =>
@@ -172,6 +173,13 @@ export default function GbrTaxYearPage() {
           </div>
         </div>
 
+        <TaxYearNavigation
+          propertyId={id}
+          taxYear={taxYear}
+          active="gbr"
+          hasGbr
+        />
+
         {report.warnings.length > 0 && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-900 dark:bg-amber-950/30">
             <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Bitte prüfen</p>
@@ -252,6 +260,73 @@ export default function GbrTaxYearPage() {
             </div>
           </section>
         </div>
+
+        {(report.logic.depreciation_items.length > 0 || report.logic.maintenance_distributions.length > 0) && (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">AfA-Logik</h2>
+                <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                  Komponenten werden separat gekürzt und gerundet, bevor sie in Anlage FE/FB einfließen.
+                </p>
+              </div>
+              <div className="divide-y divide-slate-100 px-5 dark:divide-slate-800">
+                {report.logic.depreciation_items.length === 0 ? (
+                  <p className="py-4 text-sm text-slate-500 dark:text-slate-400">Keine AfA-Komponenten hinterlegt.</p>
+                ) : (
+                  report.logic.depreciation_items.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between gap-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{item.label}</p>
+                        <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                          {item.item_type === "building" ? "Gebäude" : item.item_type === "movable_asset" ? "Inventar" : "Außenanlagen"}
+                          {item.apply_rental_ratio ? " · mit Vermietungsquote" : " · 100 %"}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm tabular-nums text-slate-600 dark:text-slate-300">{fmtEur(item.gross_annual_amount)}</p>
+                        <p className="mt-0.5 text-xs font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                          ELSTER {item.deductible_amount_elster.toLocaleString("de-DE")} €
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Verteilter Erhaltungsaufwand</h2>
+                <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                  Vorjahresblöcke und neue Verteilungen werden positionsbezogen fortgeführt.
+                </p>
+              </div>
+              <div className="divide-y divide-slate-100 px-5 dark:divide-slate-800">
+                {report.logic.maintenance_distributions.length === 0 ? (
+                  <p className="py-4 text-sm text-slate-500 dark:text-slate-400">Keine aktiven Verteilungsblöcke für dieses Jahr.</p>
+                ) : (
+                  report.logic.maintenance_distributions.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between gap-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{item.label}</p>
+                        <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                          Ursprung {item.source_year} · {item.distribution_years} Jahre · Jahresanteil {fmtEur(item.current_year_share)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm tabular-nums text-slate-600 dark:text-slate-300">{fmtEur(item.total_amount)}</p>
+                        <p className="mt-0.5 text-xs font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                          ELSTER {item.deductible_amount_elster.toLocaleString("de-DE")} €
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+          </div>
+        )}
 
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">

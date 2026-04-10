@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { TAX_FIELDS, TAX_FIELD_GROUPS } from "@/lib/tax/fieldMeta";
-import type { TaxData } from "@/types/tax";
+import { computeStructuredTaxData } from "@/lib/tax/structuredTaxLogic";
+import TaxYearNavigation from "@/components/tax/TaxYearNavigation";
+import type { TaxData, TaxDepreciationItem, TaxMaintenanceDistributionItem } from "@/types/tax";
 
 type Property = { id: string; name: string; address: string | null };
+type TaxSettingsSummary = { eigennutzung_tage: number; gesamt_tage: number; rental_share_override_pct: number | null };
 
 export default function TaxExportPage() {
   const { id, year: yearParam } = useParams<{ id: string; year: string }>();
@@ -15,23 +18,62 @@ export default function TaxExportPage() {
 
   const [property, setProperty] = useState<Property | null>(null);
   const [taxData, setTaxData] = useState<TaxData | null>(null);
+  const [hasGbr, setHasGbr] = useState(false);
   const [loading, setLoading] = useState(true);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [taxSettings, setTaxSettings] = useState<TaxSettingsSummary | null>(null);
+  const [depreciationItems, setDepreciationItems] = useState<TaxDepreciationItem[]>([]);
+  const [maintenanceDistributions, setMaintenanceDistributions] = useState<TaxMaintenanceDistributionItem[]>([]);
 
   useEffect(() => {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const [{ data: prop }, { data: entries }] = await Promise.all([
+      const [{ data: prop }, { data: entries }, gbrRes, { data: taxSettingsData }, logicRes] = await Promise.all([
         supabase.from("properties").select("id, name, address").eq("id", id).eq("user_id", user.id).single(),
         supabase.from("tax_data").select("*").eq("property_id", id).eq("tax_year", taxYear).limit(1),
+        fetch(`/api/settings/gbr?property_id=${id}`),
+        supabase.from("tax_settings").select("eigennutzung_tage, gesamt_tage, rental_share_override_pct").eq("property_id", id).maybeSingle(),
+        fetch(`/api/tax/logic-items?property_id=${id}&tax_year=${taxYear}`),
       ]);
       setProperty(prop as Property | null);
       if (entries && entries.length > 0) setTaxData(entries[0] as TaxData);
+      if (gbrRes.ok) {
+        const gbr = await gbrRes.json() as { id?: string };
+        setHasGbr(Boolean(gbr.id));
+      }
+      setTaxSettings((taxSettingsData as TaxSettingsSummary | null) ?? null);
+      if (logicRes.ok) {
+        const logic = await logicRes.json() as {
+          depreciation_items: TaxDepreciationItem[];
+          maintenance_distributions: TaxMaintenanceDistributionItem[];
+        };
+        setDepreciationItems(logic.depreciation_items);
+        setMaintenanceDistributions(logic.maintenance_distributions);
+      }
       setLoading(false);
     };
     void load();
   }, [id, taxYear]);
+
+  const rentalSharePct = useMemo(() => {
+    if (taxSettings?.rental_share_override_pct != null) return taxSettings.rental_share_override_pct;
+    const totalDays = Math.max(1, taxSettings?.gesamt_tage ?? 365);
+    const selfUseDays = Math.max(0, taxSettings?.eigennutzung_tage ?? 0);
+    return Math.max(0, Math.min(1, 1 - selfUseDays / totalDays));
+  }, [taxSettings]);
+
+  const displayTaxData = useMemo(() => (
+    taxData
+      ? computeStructuredTaxData({
+          taxData,
+          taxYear,
+          rentalSharePct,
+          depreciationItems,
+          maintenanceDistributions,
+        }).taxData
+      : null
+  ), [taxData, taxYear, rentalSharePct, depreciationItems, maintenanceDistributions]);
 
   const handleCopy = async (key: string, value: unknown) => {
     if (value == null) return;
@@ -49,13 +91,13 @@ export default function TaxExportPage() {
     return String(val);
   };
 
-  const filledCount = taxData
-    ? TAX_FIELDS.filter((f) => (taxData as unknown as Record<string, unknown>)[f.key] != null).length
+  const filledCount = displayTaxData
+    ? TAX_FIELDS.filter((f) => (displayTaxData as unknown as Record<string, unknown>)[f.key] != null).length
     : 0;
 
   if (loading) return <Skeleton />;
 
-  if (!taxData) {
+  if (!displayTaxData) {
     return (
       <main className="min-h-screen bg-slate-50 px-4 py-10 dark:bg-slate-950">
         <p className="text-center text-sm text-slate-500 dark:text-slate-400">
@@ -93,6 +135,13 @@ export default function TaxExportPage() {
             {` · ${filledCount}/${TAX_FIELDS.length} Felder`}
           </p>
         </div>
+
+        <TaxYearNavigation
+          propertyId={id}
+          taxYear={taxYear}
+          active="anlage-v-export"
+          hasGbr={hasGbr}
+        />
 
         {/* Hinweis */}
         <div className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 dark:border-blue-800 dark:bg-blue-950/30">
@@ -137,7 +186,7 @@ export default function TaxExportPage() {
               </div>
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {fields.map((field) => {
-                  const val = (taxData as unknown as Record<string, unknown>)[field.key];
+                  const val = (displayTaxData as unknown as Record<string, unknown>)[field.key];
                   const formatted = fmtVal(val, field.type);
                   const isCopied = copiedField === field.key;
 

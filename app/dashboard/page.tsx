@@ -2,507 +2,338 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import {
-  calculateProfitability,
-  type ProfitabilityTransaction,
-  type ProfitabilityDbCategory,
-} from "@/lib/calculations/profitability";
-import {
-  loadCategoryLookup,
-  type CategoryLookup,
-} from "@/lib/banking/categoryLookup";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-} from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type PropertyRecord = {
   id: string;
   name: string;
   address: string;
-  type: string;
-  kaufpreis: number | null;
-  afa_satz: number | null;
-  kaufdatum: string | null;
 };
 
-const TYPE_LABELS: Record<string, string> = {
-  wohnung: "Wohnung",
-  haus: "Haus",
-  gewerbe: "Gewerbe",
-  sonstiges: "Sonstiges",
+type TransactionRecord = {
+  id: string;
+  date: string;
+  amount: number;
+  property_id: string | null;
 };
+
+const fmtEur = (value: number) =>
+  value.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+
+const monthKey = new Date().toISOString().slice(0, 7);
+const yearKey = new Date().getFullYear().toString();
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const [displayName, setDisplayName] = useState<string>("...");
+  const [displayName, setDisplayName] = useState("—");
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [properties, setProperties] = useState<PropertyRecord[]>([]);
-  const [isFetchingEmails, setIsFetchingEmails] = useState(false);
-  const [fetchEmailResult, setFetchEmailResult] = useState<{ emails: number; attachments: number } | null>(null);
-  const [fetchEmailError, setFetchEmailError] = useState<string | null>(null);
-  const [propertyError, setPropertyError] = useState<string | null>(null);
-  const [allTransactions, setAllTransactions] = useState<ProfitabilityTransaction[]>([]);
-  const [catLookup, setCatLookup] = useState<CategoryLookup | null>(null);
+  const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [profitMode, setProfitMode] = useState<"month" | "year">("month");
 
   useEffect(() => {
-    const loadUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      const nameFromMetadata =
-        (user?.user_metadata?.full_name as string | undefined) ??
-        (user?.user_metadata?.name as string | undefined);
-
-      setDisplayName(nameFromMetadata || user?.email || "Unbekannter Nutzer");
-
-      if (user) {
-        const [{ data: propertyData, error }, { data: txData }, lookupRes] =
-          await Promise.all([
-            supabase
-              .from("properties")
-              .select("id, name, address, type, kaufpreis, afa_satz, kaufdatum")
-              .eq("user_id", user.id)
-              .order("created_at", { ascending: false }),
-            supabase
-              .from("transactions")
-              .select("id, date, amount, category, property_id")
-              .eq("user_id", user.id)
-              .or("category.is.null,category.neq.aufgeteilt")
-              .order("date", { ascending: true }),
-            loadCategoryLookup(),
-          ]);
-
-        if (error) {
-          setPropertyError(error.message);
-        } else {
-          setProperties(propertyData || []);
-        }
-        setAllTransactions((txData ?? []) as (ProfitabilityTransaction & { property_id?: string })[]);
-        setCatLookup(lookupRes);
+    const load = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setIsLoading(false);
+        return;
       }
 
+      const nameFromMetadata =
+        (user.user_metadata?.full_name as string | undefined) ??
+        (user.user_metadata?.name as string | undefined) ??
+        user.email?.split("@")[0] ??
+        "—";
+      setDisplayName(nameFromMetadata);
+
+      const [{ data: propertyData, error: propertyError }, { data: txData, error: txError }] = await Promise.all([
+        supabase
+          .from("properties")
+          .select("id, name, address")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("transactions")
+          .select("id, date, amount, property_id")
+          .eq("user_id", user.id)
+          .or("category.is.null,category.neq.aufgeteilt"),
+      ]);
+
+      if (propertyError || txError) {
+        setError(propertyError?.message ?? txError?.message ?? "Dashboard konnte nicht geladen werden.");
+      }
+
+      setProperties((propertyData ?? []) as PropertyRecord[]);
+      setTransactions((txData ?? []) as TransactionRecord[]);
       setIsLoading(false);
     };
 
-    void loadUser();
+    void load();
   }, []);
 
-  const handleFetchEmails = async () => {
-    setIsFetchingEmails(true);
-    setFetchEmailResult(null);
-    setFetchEmailError(null);
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Guten Morgen";
+    if (hour < 18) return "Guten Tag";
+    return "Guten Abend";
+  }, []);
 
-    try {
-      const response = await fetch("/api/email-fetch", { method: "POST" });
-      const data = (await response.json()) as { emails_processed?: number; attachments_saved?: number; error?: string };
+  const todayLabel = useMemo(
+    () => new Date().toLocaleDateString("de-DE", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }),
+    [],
+  );
 
-      if (!response.ok) {
-        throw new Error(data.error || "Fehler beim Abrufen der E-Mails.");
-      }
+  const monthTransactions = useMemo(
+    () => transactions.filter((tx) => tx.date.slice(0, 7) === monthKey),
+    [transactions],
+  );
 
-      setFetchEmailResult({
-        emails: data.emails_processed ?? 0,
-        attachments: data.attachments_saved ?? 0,
-      });
-    } catch (error) {
-      setFetchEmailError(error instanceof Error ? error.message : "Unbekannter Fehler.");
-    } finally {
-      setIsFetchingEmails(false);
+  const monthIncome = monthTransactions
+    .filter((tx) => Number(tx.amount) > 0)
+    .reduce((sum, tx) => sum + Number(tx.amount), 0);
+  const monthExpenses = monthTransactions
+    .filter((tx) => Number(tx.amount) < 0)
+    .reduce((sum, tx) => sum + Math.abs(Number(tx.amount)), 0);
+  const monthCashflow = monthIncome - monthExpenses;
+
+  const propertyCashflows = useMemo(() => {
+    const byProperty = new Map<string, number>();
+    for (const tx of monthTransactions) {
+      if (!tx.property_id) continue;
+      byProperty.set(tx.property_id, (byProperty.get(tx.property_id) ?? 0) + Number(tx.amount));
     }
-  };
+    return byProperty;
+  }, [monthTransactions]);
 
-  const handleLogout = async () => {
-    setIsLoggingOut(true);
-    await supabase.auth.signOut();
-    router.push("/auth");
-    router.refresh();
-  };
+  const chartData = useMemo(() => {
+    return properties.map((property) => {
+      const annualTransactions = transactions.filter(
+        (tx) => tx.property_id === property.id && tx.date.startsWith(yearKey),
+      );
+      const annualCashflow = annualTransactions.reduce((sum, tx) => sum + Number(tx.amount), 0);
+      return {
+        name: property.name,
+        cashflow: Math.round(annualCashflow * 100) / 100,
+      };
+    });
+  }, [properties, transactions]);
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:py-10">
-      {/* Welcome section */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-          Dashboard
-        </h1>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          {isLoading ? "Lade Benutzerdaten..." : `Willkommen, ${displayName}`}
-        </p>
-      </div>
+    <main className="min-h-screen bg-slate-50 px-4 py-10 dark:bg-slate-950">
+      <section className="mx-auto w-full max-w-6xl space-y-8">
+        <header className="space-y-2">
+          {isLoading ? (
+            <>
+              <div className="h-8 w-72 animate-pulse rounded bg-slate-200 dark:bg-slate-800" />
+              <div className="h-4 w-48 animate-pulse rounded bg-slate-200 dark:bg-slate-800" />
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                {greeting}, {displayName}
+              </h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{todayLabel}</p>
+            </>
+          )}
+        </header>
 
-      {/* Quick Actions */}
-      {!isLoading && (
-        <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Link
-            href={properties.length > 0 ? `/dashboard/properties/${properties[0].id}` : "/onboarding"}
-            className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-blue-300 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-700"
-          >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-              </svg>
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Dokument hochladen</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">PDF, JPG oder PNG</p>
-            </div>
-          </Link>
+        {error && (
+          <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+            {error}
+          </div>
+        )}
 
-          <Link
-            href="/dashboard/banking/import"
-            className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-blue-300 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-700"
-          >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
-                <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
-              </svg>
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">CSV importieren</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Kontoauszuege einlesen</p>
-            </div>
-          </Link>
-
-          <Link
-            href="/dashboard/inbox"
-            className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-blue-300 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-700"
-          >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-                <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-              </svg>
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">KI-Postfach</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">E-Mails automatisch verarbeiten</p>
-            </div>
-          </Link>
+        <div className="grid gap-4 md:grid-cols-3">
+          <KpiCard label="Einnahmen" value={monthIncome} tone={monthIncome === 0 ? "neutral" : "positive"} />
+          <KpiCard label="Ausgaben" value={monthExpenses} tone={monthExpenses === 0 ? "neutral" : "negative"} />
+          <KpiCard label="Cashflow" value={monthCashflow} tone={monthCashflow === 0 ? "neutral" : monthCashflow > 0 ? "positive" : "negative"} />
         </div>
-      )}
 
-      {!isLoading && propertyError ? (
-        <p className="mb-6 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
-          {propertyError}
-        </p>
-      ) : null}
-
-      {/* Properties section */}
-      {!isLoading && !propertyError ? (
-        <div className="mb-8">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">Deine Immobilien</h2>
+        <section className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">Deine Immobilien</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Direkter Einstieg in Steckbrief, Dokumente und Steuerdaten.</p>
+            </div>
             <Link
               href="/onboarding"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 transition hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-              </svg>
-              Hinzufuegen
+              <PlusIcon className="h-4 w-4" />
+              Hinzufügen
             </Link>
           </div>
 
-          {properties.length === 0 ? (
-            <div className="flex flex-col items-center gap-4 rounded-xl border-2 border-dashed border-slate-200 bg-white py-10 text-center dark:border-slate-700 dark:bg-slate-900">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950/40">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
+          {isLoading ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {[1, 2].map((item) => (
+                <div key={item} className="h-24 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-800" />
+              ))}
+            </div>
+          ) : properties.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-slate-200 py-12 text-center dark:border-slate-700">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                <BuildingIcon className="h-5 w-5 text-slate-400 dark:text-slate-500" />
               </div>
               <div>
                 <p className="font-medium text-slate-700 dark:text-slate-300">Noch keine Immobilie angelegt</p>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  Fuege deine erste Immobilie hinzu, um alle Funktionen zu nutzen.
-                </p>
+                <p className="mt-1 text-sm text-slate-500">Lege dein erstes Objekt an und starte mit Dokumenten, Banking und Steuerdaten.</p>
               </div>
               <Link
                 href="/onboarding"
                 className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-                </svg>
+                <PlusIcon className="h-4 w-4" />
                 Erste Immobilie anlegen
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {properties.map((property) => (
-                <Link
-                  key={property.id}
-                  href={`/dashboard/properties/${property.id}/overview`}
-                  className="group flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-4 transition hover:border-blue-300 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-700"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-slate-900 dark:text-slate-100">{property.name}</p>
-                    <p className="mt-0.5 truncate text-sm text-slate-500 dark:text-slate-400">
-                      {property.address}
-                    </p>
-                    <span className="mt-2 inline-block rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                      {TYPE_LABELS[property.type] || property.type}
-                    </span>
-                  </div>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="ml-3 h-5 w-5 shrink-0 text-slate-300 transition group-hover:text-blue-500 dark:text-slate-600 dark:group-hover:text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                  </svg>
-                </Link>
-              ))}
+            <div className="grid gap-3 md:grid-cols-2">
+              {properties.map((property) => {
+                const cashflow = propertyCashflows.get(property.id) ?? 0;
+                const toneClass = cashflow === 0
+                  ? "text-slate-400 dark:text-slate-500"
+                  : cashflow > 0
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-red-600 dark:text-red-400";
+
+                return (
+                  <Link
+                    key={property.id}
+                    href={`/dashboard/properties/${property.id}/overview`}
+                    className="group flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-4 transition hover:border-blue-300 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900"
+                  >
+                    <div>
+                      <p className="font-medium text-slate-900 dark:text-slate-100">{property.name}</p>
+                      <p className="mt-0.5 text-sm text-slate-500">{property.address || "—"}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-sm font-semibold tabular-nums ${toneClass}`}>
+                        {cashflow === 0 ? "—" : fmtEur(cashflow)}
+                      </p>
+                      <p className="text-xs text-slate-400">Cashflow Apr</p>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           )}
-        </div>
-      ) : null}
+        </section>
 
-      {/* Profitabilität Übersicht */}
-      {!isLoading && properties.length > 0 && <ProfitOverview
-        properties={properties}
-        transactions={allTransactions}
-        catLookup={catLookup}
-        mode={profitMode}
-        setMode={setProfitMode}
-      />}
-
-      {/* KI-Postfach section */}
-      <div className="mb-8 rounded-xl border border-slate-200 bg-white p-4 sm:p-6 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300">KI-Postfach</h2>
-        {process.env.NEXT_PUBLIC_GMAIL_USER ? (
-          <>
-            <p className="mt-2 break-all font-mono text-sm font-medium text-slate-900 dark:text-slate-100">
-              {process.env.NEXT_PUBLIC_GMAIL_USER}
-            </p>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              Schicke Rechnungen, Quittungen und Belege an diese Adresse -- sie werden automatisch verarbeitet.
-            </p>
-            <button
-              type="button"
-              onClick={() => void handleFetchEmails()}
-              disabled={isFetchingEmails}
-              className="mt-3 inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {isFetchingEmails ? "Pruefe..." : "Jetzt pruefen"}
-            </button>
-            {fetchEmailResult ? (
-              <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-400">
-                {fetchEmailResult.emails === 0
-                  ? "Keine neuen E-Mails."
-                  : `${fetchEmailResult.emails} E-Mail${fetchEmailResult.emails !== 1 ? "s" : ""} verarbeitet, ${fetchEmailResult.attachments} Anhang${fetchEmailResult.attachments !== 1 ? "aenge" : ""} gespeichert.`}
-              </p>
-            ) : null}
-            {fetchEmailError ? (
-              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{fetchEmailError}</p>
-            ) : null}
-            <div className="mt-3 flex gap-2">
-              <Link
-                href="/dashboard/inbox"
-                className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                Eingang anzeigen
-              </Link>
-              <Link
-                href="/dashboard/documents"
-                className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                Alle Dokumente
-              </Link>
+        <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">Profitabilität</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Monatsübersicht oder Jahresvergleich deiner Objekte.</p>
             </div>
-          </>
-        ) : (
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            Keine Postfach-Adresse konfiguriert (NEXT_PUBLIC_GMAIL_USER fehlt).
-          </p>
-        )}
-      </div>
+            <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-800 dark:bg-slate-800/50">
+              {(["month", "year"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setProfitMode(mode)}
+                  className={`rounded-md px-3 py-2 text-sm font-medium transition ${
+                    profitMode === mode
+                      ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+                      : "text-slate-500 dark:text-slate-400"
+                  }`}
+                >
+                  {mode === "month" ? "Monat" : "Jahr"}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      {/* Logout */}
-      <button
-        type="button"
-        onClick={handleLogout}
-        disabled={isLoggingOut}
-        className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
-      >
-        {isLoggingOut ? "Logout..." : "Logout"}
-      </button>
+          {profitMode === "month" ? (
+            <div className="mt-6 rounded-lg bg-slate-50 px-4 py-5 dark:bg-slate-800/50">
+              <p className="text-sm text-slate-500 dark:text-slate-400">Die Chart-Ansicht ist im Jahresmodus verfügbar.</p>
+            </div>
+          ) : isLoading ? (
+            <div className="mt-6 h-72 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-800" />
+          ) : chartData.length === 0 ? (
+            <div className="mt-6 flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-slate-200 py-12 text-center dark:border-slate-700">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                <ChartIcon className="h-5 w-5 text-slate-400 dark:text-slate-500" />
+              </div>
+              <div>
+                <p className="font-medium text-slate-700 dark:text-slate-300">Noch keine Jahresdaten vorhanden</p>
+                <p className="mt-1 text-sm text-slate-500">Sobald Buchungen vorliegen, erscheint hier dein Jahresvergleich.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-6 h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <CartesianGrid vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={(value) => `${Math.round(value)} €`} tick={{ fill: "#64748b", fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(148, 163, 184, 0.08)" }}
+                    formatter={(value) => fmtEur(Number(value ?? 0))}
+                    contentStyle={{ borderRadius: 12, borderColor: "#e2e8f0" }}
+                  />
+                  <Bar dataKey="cashflow" radius={[8, 8, 0, 0]} fill="#2563eb" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </section>
+      </section>
     </main>
   );
 }
 
-// ── Profitabilität Übersicht ──────────────────────────────────────────────────
-
-const MONTH_NAMES_SHORT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
-
-const fmtEur = (n: number, showSign = false) => {
-  const abs = new Intl.NumberFormat("de-DE", {
-    style: "currency", currency: "EUR", maximumFractionDigits: 0,
-  }).format(Math.abs(n));
-  if (showSign && n > 0) return `+${abs}`;
-  if (n < 0) return `−${abs}`;
-  return abs;
-};
-
-const fmtEurStr = (n: number) =>
-  new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Math.abs(n));
-
-function ProfitOverview({
-  properties,
-  transactions,
-  catLookup,
-  mode,
-  setMode,
+function KpiCard({
+  label,
+  value,
+  tone,
 }: {
-  properties: PropertyRecord[];
-  transactions: ProfitabilityTransaction[];
-  catLookup: CategoryLookup | null;
-  mode: "month" | "year";
-  setMode: (m: "month" | "year") => void;
+  label: string;
+  value: number;
+  tone: "positive" | "negative" | "neutral";
 }) {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
-
-  const dbCategories: ProfitabilityDbCategory[] | undefined = useMemo(() => {
-    if (!catLookup) return undefined;
-    return catLookup.categories.map((c) => ({
-      label: c.label, typ: c.typ, anlage_v: c.anlage_v, gruppe: c.gruppe,
-    }));
-  }, [catLookup]);
-
-  const dateRange = useMemo(() => {
-    if (mode === "year") {
-      return { von: `${currentYear}-01-01`, bis: `${currentYear}-12-31` };
-    }
-    const last = new Date(currentYear, currentMonth, 0).getDate();
-    return {
-      von: `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`,
-      bis: `${currentYear}-${String(currentMonth).padStart(2, "0")}-${String(last).padStart(2, "0")}`,
-    };
-  }, [mode, currentYear, currentMonth]);
-
-  const totals = useMemo(() => {
-    // Sum across all properties
-    const propInput = { kaufpreis: 0, afa_satz: 0 };
-    return calculateProfitability(transactions, propInput, dateRange, dbCategories);
-  }, [transactions, dateRange, dbCategories]);
-
-  // Monthly bar chart for the year
-  const barData = useMemo(() => {
-    // Old einnahmen slugs for fallback
-    const oldEinnahmen = new Set([
-      "miete_einnahmen_wohnen", "miete_einnahmen_gewerbe",
-      "nebenkosten_einnahmen", "mietsicherheit_einnahme", "sonstige_einnahmen",
-    ]);
-
-    return Array.from({ length: 12 }, (_, i) => {
-      const m = i + 1;
-      const von = `${currentYear}-${String(m).padStart(2, "0")}-01`;
-      const last = new Date(currentYear, m, 0).getDate();
-      const bis = `${currentYear}-${String(m).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
-
-      let einnahmen = 0;
-      let ausgaben = 0;
-      for (const tx of transactions) {
-        if (tx.date < von || tx.date > bis || !tx.category || tx.category === "aufgeteilt") continue;
-        const amount = Number(tx.amount);
-        let isEinnahme = false;
-        if (catLookup) {
-          const db = catLookup.byLabel.get(tx.category);
-          if (db) isEinnahme = db.typ === "einnahme";
-          else isEinnahme = oldEinnahmen.has(tx.category);
-        } else {
-          isEinnahme = oldEinnahmen.has(tx.category);
-        }
-        if (isEinnahme) einnahmen += amount;
-        else ausgaben += Math.abs(amount);
-      }
-
-      return {
-        name: MONTH_NAMES_SHORT[i],
-        Einnahmen: Math.round(einnahmen),
-        Ausgaben: Math.round(-ausgaben),
-      };
-    });
-  }, [transactions, currentYear, catLookup]);
-
-  const periodLabel = mode === "year"
-    ? `${currentYear}`
-    : `${MONTH_NAMES_SHORT[currentMonth - 1]} ${currentYear}`;
+  const toneClass = tone === "positive"
+    ? "text-emerald-600 dark:text-emerald-400"
+    : tone === "negative"
+      ? "text-red-600 dark:text-red-400"
+      : "text-slate-400 dark:text-slate-500";
 
   return (
-    <div className="mb-8 rounded-xl border border-slate-200 bg-white p-4 sm:p-6 dark:border-slate-800 dark:bg-slate-900">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
-          Profitabilität Gesamt
-        </h2>
-        <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-800">
-          <button
-            type="button"
-            onClick={() => setMode("month")}
-            className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-              mode === "month"
-                ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100"
-                : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
-            }`}
-          >
-            Monat
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("year")}
-            className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-              mode === "year"
-                ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100"
-                : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
-            }`}
-          >
-            Jahr
-          </button>
-        </div>
-      </div>
-
-      <p className="mb-3 text-xs text-slate-400 dark:text-slate-500">
-        {periodLabel} · alle Immobilien
+    <div className="rounded-lg bg-slate-50 px-3 py-2.5 dark:bg-slate-800/50">
+      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Aktueller Monat · {label}</p>
+      <p className={`mt-1 text-xl font-semibold tabular-nums ${toneClass}`}>
+        {value === 0 ? "0,00 €" : fmtEur(value)}
       </p>
-
-      {/* KPI Cards */}
-      <div className="mb-4 grid grid-cols-3 gap-3">
-        <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Einnahmen</p>
-          <p className="mt-1 text-base font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{fmtEur(totals.einnahmen)}</p>
-        </div>
-        <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Ausgaben</p>
-          <p className="mt-1 text-base font-bold tabular-nums text-red-600 dark:text-red-400">{fmtEur(totals.ausgaben)}</p>
-        </div>
-        <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-800/50">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Cashflow</p>
-          <p className={`mt-1 text-base font-bold tabular-nums ${
-            totals.cashflow_brutto >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
-          }`}>{fmtEur(totals.cashflow_brutto, true)}</p>
-        </div>
-      </div>
-
-      {/* Mini chart */}
-      {mode === "year" && (
-        <div className="mt-2">
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={barData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#94a3b8" }} />
-              <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
-              <Tooltip
-                formatter={(value, name) => [fmtEurStr(Number(value)), String(name)]}
-                contentStyle={{ fontSize: 11, borderRadius: 8, border: "1px solid #e2e8f0" }}
-              />
-              <Bar dataKey="Einnahmen" fill="#10b981" radius={[2, 2, 0, 0]} />
-              <Bar dataKey="Ausgaben" fill="#ef4444" radius={[2, 2, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
     </div>
+  );
+}
+
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+      <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+function BuildingIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+      <path d="M3 18h14a1 1 0 100-2h-1V4a2 2 0 00-2-2H6a2 2 0 00-2 2v12H3a1 1 0 100 2zm3-4h2v2H6v-2zm0-4h2v2H6v-2zm0-4h2v2H6V6zm6 8h2v2h-2v-2zm0-4h2v2h-2v-2zm0-4h2v2h-2V6z" />
+    </svg>
+  );
+}
+
+function ChartIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+      <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+    </svg>
   );
 }

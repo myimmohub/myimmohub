@@ -1,16 +1,22 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type PropertyType = "wohnung" | "haus" | "gewerbe" | "sonstiges";
 
+const STEPS = [
+  { id: 1, label: "Willkommen" },
+  { id: 2, label: "Immobilie" },
+  { id: 3, label: "Fertig" },
+];
+
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isCheckingExistingProperty, setIsCheckingExistingProperty] = useState(true);
-
   const [label, setLabel] = useState("");
   const [address, setAddress] = useState("");
   const [type, setType] = useState<PropertyType>("wohnung");
@@ -18,66 +24,9 @@ export default function OnboardingPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [createdPropertyId, setCreatedPropertyId] = useState<string | null>(null);
 
-  const handlePropertySubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSubmitError(null);
-    setIsSubmitting(true);
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setSubmitError("Du musst eingeloggt sein, um eine Immobilie anzulegen.");
-      setIsSubmitting(false);
-      return;
-    }
-
-    const { data: insertedProperty, error: insertError } = await supabase
-      .from("properties")
-      .insert({
-        user_id: user.id,
-        name: label,
-        address,
-        type,
-      })
-      .select("id")
-      .single();
-
-    if (insertError) {
-      const msg = insertError.message || "Unbekannter Fehler beim Speichern.";
-      if (msg.includes("Could not find the table") && msg.includes("properties")) {
-        setSubmitError(
-          "Die Tabelle 'properties' wurde in Supabase nicht gefunden (oder ist nicht im API-Schema verfuegbar). Bitte lege die Tabelle im 'public' Schema an und stelle sicher, dass sie fuer die API verfuegbar ist.",
-        );
-      } else {
-        setSubmitError(msg);
-      }
-      setIsSubmitting(false);
-      return;
-    }
-
-    setCreatedPropertyId(insertedProperty.id);
-    setIsSubmitting(false);
-    setStep(3);
-  };
-
-  const handleFinish = () => {
-    if (createdPropertyId) {
-      router.push(`/dashboard/properties/${createdPropertyId}`);
-      return;
-    }
-
-    router.push("/dashboard");
-  };
-
   useEffect(() => {
     const checkExistingProperties = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setIsCheckingExistingProperty(false);
         return;
@@ -100,244 +49,234 @@ export default function OnboardingPage() {
     void checkExistingProperties();
   }, [router]);
 
+  const handlePropertySubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitError(null);
+    setIsSubmitting(true);
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      setSubmitError("Du musst eingeloggt sein, um eine Immobilie anzulegen.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const { data: insertedProperty, error: insertError } = await supabase
+      .from("properties")
+      .insert({
+        user_id: user.id,
+        name: label,
+        address,
+        type,
+      })
+      .select("id")
+      .single();
+
+    if (insertError) {
+      setSubmitError(insertError.message || "Fehler beim Speichern.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    setCreatedPropertyId(insertedProperty.id);
+    setIsSubmitting(false);
+    setStep(3);
+  };
+
   if (isCheckingExistingProperty) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10 dark:bg-slate-950">
-        <p className="text-sm text-slate-600 dark:text-slate-400">Pruefe Onboarding-Status...</p>
+      <main className="min-h-screen bg-slate-50 px-4 py-10 dark:bg-slate-950">
+        <section className="mx-auto w-full max-w-3xl space-y-4">
+          <div className="h-8 w-48 animate-pulse rounded bg-slate-200 dark:bg-slate-800" />
+          <div className="h-48 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-800" />
+        </section>
       </main>
     );
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10 dark:bg-slate-950">
-      <section className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <header className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-              Onboarding
-            </h1>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              Schritt {step} von 3
-            </p>
+    <main className="min-h-screen bg-slate-50 px-4 py-10 dark:bg-slate-950">
+      <section className="mx-auto w-full max-w-3xl space-y-6">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Onboarding</h1>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">In wenigen Minuten ist deine erste Immobilie startklar.</p>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Schritt {step} von 3</p>
           </div>
 
-          <div className="flex items-center gap-2">
-            {[1, 2, 3].map((currentStep) => (
-              <span
-                key={currentStep}
-                className={`h-2 w-2 rounded-full ${
-                  step >= currentStep ? "bg-blue-600 dark:bg-blue-500" : "bg-slate-300 dark:bg-slate-700"
-                }`}
-              />
+          <div className="mt-6 grid grid-cols-3 gap-4">
+            {STEPS.map((item) => (
+              <div key={item.id} className="text-center">
+                <div className={`mx-auto h-3 w-3 rounded-full ${step >= item.id ? "bg-blue-600 dark:bg-blue-400" : "bg-slate-300 dark:bg-slate-700"}`} />
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{item.label}</p>
+              </div>
             ))}
           </div>
-        </header>
+        </div>
 
-        {step === 1 ? (
-          <div className="mt-8 space-y-4">
-            <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
-              Willkommen bei ImmoHub
-            </h2>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              ImmoHub hilft dir dabei, deine Immobilien zentral zu verwalten: von Stammdaten über Mieter
-              bis hin zu Dokumenten und Aufgaben. In wenigen Schritten legst du deine erste Immobilie an
-              und bist startklar.
-            </p>
-
+        {step === 1 && (
+          <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+            <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">Was MyImmoHub für dich übernimmt</h2>
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              {[
+                { title: "Dokumente", text: "Kaufverträge, Rechnungen und Belege an einem Ort verwalten.", icon: DocumentIcon },
+                { title: "Banking", text: "Kontoauszüge importieren und Transaktionen sauber kategorisieren.", icon: CardIcon },
+                { title: "Steuer", text: "Anlage V und GbR-Daten strukturiert vorbereiten.", icon: ChartIcon },
+              ].map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.title} className="rounded-lg bg-slate-50 px-4 py-4 dark:bg-slate-800/50">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-blue-600 dark:bg-slate-900 dark:text-blue-400">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <p className="mt-3 text-sm font-medium text-slate-900 dark:text-slate-100">{item.title}</p>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{item.text}</p>
+                  </div>
+                );
+              })}
+            </div>
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="mt-4 inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
+              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
             >
-              Onboarding starten
+              Weiter zur Immobilie
             </button>
           </div>
-        ) : null}
+        )}
 
-        {step === 2 ? (
-          <div className="mt-8">
-            <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
-              Erste Immobilie anlegen
-            </h2>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              Lege eine Immobilie an, die du mit ImmoHub verwalten möchtest. Du kannst später jederzeit
-              weitere Objekte hinzufügen.
-            </p>
+        {step === 2 && (
+          <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+            <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">Erste Immobilie anlegen</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Die Basisdaten reichen aus. Alles Weitere kannst du später ergänzen.</p>
 
             <form onSubmit={handlePropertySubmit} className="mt-6 space-y-4">
-              <div>
-                <label
-                  htmlFor="label"
-                  className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300"
-                >
-                  Bezeichnung
-                </label>
-                <input
-                  id="label"
-                  type="text"
-                  required
-                  value={label}
-                  onChange={(event) => setLabel(event.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
-                  placeholder="z.B. Mehrfamilienhaus Musterstraße 12"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="address"
-                  className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300"
-                >
-                  Adresse
-                </label>
-                <input
-                  id="address"
-                  type="text"
-                  required
-                  value={address}
-                  onChange={(event) => setAddress(event.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
-                  placeholder="z.B. Musterstraße 12, 12345 Musterstadt"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="type"
-                  className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300"
-                >
-                  Typ
-                </label>
-                <select
-                  id="type"
-                  value={type}
-                  onChange={(event) => setType(event.target.value as PropertyType)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/40"
-                >
+              <Field label="Bezeichnung">
+                <input className={inputClass} value={label} onChange={(event) => setLabel(event.target.value)} placeholder="z. B. Wohnung Köln Lindenthal" required />
+              </Field>
+              <Field label="Adresse">
+                <input className={inputClass} value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Straße, PLZ Ort" required />
+              </Field>
+              <Field label="Typ">
+                <select className={inputClass} value={type} onChange={(event) => setType(event.target.value as PropertyType)}>
                   <option value="wohnung">Wohnung</option>
                   <option value="haus">Haus</option>
                   <option value="gewerbe">Gewerbe</option>
                   <option value="sonstiges">Sonstiges</option>
                 </select>
-              </div>
+              </Field>
 
-              {submitError ? (
-                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
-                  {submitError}
-                </p>
-              ) : null}
+              {submitError && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{submitError}</div>}
 
-              <div className="mt-4 flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => setStep(1)}
-                  className="text-sm font-medium text-slate-600 underline underline-offset-4 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                 >
                   Zurück
                 </button>
-
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
                 >
-                  {isSubmitting ? "Speichern..." : "Immobilie speichern & weiter"}
+                  {isSubmitting ? "Speichert..." : "Immobilie speichern"}
                 </button>
               </div>
             </form>
           </div>
-        ) : null}
+        )}
 
-        {step === 3 ? (
-          <div className="mt-8 space-y-6">
-            {/* Erfolgs-Header */}
+        {step === 3 && (
+          <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-start gap-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-emerald-600 dark:text-emerald-400">
-                  <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
-                </svg>
-              </span>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+                <CheckIcon className="h-4 w-4" />
+              </div>
               <div>
-                <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
-                  {label} wurde angelegt
-                </h2>
-                <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-                  {address}
-                </p>
+                <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">Immobilie angelegt</h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{label} · {address}</p>
               </div>
             </div>
 
-            {/* Nächste Schritte */}
-            <div>
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Jetzt empfohlen — lade diese Dokumente hoch:
-              </p>
-
-              <div className="mt-3 space-y-3">
-
-                {/* Kaufvertrag */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm dark:bg-slate-900 dark:text-slate-400">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                        <path fillRule="evenodd" d="M4 4a2 2 0 0 1 2-2h4.586A2 2 0 0 1 12 2.586L15.414 6A2 2 0 0 1 16 7.414V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm2 6a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 10Zm.75 2.75a.75.75 0 0 0 0 1.5h6.5a.75.75 0 0 0 0-1.5h-6.5Z" clipRule="evenodd" />
-                      </svg>
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                        Kaufvertrag
-                        <span className="ml-2 text-xs font-normal text-slate-400">PDF</span>
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        Die KI liest Kaufpreis, Kaufdatum, Baujahr, Wohnfläche und die Kaufpreisaufteilung
-                        (Gebäude / Grund / Inventar) automatisch aus. Das Ergebnis wird direkt in den
-                        Steckbrief übernommen und für die AfA-Berechnung genutzt.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Kontoauszug */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm dark:bg-slate-900 dark:text-slate-400">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                        <path fillRule="evenodd" d="M1 4a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4Zm12 4a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM4 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm13-1a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" clipRule="evenodd" />
-                        <path d="M3 13.5A1.5 1.5 0 0 1 1.5 12v-.5A2.5 2.5 0 0 0 4 14h12a2.5 2.5 0 0 0 2.5-2.5v.5a1.5 1.5 0 0 1-1.5 1.5H3Z" />
-                      </svg>
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                        Kontoauszug
-                        <span className="ml-2 text-xs font-normal text-slate-400">CSV · alle deutschen Banken</span>
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        Buchungen werden automatisch den steuerlichen Kategorien der Anlage V zugeordnet
-                        (z. B. Schuldzinsen, Erhaltungsaufwand, Grundsteuer). Duplikate werden beim
-                        erneuten Import automatisch übersprungen.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <div className="rounded-lg bg-slate-50 px-4 py-4 dark:bg-slate-800/50">
+                <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Nächster sinnvoller Schritt</p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Lade deinen Kaufvertrag hoch, damit Stammdaten und Kaufpreisaufteilung automatisch übernommen werden.</p>
+              </div>
+              <div className="rounded-lg bg-slate-50 px-4 py-4 dark:bg-slate-800/50">
+                <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Danach</p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Importiere Kontoauszüge und starte mit Banking, Profitabilität und Steuerdaten.</p>
               </div>
             </div>
 
-            {/* CTA */}
-            <button
-              type="button"
-              onClick={handleFinish}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
-            >
-              {createdPropertyId ? "Zur Immobilie & Dokumente hochladen" : "Zum Dashboard"}
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4">
-                <path fillRule="evenodd" d="M2 8a.75.75 0 0 1 .75-.75h8.69L8.22 4.03a.75.75 0 0 1 1.06-1.06l4.5 4.5a.75.75 0 0 1 0 1.06l-4.5 4.5a.75.75 0 0 1-1.06-1.06l3.22-3.22H2.75A.75.75 0 0 1 2 8Z" clipRule="evenodd" />
-              </svg>
-            </button>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              {createdPropertyId && (
+                <Link
+                  href={`/dashboard/properties/${createdPropertyId}`}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
+                >
+                  Dokumente hochladen
+                </Link>
+              )}
+              <button
+                type="button"
+                onClick={() => router.push(createdPropertyId ? `/dashboard/properties/${createdPropertyId}/overview` : "/dashboard")}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Zum Steckbrief
+              </button>
+            </div>
           </div>
-        ) : null}
+        )}
       </section>
     </main>
   );
 }
 
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100";
+
+function DocumentIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+      <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+function CardIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+      <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v1H2V5z" />
+      <path fillRule="evenodd" d="M18 9H2v6a2 2 0 002 2h12a2 2 0 002-2V9z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+function ChartIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+      <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+      <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 111.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143Z" clipRule="evenodd" />
+    </svg>
+  );
+}

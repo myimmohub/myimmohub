@@ -1,111 +1,48 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, usePathname } from "next/navigation";
 import Link from "next/link";
+import { useParams, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 const TABS = [
-  {
-    href: (id: string) => `/dashboard/properties/${id}`,
-    label: "Dokumente",
-    exact: true,
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-      </svg>
-    ),
-  },
-  {
-    href: (id: string) => `/dashboard/properties/${id}/overview`,
-    label: "Steckbrief",
-    exact: false,
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-      </svg>
-    ),
-  },
-  {
-    href: (id: string) => `/dashboard/properties/${id}/profitability`,
-    label: "Profitabilität",
-    exact: false,
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-        <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-      </svg>
-    ),
-  },
-  {
-    href: (id: string) => `/dashboard/properties/${id}/tax`,
-    label: "Steuerdaten",
-    exact: false,
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-        <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v7a1 1 0 102 0V8z" clipRule="evenodd" />
-      </svg>
-    ),
-  },
+  { label: "Steckbrief", href: (id: string) => `/dashboard/properties/${id}/overview`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/overview`) },
+  { label: "Dokumente", href: (id: string) => `/dashboard/properties/${id}`, match: (pathname: string, id: string) => pathname === `/dashboard/properties/${id}` },
+  { label: "Profitabilität", href: (id: string) => `/dashboard/properties/${id}/profitability`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/profitability`) },
+  { label: "Steuerdaten", href: (id: string) => `/dashboard/properties/${id}/tax`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/tax`) },
 ];
 
 export default function PropertyLayout({ children }: { children: React.ReactNode }) {
   const { id } = useParams<{ id: string }>();
   const pathname = usePathname();
-  const [propertyName, setPropertyName] = useState<string | null>(null);
+  const [propertyName, setPropertyName] = useState<string>("Immobilie");
 
   useEffect(() => {
-    const load = async () => {
-      const { data } = await supabase
-        .from("properties")
-        .select("name")
-        .eq("id", id)
-        .single();
-      if (data) setPropertyName(data.name as string);
+    const loadProperty = async () => {
+      const { data } = await supabase.from("properties").select("name").eq("id", id).single();
+      if (data?.name) setPropertyName(data.name as string);
     };
-    void load();
+    void loadProperty();
   }, [id]);
-
-  const isActive = (tab: typeof TABS[number]) => {
-    const href = tab.href(id);
-    return tab.exact ? pathname === href : pathname.startsWith(href);
-  };
 
   return (
     <>
-      {/* Sub-Navigation */}
-      <div className="sticky top-14 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/95">
-        <div className="mx-auto max-w-6xl px-4">
-          {/* Immobilienname */}
-          {propertyName && (
-            <div className="flex items-center gap-2 pb-0 pt-3">
-              <Link
-                href="/dashboard"
-                className="text-xs text-slate-400 transition hover:text-blue-600 dark:text-slate-500 dark:hover:text-blue-400"
-              >
-                Dashboard
-              </Link>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-slate-300 dark:text-slate-600" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-              </svg>
-              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{propertyName}</span>
-            </div>
-          )}
-
-          {/* Tabs */}
-          <nav className="-mb-px flex gap-0.5 pt-2">
+      <div className="sticky top-16 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/95">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3">
+          <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{propertyName}</div>
+          <nav className="-mb-3 flex flex-wrap gap-4">
             {TABS.map((tab) => {
-              const active = isActive(tab);
+              const active = tab.match(pathname, id);
               return (
                 <Link
                   key={tab.label}
                   href={tab.href(id)}
-                  className={`flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition ${
+                  className={`border-b-2 pb-3 text-sm font-medium transition ${
                     active
-                      ? "border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-400"
-                      : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200"
+                      ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
+                      : "border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
                   }`}
                 >
-                  {tab.icon}
                   {tab.label}
                 </Link>
               );
@@ -113,8 +50,6 @@ export default function PropertyLayout({ children }: { children: React.ReactNode
           </nav>
         </div>
       </div>
-
-      {/* Seiteninhalt */}
       {children}
     </>
   );

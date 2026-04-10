@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { buildGbrTaxReport, type GbrSettingsSummary, type TaxSettingsSummary } from "@/lib/tax/gbrTaxReport";
+import { isDistributionActiveForYear } from "@/lib/tax/structuredTaxLogic";
 import type { TaxData } from "@/types/tax";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -24,11 +25,20 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Nicht authentifiziert." }, { status: 401 });
 
-  const [{ data: property, error: propertyError }, { data: taxData, error: taxError }, { data: gbrSettings, error: gbrError }, { data: taxSettings, error: taxSettingsError }] = await Promise.all([
+  const [
+    { data: property, error: propertyError },
+    { data: taxData, error: taxError },
+    { data: gbrSettings, error: gbrError },
+    { data: taxSettings, error: taxSettingsError },
+    { data: depreciationItems, error: depreciationError },
+    { data: maintenanceItems, error: maintenanceError },
+  ] = await Promise.all([
     supabase.from("properties").select("id, name, address").eq("id", propertyId).eq("user_id", user.id).single(),
     supabase.from("tax_data").select("*").eq("property_id", propertyId).eq("tax_year", taxYear).single(),
     supabase.from("gbr_settings").select("*, gbr_partner(*)").eq("property_id", propertyId).maybeSingle(),
     supabase.from("tax_settings").select("eigennutzung_tage, gesamt_tage, rental_share_override_pct").eq("property_id", propertyId).maybeSingle(),
+    supabase.from("tax_depreciation_items").select("*").eq("property_id", propertyId).eq("tax_year", taxYear).order("created_at", { ascending: true }),
+    supabase.from("tax_maintenance_distributions").select("*").eq("property_id", propertyId).order("source_year", { ascending: true }),
   ]);
 
   if (propertyError || !property) {
@@ -42,6 +52,12 @@ export async function GET(request: Request) {
   }
   if (taxSettingsError) {
     return NextResponse.json({ error: taxSettingsError.message }, { status: 500 });
+  }
+  if (depreciationError) {
+    return NextResponse.json({ error: depreciationError.message }, { status: 500 });
+  }
+  if (maintenanceError) {
+    return NextResponse.json({ error: maintenanceError.message }, { status: 500 });
   }
 
   const partnerIds = ((gbrSettings?.gbr_partner ?? []) as { id: string }[]).map((partner) => partner.id);
@@ -63,6 +79,8 @@ export async function GET(request: Request) {
     gbrSettings: (gbrSettings as GbrSettingsSummary | null) ?? null,
     partnerTaxValues: partnerTaxValues ?? [],
     taxSettings: (taxSettings as TaxSettingsSummary | null) ?? null,
+    depreciationItems: depreciationItems ?? [],
+    maintenanceDistributions: (maintenanceItems ?? []).filter((item) => isDistributionActiveForYear(item, taxYear)),
   });
 
   return NextResponse.json(report);
