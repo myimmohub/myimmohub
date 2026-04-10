@@ -19,6 +19,8 @@ type Transaction = {
 type PropertyForTax = {
   kaufpreis: number | null;
   gebaeudewert: number | null;
+  grundwert?: number | null;
+  inventarwert?: number | null;
   baujahr: number | null;
   afa_satz: number | null;       // dezimal, z. B. 0.02
   kaufdatum: string | null;
@@ -33,6 +35,19 @@ type DbCategory = {
   anlage_v: string | null;
   gruppe: string;
 };
+
+function normalizeForMatching(value: string | null | undefined) {
+  return (value ?? "")
+    .toLocaleLowerCase("de-DE")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function containsAny(text: string, needles: string[]) {
+  return needles.some((needle) => text.includes(needle));
+}
 
 // ── Direktes Mapping: Kategorie-Label → tax_data-Feld ───────────────────────
 
@@ -148,13 +163,55 @@ const OLD_SLUG_TO_FIELD: Record<string, keyof TaxData> = {
   "sonstiges_nicht_absetzbar": "other_expenses",
 };
 
+function inferFieldFromText(
+  label: string,
+  gruppe?: string | null,
+): keyof TaxData | null {
+  const haystack = `${normalizeForMatching(label)} ${normalizeForMatching(gruppe)}`.trim();
+  if (!haystack) return null;
+
+  if (containsAny(haystack, ["grundsteuer"])) return "property_tax";
+  if (containsAny(haystack, ["versicherung", "wohngebaude", "haftpflicht"])) return "insurance";
+  if (containsAny(haystack, ["kreditzins", "schuldzins", "zinsdarlehen", "darlehenszins", "hypothekenzins"])) return "loan_interest";
+  if (containsAny(haystack, ["kontofuhrung", "bankgebuhr", "kontogebuhr"])) return "bank_fees";
+  if (containsAny(haystack, ["wasser", "abwasser", "sewage"])) return "water_sewage";
+  if (containsAny(haystack, ["mull", "abfall", "entsorgung"])) return "waste_disposal";
+  if (containsAny(haystack, ["weg kosten", "weg umlage", "hausgeld", "eigentu mergemeinschaft", "eigentumergemeinschaft", "weg"])) return "hoa_fees";
+  if (containsAny(haystack, ["hausverwaltung", "immobilienverwaltung", "objektverwaltung", "ferienhausverwaltung"])) return "property_management";
+  if (containsAny(haystack, ["handwerker", "material", "instandhaltung", "instandsetzung", "reparatur", "wartung", "sanierung", "renovierung"])) return "maintenance_costs";
+  if (containsAny(haystack, ["nebenkostenerstattung", "umlage"])) return "operating_costs_income";
+  if (containsAny(haystack, ["mieteinnahmen", "miete", "ferienvermietung"])) return "rent_income";
+  if (containsAny(haystack, ["kaution"])) return "deposits_received";
+
+  if (containsAny(haystack, ["gebaude"])) return "other_expenses";
+  if (containsAny(haystack, ["instandhaltung"])) return "maintenance_costs";
+  if (containsAny(haystack, ["betriebskosten"])) return "other_expenses";
+  if (containsAny(haystack, ["finanzierung"])) return "loan_interest";
+  if (containsAny(haystack, ["verwaltung"])) return "other_expenses";
+  if (containsAny(haystack, ["einnahmen"])) return "other_income";
+  return null;
+}
+
+function deriveBuildingBasis(property: PropertyForTax): number {
+  if (property.gebaeudewert != null && property.gebaeudewert > 0) {
+    return property.gebaeudewert;
+  }
+
+  const purchasePrice = property.kaufpreis ?? 0;
+  if (purchasePrice <= 0) return 0;
+
+  const landValue = Math.max(0, property.grundwert ?? 0);
+  const fixturesValue = Math.max(0, property.inventarwert ?? 0);
+  const derivedValue = purchasePrice - landValue - fixturesValue;
+
+  return derivedValue > 0 ? derivedValue : purchasePrice;
+}
+
 /**
  * Berechnet AfA basierend auf Property-Daten.
  */
 export function calculateDepreciation(property: PropertyForTax): number {
-  const afaBasis = (property.gebaeudewert != null && property.gebaeudewert > 0)
-    ? property.gebaeudewert
-    : property.kaufpreis ?? 0;
+  const afaBasis = deriveBuildingBasis(property);
 
   if (afaBasis <= 0) return 0;
 
@@ -188,6 +245,9 @@ function resolveField(
     // "nicht absetzbar" → überspringen
     if (dbCat.anlage_v === "nicht absetzbar") return null;
 
+    const inferredField = inferFieldFromText(dbCat.label, dbCat.gruppe);
+    if (inferredField) return inferredField;
+
     // 3. anlage_v-Zeile aus der DB-Kategorie (präzisestes Mapping, z. B. "Z. 19" → property_tax)
     if (dbCat.anlage_v) {
       const zeileNum = parseInt(dbCat.anlage_v.replace("Z. ", "").trim(), 10);
@@ -200,7 +260,10 @@ function resolveField(
     if (GRUPPE_TO_FIELD[dbCat.gruppe]) return GRUPPE_TO_FIELD[dbCat.gruppe];
   }
 
-  // 4. anlage_v_zeile auf der Transaktion
+  const inferredFallback = inferFieldFromText(cat, null);
+  if (inferredFallback) return inferredFallback;
+
+  // 5. anlage_v_zeile auf der Transaktion
   if (anlageVZeile && ZEILE_TO_FIELD[anlageVZeile]) {
     return ZEILE_TO_FIELD[anlageVZeile];
   }
@@ -259,7 +322,7 @@ export function calculateTaxFromTransactions(
     // Objekt-Stammdaten aus Property
     build_year: property.baujahr ?? undefined,
     acquisition_date: property.kaufdatum ?? undefined,
-    acquisition_cost_building: property.gebaeudewert ?? property.kaufpreis ?? undefined,
+    acquisition_cost_building: deriveBuildingBasis(property) || undefined,
     property_type: property.type ?? undefined,
 
     // Berechnete Einnahmen

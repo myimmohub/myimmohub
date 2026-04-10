@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import TaxYearNavigation from "@/components/tax/TaxYearNavigation";
+import { allocateElsterLineSummary, buildElsterLineSummary } from "@/lib/tax/elsterLineLogic";
+import { computeRentalShare } from "@/lib/tax/rentalShare";
 import type { GbrTaxReport } from "@/types/tax";
 
 const fmtEur = (value: number) =>
@@ -137,6 +139,13 @@ export default function GbrTaxYearPage() {
     );
   }
 
+  const rentalShareInfo = computeRentalShare({
+    eigennutzung_tage: report.gbr.eigennutzung_tage,
+    gesamt_tage: report.gbr.gesamt_tage,
+    rental_share_override_pct: report.gbr.rental_share_source === "override" ? report.gbr.rental_share_pct : null,
+  });
+  const lineSummary = buildElsterLineSummary(report.tax_data);
+
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10 dark:bg-slate-950">
       <section className="mx-auto w-full max-w-5xl space-y-6">
@@ -236,6 +245,13 @@ export default function GbrTaxYearPage() {
                   <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
                     Quelle: {report.gbr.rental_share_source === "override" ? "manuell" : `automatisch aus ${report.gbr.eigennutzung_tage}/${report.gbr.gesamt_tage} Tagen`}
                   </p>
+                  {rentalShareInfo.warnings.length > 0 && (
+                    <div className="mt-1 space-y-1 text-xs text-amber-600 dark:text-amber-400">
+                      {rentalShareInfo.warnings.map((warning) => (
+                        <p key={warning}>{warning}</p>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <input
@@ -259,6 +275,17 @@ export default function GbrTaxYearPage() {
               </div>
             </div>
           </section>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <BucketPanel title="FE-Herleitung: Einnahmen & Werbungskosten" items={[
+            ...lineSummary.income_buckets,
+            ...lineSummary.expense_buckets,
+          ]} total={lineSummary.income_total - lineSummary.advertising_costs_total} />
+          <BucketPanel title="FE-Herleitung: AfA & Sonderabzüge" items={[
+            ...lineSummary.depreciation_buckets,
+            ...lineSummary.special_buckets,
+          ]} total={-(lineSummary.depreciation_total + lineSummary.special_deductions_total)} />
         </div>
 
         {(report.logic.depreciation_items.length > 0 || report.logic.maintenance_distributions.length > 0) && (
@@ -359,41 +386,60 @@ export default function GbrTaxYearPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {report.fb.map((partner) => (
-                    <tr key={partner.partner_id}>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-slate-900 dark:text-slate-100">{partner.partner_name}</p>
-                        <p className="text-xs text-slate-400 dark:text-slate-500">{partner.email || "Keine E-Mail"}</p>
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{partner.anteil_pct.toFixed(2)} %</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{fmtEur(partner.total_income)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{fmtEur(partner.total_expenses)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{fmtEur(partner.depreciation_total + partner.special_deductions_total)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={partnerSpecialValues[partner.partner_id] ?? ""}
-                            onChange={(e) => setPartnerSpecialValues((prev) => ({ ...prev, [partner.partner_id]: e.target.value }))}
-                            className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-right text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                            placeholder="0,00"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => void savePartnerSpecialExpenses(partner.partner_id)}
-                            disabled={savingPartnerId === partner.partner_id}
-                            className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                          >
-                            {savingPartnerId === partner.partner_id ? "..." : "Speichern"}
-                          </button>
-                        </div>
-                      </td>
-                      <td className={`px-4 py-3 text-right font-semibold tabular-nums ${partner.result < 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-900 dark:text-slate-100"}`}>
-                        {fmtEur(partner.result)}
-                      </td>
-                    </tr>
-                  ))}
+                  {report.fb.map((partner) => {
+                    const allocated = allocateElsterLineSummary(lineSummary, partner.anteil_pct);
+                    return (
+                      <>
+                        <tr key={partner.partner_id}>
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-slate-900 dark:text-slate-100">{partner.partner_name}</p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500">{partner.email || "Keine E-Mail"}</p>
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{partner.anteil_pct.toFixed(2)} %</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{fmtEur(partner.total_income)}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{fmtEur(partner.total_expenses)}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{fmtEur(partner.depreciation_total + partner.special_deductions_total)}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-2">
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={partnerSpecialValues[partner.partner_id] ?? ""}
+                                onChange={(e) => setPartnerSpecialValues((prev) => ({ ...prev, [partner.partner_id]: e.target.value }))}
+                                className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-right text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                                placeholder="0,00"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void savePartnerSpecialExpenses(partner.partner_id)}
+                                disabled={savingPartnerId === partner.partner_id}
+                                className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                              >
+                                {savingPartnerId === partner.partner_id ? "..." : "Speichern"}
+                              </button>
+                            </div>
+                          </td>
+                          <td className={`px-4 py-3 text-right font-semibold tabular-nums ${partner.result < 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-900 dark:text-slate-100"}`}>
+                            {fmtEur(partner.result)}
+                          </td>
+                        </tr>
+                        <tr key={`${partner.partner_id}-logic`} className="bg-slate-50/60 dark:bg-slate-800/30">
+                          <td colSpan={7} className="px-4 py-4">
+                            <div className="grid gap-4 lg:grid-cols-2">
+                              <BucketPanel title={`FB-Herleitung ${partner.partner_name}: Einnahmen & Kosten`} items={[
+                                ...allocated.income_buckets.map((bucket) => ({ ...bucket, amount: bucket.allocated_amount })),
+                                ...allocated.expense_buckets.map((bucket) => ({ ...bucket, amount: bucket.allocated_amount })),
+                              ]} total={allocated.income_total - allocated.advertising_costs_total} compact />
+                              <BucketPanel title={`FB-Herleitung ${partner.partner_name}: AfA & Sonder`} items={[
+                                ...allocated.depreciation_buckets.map((bucket) => ({ ...bucket, amount: bucket.allocated_amount })),
+                                ...allocated.special_buckets.map((bucket) => ({ ...bucket, amount: bucket.allocated_amount })),
+                              ]} total={-(allocated.depreciation_total + allocated.special_deductions_total)} compact />
+                            </div>
+                          </td>
+                        </tr>
+                      </>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -441,5 +487,45 @@ function Skeleton() {
         {[1, 2, 3].map((i) => <div key={i} className="h-64 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-800" />)}
       </section>
     </main>
+  );
+}
+
+function BucketPanel({
+  title,
+  items,
+  total,
+  compact = false,
+}: {
+  title: string;
+  items: { key: string; label: string; amount: number; detail?: string }[];
+  total: number;
+  compact?: boolean;
+}) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex items-center justify-between gap-4">
+        <h3 className={`${compact ? "text-xs" : "text-sm"} font-semibold text-slate-900 dark:text-slate-100`}>{title}</h3>
+        <span className={`${compact ? "text-xs" : "text-sm"} font-semibold tabular-nums text-slate-900 dark:text-slate-100`}>
+          {fmtEur(total)}
+        </span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {items.length === 0 ? (
+          <p className="text-sm text-slate-400 dark:text-slate-500">Keine Werte vorhanden.</p>
+        ) : (
+          items.map((item) => (
+            <div key={`${title}-${item.key}`} className="flex items-start justify-between gap-4">
+              <div>
+                <p className={`${compact ? "text-xs" : "text-sm"} text-slate-700 dark:text-slate-300`}>{item.label}</p>
+                {item.detail ? <p className="text-xs text-slate-500 dark:text-slate-400">{item.detail}</p> : null}
+              </div>
+              <span className={`${compact ? "text-xs" : "text-sm"} tabular-nums text-slate-600 dark:text-slate-300`}>
+                {fmtEur(item.amount)}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
   );
 }

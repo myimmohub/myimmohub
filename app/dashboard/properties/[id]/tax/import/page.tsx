@@ -15,6 +15,29 @@ type ImportedPartnerPreview = {
   special_expenses?: number | null;
   note?: string | null;
 };
+type ImportedExpenseBlockPreview = {
+  key: string;
+  label: string;
+  amount: number | null;
+  detail?: string | null;
+};
+type ImportedDepreciationItemPreview = {
+  label: string;
+  item_type: "building" | "outdoor" | "movable_asset";
+  gross_annual_amount: number | null;
+  apply_rental_ratio: boolean;
+};
+type ImportedMaintenanceDistributionPreview = {
+  label: string;
+  source_year: number | null;
+  total_amount: number | null;
+  classification: "maintenance_expense" | "production_cost" | "depreciation";
+  deduction_mode: "immediate" | "distributed";
+  distribution_years: number | null;
+  current_year_share_override: number | null;
+  apply_rental_ratio: boolean;
+  note?: string | null;
+};
 type SupplementalPreview = {
   gbr_name: string | null;
   gbr_steuernummer: string | null;
@@ -25,6 +48,10 @@ type SupplementalPreview = {
   gesamt_tage: number | null;
   rental_share_override_pct: number | null;
   partners: ImportedPartnerPreview[];
+  expense_blocks: ImportedExpenseBlockPreview[];
+  depreciation_items: ImportedDepreciationItemPreview[];
+  maintenance_distributions: ImportedMaintenanceDistributionPreview[];
+  import_notes: string[];
 };
 type ImportResult = {
   fields: TaxData;
@@ -346,6 +373,113 @@ export default function TaxImportPage() {
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                  </div>
+                )}
+
+                {(result.supplemental_data.expense_blocks.length > 0 ||
+                  result.supplemental_data.depreciation_items.length > 0 ||
+                  result.supplemental_data.maintenance_distributions.length > 0 ||
+                  result.supplemental_data.import_notes.length > 0) && (
+                  <div className="space-y-4 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                        Steuerlogik aus PDF
+                      </h3>
+                    </div>
+                    <div className="space-y-4 px-5 py-4">
+                      {result.supplemental_data.import_notes.length > 0 && (
+                        <div className="space-y-2">
+                          {result.supplemental_data.import_notes.map((note) => (
+                            <p key={note} className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                              {note}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+
+                      {result.supplemental_data.expense_blocks.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Erkannte Kostenblöcke</p>
+                          <div className="grid gap-3 md:grid-cols-2">
+                            {result.supplemental_data.expense_blocks.map((block) => (
+                              <div key={`${block.key}-${block.label}`} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/50">
+                                <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{block.label}</p>
+                                {block.detail ? <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{block.detail}</p> : null}
+                                <p className="mt-2 text-sm tabular-nums text-slate-700 dark:text-slate-300">{fmtVal(block.amount, "numeric")}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {result.supplemental_data.depreciation_items.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Erkannte AfA-Positionen</p>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
+                                  <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Bezeichnung</th>
+                                  <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Typ</th>
+                                  <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">Brutto/Jahr</th>
+                                  <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">Quote</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                {result.supplemental_data.depreciation_items.map((item, index) => (
+                                  <tr key={`${item.label}-${index}`}>
+                                    <td className="px-4 py-3 text-slate-900 dark:text-slate-100">{item.label}</td>
+                                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                                      {item.item_type === "building" ? "Gebäude" : item.item_type === "outdoor" ? "Außenanlagen" : "Inventar"}
+                                    </td>
+                                    <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">
+                                      {fmtVal(item.gross_annual_amount, "numeric")}
+                                    </td>
+                                    <td className="px-4 py-3 text-right text-slate-500 dark:text-slate-400">
+                                      {item.apply_rental_ratio ? "mit Vermietungsquote" : "100 %"}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {result.supplemental_data.maintenance_distributions.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Erkannte Verteilungsblöcke</p>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
+                                  <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Bezeichnung</th>
+                                  <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">Jahr</th>
+                                  <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">Betrag</th>
+                                  <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Logik</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                {result.supplemental_data.maintenance_distributions.map((item, index) => (
+                                  <tr key={`${item.label}-${index}`}>
+                                    <td className="px-4 py-3 text-slate-900 dark:text-slate-100">{item.label}</td>
+                                    <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">
+                                      {item.source_year ?? "—"}
+                                    </td>
+                                    <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">
+                                      {fmtVal(item.total_amount, "numeric")}
+                                    </td>
+                                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                                      {item.classification} · {item.deduction_mode === "immediate" ? "sofort" : `${item.distribution_years ?? "—"} Jahre`}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

@@ -7,14 +7,27 @@ import type {
   TaxDepreciationItem,
   TaxMaintenanceDistributionItem,
 } from "@/types/tax";
-import { calcElsterEuroFromCents, fromCents, ratioToBasisPoints, roundHalfUpEuroFromCents, toCents } from "@/lib/tax/elsterMath";
+import { calcElsterEuroFromCents, fromCents, ratioToBasisPoints, toCents } from "@/lib/tax/elsterMath";
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
+const num = (value: number | null | undefined) => Number(value ?? 0);
 const taxFieldForItemType: Record<TaxDepreciationItem["item_type"], ComputedTaxDepreciationItem["tax_field"]> = {
   building: "depreciation_building",
   outdoor: "depreciation_outdoor",
   movable_asset: "depreciation_fixtures",
 };
+const RAW_PRORATED_FIELDS: (keyof StructuredTaxLineTotals | "loan_interest" | "property_tax" | "hoa_fees" | "insurance" | "water_sewage" | "waste_disposal")[] = [
+  "loan_interest",
+  "property_tax",
+  "hoa_fees",
+  "insurance",
+  "water_sewage",
+  "waste_disposal",
+  "depreciation_building",
+  "depreciation_outdoor",
+  "depreciation_fixtures",
+  "maintenance_costs",
+];
 
 export type StructuredTaxComputation = {
   taxData: TaxData;
@@ -161,12 +174,11 @@ export function computeStructuredTaxData(args: {
   }).filter((item) => item.affects_tax_year);
 
   if (computedMaintenanceDistributions.length > 0) {
-    const baseMaintenance = roundHalfUpEuroFromCents(toCents(taxData.maintenance_costs));
     depreciationLineTotals.maintenance_costs = computedMaintenanceDistributions
       .filter((item) => item.tax_field === "maintenance_costs")
       .reduce(
         (sum, item) => sum + item.deductible_amount_elster,
-        baseMaintenance,
+        0,
       );
     depreciationLineTotals.depreciation_building = computedMaintenanceDistributions
       .filter((item) => item.tax_field === "depreciation_building")
@@ -183,6 +195,16 @@ export function computeStructuredTaxData(args: {
   }
 
   const nextTaxData: TaxData = { ...taxData };
+  for (const field of RAW_PRORATED_FIELDS) {
+    const existingValue = nextTaxData[field];
+    const hasStructuredOverride = depreciationLineTotals[field as keyof StructuredTaxLineTotals] != null;
+    if (existingValue == null || hasStructuredOverride) continue;
+    nextTaxData[field] = calcElsterEuroFromCents({
+      amountCents: toCents(num(existingValue)),
+      applyRentalRatio: true,
+      rentalShareBasisPoints,
+    });
+  }
   if (depreciationLineTotals.depreciation_building != null) {
     nextTaxData.depreciation_building = depreciationLineTotals.depreciation_building;
   }

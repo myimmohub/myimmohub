@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import TaxYearNavigation from "@/components/tax/TaxYearNavigation";
-import type { GbrTaxReport, TaxData } from "@/types/tax";
+import { buildElsterLineSummary } from "@/lib/tax/elsterLineLogic";
+import { formatDateForDisplay } from "@/lib/tax/partnerNormalization";
+import type { GbrTaxReport } from "@/types/tax";
 
 const fmtEur = (value: number | null | undefined) =>
   value == null
@@ -17,8 +19,7 @@ const fmtPct = (value: number | null | undefined) =>
 const fmtIntPct = (value: number | null | undefined) =>
   value == null ? "—" : `${value.toFixed(2).replace(".", ",")} %`;
 
-const fmtDate = (value: string | null | undefined) =>
-  value ? new Date(value).toLocaleDateString("de-DE") : "—";
+const fmtDate = (value: string | null | undefined) => formatDateForDisplay(value);
 
 export default function GbrTaxPdfPage() {
   const { id, year } = useParams<{ id: string; year: string }>();
@@ -46,6 +47,7 @@ export default function GbrTaxPdfPage() {
   const anlageVExpenseRows = useMemo(() => {
     if (!report) return [];
     const taxData = report.tax_data;
+    const lineSummary = buildElsterLineSummary(taxData);
     return [
       ["33", "AfA Gebäude", fmtEur(taxData.depreciation_building ?? null)],
       ["34", "AfA Außenanlagen", fmtEur(taxData.depreciation_outdoor ?? null)],
@@ -55,7 +57,7 @@ export default function GbrTaxPdfPage() {
       ["47", "Schuldzinsen", fmtEur(taxData.loan_interest ?? null)],
       ["48", "Versicherungen", fmtEur(taxData.insurance ?? null)],
       ["49", "Hausverwaltung / Hausgeld", fmtEur(taxData.property_management ?? null)],
-      ["50", "Sonstige Werbungskosten", fmtEur(sumMiscExpenses(taxData))],
+      ["50", "Sonstige Werbungskosten", fmtEur(lineSummary.expense_buckets.find((bucket) => bucket.key === "other_expenses")?.amount ?? 0)],
       ["60", "Sonderabschreibung § 7b", fmtEur(taxData.special_deduction_7b ?? null)],
       ["61", "Weitere Sonderabzüge", fmtEur(taxData.special_deduction_renovation ?? null)],
     ] as const;
@@ -161,6 +163,16 @@ export default function GbrTaxPdfPage() {
             <FormGrid rows={anlageVExpenseRows} />
           </ElsterSection>
 
+          <ElsterSection title="3b. Verdichtete Kostenblöcke">
+            <FormGrid
+              rows={buildElsterLineSummary(report.tax_data).expense_buckets.map((bucket, index) => [
+                `WK-${index + 1}`,
+                bucket.detail ? `${bucket.label} (${bucket.detail})` : bucket.label,
+                fmtEur(bucket.amount),
+              ])}
+            />
+          </ElsterSection>
+
           <ElsterSection title="4. Ergänzende Berechnungsbasis">
             <FormGrid
               rows={[
@@ -260,16 +272,6 @@ export default function GbrTaxPdfPage() {
         ))}
       </div>
     </main>
-  );
-}
-
-function sumMiscExpenses(taxData: TaxData) {
-  return (
-    Number(taxData.hoa_fees ?? 0) +
-    Number(taxData.water_sewage ?? 0) +
-    Number(taxData.waste_disposal ?? 0) +
-    Number(taxData.bank_fees ?? 0) +
-    Number(taxData.other_expenses ?? 0)
   );
 }
 

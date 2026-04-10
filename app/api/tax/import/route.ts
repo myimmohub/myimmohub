@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { normalizePartnerName } from "@/lib/tax/partnerNormalization";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -37,10 +38,22 @@ depreciation_building, depreciation_outdoor, depreciation_fixtures,
 special_deduction_7b, special_deduction_renovation,
 gbr_name, gbr_steuernummer, gbr_finanzamt, feststellungserklaerung,
 teilweise_eigennutzung, eigennutzung_tage, gesamt_tage, rental_share_override_pct,
-partners
+partners, expense_blocks, depreciation_items, maintenance_distributions
 
 partners ist ein Array von Objekten mit:
-name, anteil_pct, email, special_expenses, note`;
+name, anteil_pct, email, special_expenses, note
+
+expense_blocks ist ein Array von Objekten mit:
+key, label, amount, detail
+
+depreciation_items ist ein Array von Objekten mit:
+label, item_type, gross_annual_amount, apply_rental_ratio
+
+maintenance_distributions ist ein Array von Objekten mit:
+label, source_year, total_amount, classification, deduction_mode, distribution_years, current_year_share_override, apply_rental_ratio, note
+
+Wenn konkrete AfA-Positionen oder verteilte Erhaltungsaufwände erkennbar sind, befülle diese Arrays.
+Wenn das Dokument dafür keine belastbare Aufteilung enthält, lasse die Arrays leer statt zu raten.`;
 
 type ImportRequest = {
   property_id: string;
@@ -57,6 +70,32 @@ type ImportedPartner = {
   note: string | null;
 };
 
+type ImportedExpenseBlock = {
+  key: string;
+  label: string;
+  amount: number | null;
+  detail: string | null;
+};
+
+type ImportedDepreciationItem = {
+  label: string;
+  item_type: "building" | "outdoor" | "movable_asset";
+  gross_annual_amount: number | null;
+  apply_rental_ratio: boolean;
+};
+
+type ImportedMaintenanceDistribution = {
+  label: string;
+  source_year: number | null;
+  total_amount: number | null;
+  classification: "maintenance_expense" | "production_cost" | "depreciation";
+  deduction_mode: "immediate" | "distributed";
+  distribution_years: number | null;
+  current_year_share_override: number | null;
+  apply_rental_ratio: boolean;
+  note: string | null;
+};
+
 type ImportedSupplementalData = {
   gbr_name: string | null;
   gbr_steuernummer: string | null;
@@ -67,6 +106,10 @@ type ImportedSupplementalData = {
   gesamt_tage: number | null;
   rental_share_override_pct: number | null;
   partners: ImportedPartner[];
+  expense_blocks: ImportedExpenseBlock[];
+  depreciation_items: ImportedDepreciationItem[];
+  maintenance_distributions: ImportedMaintenanceDistribution[];
+  import_notes: string[];
 };
 
 function unwrapExtractedValue(value: unknown): unknown {
@@ -115,8 +158,8 @@ function asNullableBoolean(value: unknown): boolean | null {
   return null;
 }
 
-function normalizeName(value: string) {
-  return value.trim().toLocaleLowerCase("de-DE");
+function asObjectArray(value: unknown) {
+  return Array.isArray(value) ? value as Record<string, unknown>[] : [];
 }
 
 export async function POST(request: Request) {
@@ -327,7 +370,71 @@ export async function POST(request: Request) {
           return acc;
         }, [])
       : [],
+    expense_blocks: asObjectArray(extractedFields.expense_blocks).reduce<ImportedExpenseBlock[]>((acc, row) => {
+      const key = asNullableString(row.key);
+      const label = asNullableString(row.label);
+      if (!key || !label) return acc;
+      acc.push({
+        key,
+        label,
+        amount: asNullableNumber(row.amount),
+        detail: asNullableString(row.detail),
+      });
+      return acc;
+    }, []),
+    depreciation_items: asObjectArray(extractedFields.depreciation_items).reduce<ImportedDepreciationItem[]>((acc, row) => {
+      const label = asNullableString(row.label);
+      const itemType = asNullableString(row.item_type);
+      if (!label || !itemType || !["building", "outdoor", "movable_asset"].includes(itemType)) return acc;
+      acc.push({
+        label,
+        item_type: itemType as ImportedDepreciationItem["item_type"],
+        gross_annual_amount: asNullableNumber(row.gross_annual_amount),
+        apply_rental_ratio: asNullableBoolean(row.apply_rental_ratio) ?? true,
+      });
+      return acc;
+    }, []),
+    maintenance_distributions: asObjectArray(extractedFields.maintenance_distributions).reduce<ImportedMaintenanceDistribution[]>((acc, row) => {
+      const label = asNullableString(row.label);
+      if (!label) return acc;
+      const classification = asNullableString(row.classification);
+      const deductionMode = asNullableString(row.deduction_mode);
+      acc.push({
+        label,
+        source_year: asNullableInteger(row.source_year),
+        total_amount: asNullableNumber(row.total_amount),
+        classification:
+          classification === "production_cost" || classification === "depreciation"
+            ? classification
+            : "maintenance_expense",
+        deduction_mode: deductionMode === "immediate" ? "immediate" : "distributed",
+        distribution_years: asNullableInteger(row.distribution_years),
+        current_year_share_override: asNullableNumber(row.current_year_share_override),
+        apply_rental_ratio: asNullableBoolean(row.apply_rental_ratio) ?? true,
+        note: asNullableString(row.note),
+      });
+      return acc;
+    }, []),
+    import_notes: [],
   };
+  supplementalData.partners = Array.from(
+    supplementalData.partners.reduce((acc, partner) => {
+      const key = normalizePartnerName(partner.name);
+      const existing = acc.get(key);
+      if (!existing) {
+        acc.set(key, { ...partner });
+        return acc;
+      }
+      existing.anteil_pct = Math.max(existing.anteil_pct ?? 0, partner.anteil_pct ?? 0);
+      if (!existing.email && partner.email) existing.email = partner.email;
+      if ((existing.special_expenses ?? null) == null || Math.abs(partner.special_expenses ?? 0) > Math.abs(existing.special_expenses ?? 0)) {
+        existing.special_expenses = partner.special_expenses;
+      }
+      if (!existing.note && partner.note) existing.note = partner.note;
+      if (partner.name.length > existing.name.length) existing.name = partner.name;
+      return acc;
+    }, new Map<string, ImportedPartner>()).values(),
+  );
 
   // Upsert (overwrite if confirmed)
   const { data: saved, error: saveError } = overwrite
@@ -401,11 +508,11 @@ export async function POST(request: Request) {
     }
 
     const existingPartnerMap = new Map(
-      (existingPartners ?? []).map((partner) => [normalizeName(partner.name), partner]),
+      (existingPartners ?? []).map((partner) => [normalizePartnerName(partner.name), partner]),
     );
 
     for (const importedPartner of supplementalData.partners) {
-      const normalizedName = normalizeName(importedPartner.name);
+      const normalizedName = normalizePartnerName(importedPartner.name);
       const existingPartner = existingPartnerMap.get(normalizedName);
 
       const partnerPayload = {
@@ -473,6 +580,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Steuer-Einstellungen konnten nicht geladen werden: ${existingTaxSettingsError.message}` }, { status: 500 });
     }
 
+    const resolvedRentalShareOverride =
+      supplementalData.eigennutzung_tage != null || supplementalData.gesamt_tage != null
+        ? null
+        : supplementalData.rental_share_override_pct ?? existingTaxSettings?.rental_share_override_pct ?? null;
+
     const { error: taxSettingsSaveError } = await supabase
       .from("tax_settings")
       .upsert({
@@ -480,13 +592,100 @@ export async function POST(request: Request) {
         objekttyp: existingTaxSettings?.objekttyp ?? "dauervermietung",
         eigennutzung_tage: supplementalData.eigennutzung_tage ?? existingTaxSettings?.eigennutzung_tage ?? 0,
         gesamt_tage: supplementalData.gesamt_tage ?? existingTaxSettings?.gesamt_tage ?? 365,
-        rental_share_override_pct: supplementalData.rental_share_override_pct ?? existingTaxSettings?.rental_share_override_pct ?? null,
+        rental_share_override_pct: resolvedRentalShareOverride,
         kleinunternehmer: existingTaxSettings?.kleinunternehmer ?? false,
         option_ust: existingTaxSettings?.option_ust ?? false,
       }, { onConflict: "property_id" });
 
     if (taxSettingsSaveError) {
       return NextResponse.json({ error: `Steuer-Einstellungen konnten nicht gespeichert werden: ${taxSettingsSaveError.message}` }, { status: 500 });
+    }
+  }
+
+  const importedDepreciationItems = supplementalData.depreciation_items.filter(
+    (item) => item.gross_annual_amount != null && item.gross_annual_amount > 0,
+  );
+  if (importedDepreciationItems.length > 0) {
+    const { data: existingDepItems, error: depItemsError } = await supabase
+      .from("tax_depreciation_items")
+      .select("id")
+      .eq("property_id", property_id)
+      .eq("tax_year", tax_year);
+
+    if (depItemsError) {
+      supplementalData.import_notes.push(`AfA-Positionen konnten nicht geprüft werden: ${depItemsError.message}`);
+    } else if ((existingDepItems?.length ?? 0) === 0 || overwrite) {
+      if (overwrite && (existingDepItems?.length ?? 0) > 0) {
+        await supabase.from("tax_depreciation_items").delete().eq("property_id", property_id).eq("tax_year", tax_year);
+      }
+
+      const { error: depInsertError } = await supabase
+        .from("tax_depreciation_items")
+        .insert(importedDepreciationItems.map((item) => ({
+          property_id,
+          tax_year,
+          item_type: item.item_type,
+          label: item.label,
+          gross_annual_amount: item.gross_annual_amount,
+          apply_rental_ratio: item.apply_rental_ratio,
+        })));
+
+      if (depInsertError) {
+        supplementalData.import_notes.push(`AfA-Positionen konnten nicht übernommen werden: ${depInsertError.message}`);
+      } else {
+        supplementalData.import_notes.push(`${importedDepreciationItems.length} AfA-Position(en) aus dem PDF übernommen.`);
+      }
+    } else {
+      supplementalData.import_notes.push("AfA-Positionen wurden erkannt, aber nicht übernommen, weil bereits AfA-Komponenten vorhanden sind.");
+    }
+  }
+
+  const importedMaintenanceDistributions = supplementalData.maintenance_distributions.filter(
+    (item) => item.source_year != null && item.total_amount != null && item.total_amount > 0,
+  );
+  if (importedMaintenanceDistributions.length > 0) {
+    const { data: existingMaintenanceItems, error: maintenanceItemsError } = await supabase
+      .from("tax_maintenance_distributions")
+      .select("id")
+      .eq("property_id", property_id);
+
+    if (maintenanceItemsError) {
+      supplementalData.import_notes.push(`Verteilungsblöcke konnten nicht geprüft werden: ${maintenanceItemsError.message}`);
+    } else if ((existingMaintenanceItems?.length ?? 0) === 0 || overwrite) {
+      if (overwrite && (existingMaintenanceItems?.length ?? 0) > 0) {
+        await supabase
+          .from("tax_maintenance_distributions")
+          .delete()
+          .eq("property_id", property_id)
+          .ilike("note", "PDF Import:%");
+      }
+
+      const { error: maintenanceInsertError } = await supabase
+        .from("tax_maintenance_distributions")
+        .insert(importedMaintenanceDistributions.map((item) => ({
+          property_id,
+          source_year: item.source_year,
+          label: item.label,
+          total_amount: item.total_amount,
+          classification: item.classification,
+          deduction_mode: item.deduction_mode,
+          distribution_years:
+            item.deduction_mode === "immediate"
+              ? 1
+              : Math.min(5, Math.max(2, item.distribution_years ?? 3)),
+          current_year_share_override: item.current_year_share_override,
+          apply_rental_ratio: item.apply_rental_ratio,
+          status: "active",
+          note: `PDF Import: ${tax_year}${item.note ? ` · ${item.note}` : ""}`,
+        })));
+
+      if (maintenanceInsertError) {
+        supplementalData.import_notes.push(`Verteilungsblöcke konnten nicht übernommen werden: ${maintenanceInsertError.message}`);
+      } else {
+        supplementalData.import_notes.push(`${importedMaintenanceDistributions.length} Verteilungsblock/-blöcke aus dem PDF übernommen.`);
+      }
+    } else {
+      supplementalData.import_notes.push("Verteilungsblöcke wurden erkannt, aber nicht übernommen, weil bereits Logik-Items vorhanden sind.");
     }
   }
 

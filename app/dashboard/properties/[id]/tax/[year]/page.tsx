@@ -6,6 +6,8 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { TAX_FIELDS, TAX_FIELD_GROUPS } from "@/lib/tax/fieldMeta";
 import { calculateTaxTotals } from "@/lib/tax/gbrTaxReport";
+import { formatDateForDisplay } from "@/lib/tax/partnerNormalization";
+import { computeRentalShare } from "@/lib/tax/rentalShare";
 import { computeStructuredTaxData } from "@/lib/tax/structuredTaxLogic";
 import TaxYearNavigation from "@/components/tax/TaxYearNavigation";
 import type {
@@ -31,7 +33,7 @@ const CONFIDENCE_DOT: Record<TaxConfidence | "null", string> = {
 const fmtVal = (val: unknown, type: string) => {
   if (val == null || val === "") return "—";
   if (type === "numeric") return Number(val).toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 });
-  if (type === "date") return new Date(val as string).toLocaleDateString("de-DE");
+  if (type === "date") return formatDateForDisplay(val as string);
   if (type === "integer") return String(val);
   return String(val);
 };
@@ -264,12 +266,10 @@ export default function TaxYearPage() {
   };
 
   // Count filled fields
-  const rentalSharePct = useMemo(() => {
-    if (taxSettings?.rental_share_override_pct != null) return taxSettings.rental_share_override_pct;
-    const totalDays = Math.max(1, taxSettings?.gesamt_tage ?? 365);
-    const selfUseDays = Math.max(0, taxSettings?.eigennutzung_tage ?? 0);
-    return Math.max(0, Math.min(1, 1 - selfUseDays / totalDays));
-  }, [taxSettings]);
+  const rentalSharePct = useMemo(
+    () => computeRentalShare(taxSettings ?? {}).rental_share_pct,
+    [taxSettings],
+  );
 
   const structuredTax = taxData
     ? computeStructuredTaxData({

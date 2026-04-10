@@ -8,6 +8,8 @@ import type {
   TaxMaintenanceDistributionItem,
 } from "@/types/tax";
 import { computeStructuredTaxData } from "@/lib/tax/structuredTaxLogic";
+import { mergeDuplicatePartners, mergePartnerTaxValuesByNormalizedName, normalizePartnerName } from "@/lib/tax/partnerNormalization";
+import { computeRentalShare } from "@/lib/tax/rentalShare";
 
 export type GbrPartner = {
   id: string;
@@ -116,16 +118,6 @@ type PropertySummary = {
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 const num = (value: number | null | undefined) => Number(value ?? 0);
-const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
-
-const PRORATED_FIELDS: (keyof TaxData)[] = [
-  "loan_interest",
-  "property_tax",
-  "hoa_fees",
-  "insurance",
-  "water_sewage",
-  "waste_disposal",
-];
 
 export function calculateTaxTotals(taxData: TaxData) {
   const totalIncome = round2(
@@ -190,21 +182,22 @@ export function buildGbrTaxReport(args: {
     maintenanceDistributions = [],
   } = args;
   const warnings: string[] = [];
-  const partners = gbrSettings?.gbr_partner ?? [];
-  const partnerTaxMap = new Map(
-    partnerTaxValues.map((item) => [item.gbr_partner_id, num(item.special_expenses)]),
-  );
-  const totalDays = Math.max(1, num(taxSettings?.gesamt_tage) || 365);
-  const selfUseDays = Math.max(0, num(taxSettings?.eigennutzung_tage));
-  const autoRentalSharePct = clamp01(1 - selfUseDays / totalDays);
-  const rentalShareSource = taxSettings?.rental_share_override_pct != null ? "override" : "auto";
-  const rentalSharePct = clamp01(num(taxSettings?.rental_share_override_pct ?? autoRentalSharePct));
+  const rawPartners = gbrSettings?.gbr_partner ?? [];
+  const { partners, duplicateWarnings } = mergeDuplicatePartners(rawPartners);
+  const partnerTaxMap = mergePartnerTaxValuesByNormalizedName(partnerTaxValues, rawPartners);
+  const rentalShare = computeRentalShare(taxSettings ?? {});
+  const totalDays = rentalShare.gesamt_tage;
+  const selfUseDays = rentalShare.eigennutzung_tage;
+  const rentalShareSource = rentalShare.rental_share_source;
+  const rentalSharePct = rentalShare.rental_share_pct;
   const partnerTotalSharePct = round2(
     partners.reduce((sum, partner) => sum + num(partner.anteil), 0),
   );
 
   if (!gbrSettings) warnings.push("Keine GbR-Stammdaten gefunden.");
   if (partners.length === 0) warnings.push("Es sind keine GbR-Partner hinterlegt.");
+  warnings.push(...duplicateWarnings);
+  warnings.push(...rentalShare.warnings);
   if (partners.length > 0 && Math.abs(partnerTotalSharePct - 100) > 0.01) {
     warnings.push(`Die Partneranteile summieren sich auf ${partnerTotalSharePct.toFixed(2)} % statt 100 %.`);
   }
@@ -227,20 +220,12 @@ export function buildGbrTaxReport(args: {
   });
 
   const adjustedTaxData: TaxData = { ...structured.taxData };
-  if (gbrSettings?.teilweise_eigennutzung) {
-    const adjustedTaxDataRecord = adjustedTaxData as unknown as Record<string, unknown>;
-    const taxDataRecord = structured.taxData as unknown as Record<string, unknown>;
-    for (const field of PRORATED_FIELDS) {
-      adjustedTaxDataRecord[field] = round2(num(taxDataRecord[field] as number | null | undefined) * rentalSharePct);
-    }
-  }
-
   const totals = calculateTaxTotals(adjustedTaxData);
   warnings.push(...structured.warnings.map((item) => item.message));
 
   const fb = partners.map((partner) => {
     const factor = num(partner.anteil) / 100;
-    const partnerSpecialExpenses = round2(partnerTaxMap.get(partner.id) ?? 0);
+    const partnerSpecialExpenses = round2(partnerTaxMap.get(normalizePartnerName(partner.name)) ?? 0);
     const resultBeforePartnerAdjustments = round2(totals.result * factor);
     const allocation = {
       partner_id: partner.id,

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import TaxYearNavigation from "@/components/tax/TaxYearNavigation";
+import { allocateElsterLineSummary, buildElsterLineSummary } from "@/lib/tax/elsterLineLogic";
 import type { GbrTaxReport } from "@/types/tax";
 
 const fmtEur = (value: number) =>
@@ -44,6 +45,8 @@ export default function GbrTaxExportPage() {
       </main>
     );
   }
+
+  const lineSummary = buildElsterLineSummary(report.tax_data);
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10 dark:bg-slate-950">
@@ -106,28 +109,116 @@ export default function GbrTaxExportPage() {
           </div>
         </section>
 
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">FE-Herleitung aus Anlage V</h2>
+            <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+              Dieselben verdichteten ELSTER-Blöcke, aus denen das Feststellungsergebnis der GbR entsteht.
+            </p>
+          </div>
+          <div className="grid gap-4 p-5 md:grid-cols-2">
+            <BucketCard title="Einnahmen" items={lineSummary.income_buckets} total={lineSummary.income_total} />
+            <BucketCard title="Werbungskosten" items={lineSummary.expense_buckets} total={lineSummary.advertising_costs_total} />
+            <BucketCard title="AfA" items={lineSummary.depreciation_buckets} total={lineSummary.depreciation_total} />
+            <BucketCard title="Sonderabzüge" items={lineSummary.special_buckets} total={lineSummary.special_deductions_total} />
+          </div>
+        </section>
+
         {report.fb.map((partner) => (
-          <section key={partner.partner_id} className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
-              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Anlage FB — {partner.partner_name}</h2>
-              <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
-                Beteiligungsquote {partner.anteil_pct.toFixed(2)} % {partner.email ? `· ${partner.email}` : ""}
-              </p>
-            </div>
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              <ExportRow label="Beteiligungsquote" value={`${partner.anteil_pct.toFixed(2)} %`} rawValue={partner.anteil_pct} copyKey={`${partner.partner_id}-share`} copied={copied} onCopy={handleCopy} />
-              <ExportRow label="Einnahmenanteil" value={fmtEur(partner.total_income)} rawValue={partner.total_income} copyKey={`${partner.partner_id}-income`} copied={copied} onCopy={handleCopy} />
-              <ExportRow label="Werbungskostenanteil" value={fmtEur(partner.total_expenses)} rawValue={partner.total_expenses} copyKey={`${partner.partner_id}-expenses`} copied={copied} onCopy={handleCopy} />
-              <ExportRow label="AfA-Anteil" value={fmtEur(partner.depreciation_total)} rawValue={partner.depreciation_total} copyKey={`${partner.partner_id}-afa`} copied={copied} onCopy={handleCopy} />
-              <ExportRow label="Sonderabzüge" value={fmtEur(partner.special_deductions_total)} rawValue={partner.special_deductions_total} copyKey={`${partner.partner_id}-special`} copied={copied} onCopy={handleCopy} />
-              <ExportRow label="Sonderwerbungskosten" value={fmtEur(partner.partner_special_expenses)} rawValue={partner.partner_special_expenses} copyKey={`${partner.partner_id}-special-expenses`} copied={copied} onCopy={handleCopy} />
-              <ExportRow label="Ergebnis vor Partnerwerten" value={fmtEur(partner.result_before_partner_adjustments)} rawValue={partner.result_before_partner_adjustments} copyKey={`${partner.partner_id}-result-base`} copied={copied} onCopy={handleCopy} />
-              <ExportRow label="Zuzurechnendes Ergebnis" value={fmtEur(partner.result)} rawValue={partner.result} copyKey={`${partner.partner_id}-result`} copied={copied} onCopy={handleCopy} strong />
-            </div>
-          </section>
+          <PartnerSection
+            key={partner.partner_id}
+            partner={partner}
+            copied={copied}
+            onCopy={handleCopy}
+            lineSummary={allocateElsterLineSummary(lineSummary, partner.anteil_pct)}
+          />
         ))}
       </section>
     </main>
+  );
+}
+
+function PartnerSection({
+  partner,
+  copied,
+  onCopy,
+  lineSummary,
+}: {
+  partner: GbrTaxReport["fb"][number];
+  copied: string | null;
+  onCopy: (key: string, value: string | number) => Promise<void>;
+  lineSummary: ReturnType<typeof allocateElsterLineSummary>;
+}) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Anlage FB — {partner.partner_name}</h2>
+        <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+          Beteiligungsquote {partner.anteil_pct.toFixed(2)} % {partner.email ? `· ${partner.email}` : ""}
+        </p>
+      </div>
+      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+        <ExportRow label="Beteiligungsquote" value={`${partner.anteil_pct.toFixed(2)} %`} rawValue={partner.anteil_pct} copyKey={`${partner.partner_id}-share`} copied={copied} onCopy={onCopy} />
+        <ExportRow label="Einnahmenanteil" value={fmtEur(partner.total_income)} rawValue={partner.total_income} copyKey={`${partner.partner_id}-income`} copied={copied} onCopy={onCopy} />
+        <ExportRow label="Werbungskostenanteil" value={fmtEur(partner.total_expenses)} rawValue={partner.total_expenses} copyKey={`${partner.partner_id}-expenses`} copied={copied} onCopy={onCopy} />
+        <ExportRow label="AfA-Anteil" value={fmtEur(partner.depreciation_total)} rawValue={partner.depreciation_total} copyKey={`${partner.partner_id}-afa`} copied={copied} onCopy={onCopy} />
+        <ExportRow label="Sonderabzüge" value={fmtEur(partner.special_deductions_total)} rawValue={partner.special_deductions_total} copyKey={`${partner.partner_id}-special`} copied={copied} onCopy={onCopy} />
+        <ExportRow label="Sonderwerbungskosten" value={fmtEur(partner.partner_special_expenses)} rawValue={partner.partner_special_expenses} copyKey={`${partner.partner_id}-special-expenses`} copied={copied} onCopy={onCopy} />
+        <ExportRow label="Ergebnis vor Partnerwerten" value={fmtEur(partner.result_before_partner_adjustments)} rawValue={partner.result_before_partner_adjustments} copyKey={`${partner.partner_id}-result-base`} copied={copied} onCopy={onCopy} />
+        <ExportRow label="Zuzurechnendes Ergebnis" value={fmtEur(partner.result)} rawValue={partner.result} copyKey={`${partner.partner_id}-result`} copied={copied} onCopy={onCopy} strong />
+      </div>
+      <div className="grid gap-4 border-t border-slate-100 p-5 dark:border-slate-800 md:grid-cols-2">
+        <BucketCard title="Einnahmenanteile" items={lineSummary.income_buckets.map(mapAllocatedBucket)} total={lineSummary.income_total} />
+        <BucketCard title="Werbungskostenanteile" items={lineSummary.expense_buckets.map(mapAllocatedBucket)} total={lineSummary.advertising_costs_total} />
+      </div>
+    </section>
+  );
+}
+
+function mapAllocatedBucket(bucket: { key: string; label: string; detail?: string; allocated_amount: number }) {
+  return {
+    key: bucket.key,
+    label: bucket.label,
+    detail: bucket.detail,
+    amount: bucket.allocated_amount,
+  };
+}
+
+function BucketCard({
+  title,
+  items,
+  total,
+}: {
+  title: string;
+  items: { key: string; label: string; amount: number; detail?: string }[];
+  total: number;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/40">
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">{title}</h3>
+        <span className="text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+          {total.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+        </span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {items.length === 0 ? (
+          <p className="text-sm text-slate-400 dark:text-slate-500">Keine Werte vorhanden.</p>
+        ) : (
+          items.map((item) => (
+            <div key={item.key} className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm text-slate-700 dark:text-slate-300">{item.label}</p>
+                {item.detail ? <p className="text-xs text-slate-500 dark:text-slate-400">{item.detail}</p> : null}
+              </div>
+              <span className="text-sm tabular-nums text-slate-600 dark:text-slate-300">
+                {item.amount.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   );
 }
 

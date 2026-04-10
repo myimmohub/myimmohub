@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { computeRentalShare } from "@/lib/tax/rentalShare";
 import { usePropertyId } from "../property-context";
 
 type TaxSettings = {
@@ -91,7 +92,8 @@ export default function SteuerPage() {
   const update = (key: keyof TaxSettings, value: unknown) =>
     setData({ ...data, [key]: value });
 
-  const autoRentalShare = Math.max(0, Math.min(1, 1 - data.eigennutzung_tage / Math.max(1, data.gesamt_tage)));
+  const rentalShare = computeRentalShare(data);
+  const autoRentalShare = rentalShare.auto_rental_share_pct;
 
   return (
     <div className="space-y-6">
@@ -158,6 +160,13 @@ export default function SteuerPage() {
             <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
               Leer lassen für Automatik aus Eigennutzung: {(autoRentalShare * 100).toFixed(2).replace(".", ",")} %
             </p>
+            {rentalShare.warnings.length > 0 && (
+              <div className="mt-2 space-y-1 text-xs text-amber-600 dark:text-amber-400">
+                {rentalShare.warnings.map((warning) => (
+                  <p key={warning}>{warning}</p>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </section>

@@ -4,8 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { buildElsterLineSummary } from "@/lib/tax/elsterLineLogic";
 import { TAX_FIELDS, TAX_FIELD_GROUPS } from "@/lib/tax/fieldMeta";
 import { computeStructuredTaxData } from "@/lib/tax/structuredTaxLogic";
+import { formatDateForDisplay } from "@/lib/tax/partnerNormalization";
+import { computeRentalShare } from "@/lib/tax/rentalShare";
 import TaxYearNavigation from "@/components/tax/TaxYearNavigation";
 import type { TaxData, TaxDepreciationItem, TaxMaintenanceDistributionItem } from "@/types/tax";
 
@@ -56,12 +59,10 @@ export default function TaxExportPage() {
     void load();
   }, [id, taxYear]);
 
-  const rentalSharePct = useMemo(() => {
-    if (taxSettings?.rental_share_override_pct != null) return taxSettings.rental_share_override_pct;
-    const totalDays = Math.max(1, taxSettings?.gesamt_tage ?? 365);
-    const selfUseDays = Math.max(0, taxSettings?.eigennutzung_tage ?? 0);
-    return Math.max(0, Math.min(1, 1 - selfUseDays / totalDays));
-  }, [taxSettings]);
+  const rentalSharePct = useMemo(
+    () => computeRentalShare(taxSettings ?? {}).rental_share_pct,
+    [taxSettings],
+  );
 
   const displayTaxData = useMemo(() => (
     taxData
@@ -86,7 +87,7 @@ export default function TaxExportPage() {
   const fmtVal = (val: unknown, type: string) => {
     if (val == null) return null;
     if (type === "numeric") return Number(val).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
-    if (type === "date") return new Date(val as string).toLocaleDateString("de-DE");
+    if (type === "date") return formatDateForDisplay(val as string);
     if (type === "integer") return String(val);
     return String(val);
   };
@@ -94,6 +95,7 @@ export default function TaxExportPage() {
   const filledCount = displayTaxData
     ? TAX_FIELDS.filter((f) => (displayTaxData as unknown as Record<string, unknown>)[f.key] != null).length
     : 0;
+  const lineSummary = displayTaxData ? buildElsterLineSummary(displayTaxData) : null;
 
   if (loading) return <Skeleton />;
 
@@ -165,6 +167,31 @@ export default function TaxExportPage() {
             {filledCount === TAX_FIELDS.length ? "✓ Vollständig" : `${TAX_FIELDS.length - filledCount} Felder fehlen`}
           </span>
         </div>
+
+        {lineSummary && (
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">ELSTER-Zeilenlogik</h2>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                Steuerlich verdichtete Sicht auf Einnahmen, Werbungskosten, AfA und Sonderabzüge.
+              </p>
+            </div>
+            <div className="grid gap-4 p-5 md:grid-cols-2">
+              <LineLogicCard title="Einnahmen" items={lineSummary.income_buckets} total={lineSummary.income_total} />
+              <LineLogicCard title="Werbungskosten" items={lineSummary.expense_buckets} total={lineSummary.advertising_costs_total} />
+              <LineLogicCard title="AfA" items={lineSummary.depreciation_buckets} total={lineSummary.depreciation_total} />
+              <LineLogicCard title="Sonderabzüge" items={lineSummary.special_buckets} total={lineSummary.special_deductions_total} />
+            </div>
+            <div className="border-t border-slate-100 px-5 py-4 dark:border-slate-800">
+              <div className="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Ergebnis nach ELSTER-Logik</span>
+                <span className="text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                  {lineSummary.result.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Felder nach Gruppe */}
         {TAX_FIELD_GROUPS.map(({ key: cat, label: groupLabel, color }) => {
@@ -247,6 +274,44 @@ export default function TaxExportPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+function LineLogicCard({
+  title,
+  items,
+  total,
+}: {
+  title: string;
+  items: { key: string; label: string; amount: number; detail?: string }[];
+  total: number;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/40">
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">{title}</h3>
+        <span className="text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+          {total.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+        </span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {items.length === 0 ? (
+          <p className="text-sm text-slate-400 dark:text-slate-500">Keine Werte vorhanden.</p>
+        ) : (
+          items.map((item) => (
+            <div key={item.key} className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm text-slate-700 dark:text-slate-300">{item.label}</p>
+                {item.detail ? <p className="text-xs text-slate-500 dark:text-slate-400">{item.detail}</p> : null}
+              </div>
+              <span className="text-sm tabular-nums text-slate-600 dark:text-slate-300">
+                {item.amount.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   );
 }
 

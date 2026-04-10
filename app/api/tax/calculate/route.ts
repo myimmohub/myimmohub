@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   // Load property
   const { data: prop } = await supabase
     .from("properties")
-    .select("id, kaufpreis, gebaeudewert, baujahr, afa_satz, kaufdatum, address, type")
+    .select("id, kaufpreis, gebaeudewert, grundwert, inventarwert, baujahr, afa_satz, kaufdatum, address, type")
     .eq("id", property_id)
     .eq("user_id", user.id)
     .single();
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
 
   const calculated = calculateTaxFromTransactions(
     (txData ?? []) as { date: string; amount: number; category: string | null; anlage_v_zeile: number | null }[],
-    prop as { kaufpreis: number | null; gebaeudewert: number | null; baujahr: number | null; afa_satz: number | null; kaufdatum: string | null; address: string | null; type: string | null },
+    prop as { kaufpreis: number | null; gebaeudewert: number | null; grundwert: number | null; inventarwert: number | null; baujahr: number | null; afa_satz: number | null; kaufdatum: string | null; address: string | null; type: string | null },
     tax_year,
     (categories ?? []) as { label: string; typ: string; anlage_v: string | null; gruppe: string }[],
   );
