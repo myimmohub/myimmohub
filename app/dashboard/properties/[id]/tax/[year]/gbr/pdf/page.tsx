@@ -1,13 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import TaxYearNavigation from "@/components/tax/TaxYearNavigation";
-import type { GbrTaxReport } from "@/types/tax";
+import type { GbrTaxReport, TaxData } from "@/types/tax";
 
-const fmtEur = (value: number) =>
-  value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " EUR";
+const fmtEur = (value: number | null | undefined) =>
+  value == null
+    ? "—"
+    : value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " EUR";
+
+const fmtPct = (value: number | null | undefined) =>
+  value == null ? "—" : `${(value * 100).toFixed(2).replace(".", ",")} %`;
+
+const fmtIntPct = (value: number | null | undefined) =>
+  value == null ? "—" : `${value.toFixed(2).replace(".", ",")} %`;
+
+const fmtDate = (value: string | null | undefined) =>
+  value ? new Date(value).toLocaleDateString("de-DE") : "—";
 
 export default function GbrTaxPdfPage() {
   const { id, year } = useParams<{ id: string; year: string }>();
@@ -22,6 +33,34 @@ export default function GbrTaxPdfPage() {
     void load();
   }, [id, taxYear]);
 
+  const anlageVIncomeRows = useMemo(() => {
+    if (!report) return [];
+    return [
+      ["9", "Mieteinnahmen", fmtEur(report.tax_data.rent_income ?? null)],
+      ["10", "Mieteinnahmen Gewerbe", fmtEur(report.tax_data.rent_prior_year ?? null)],
+      ["13", "Umlagen / Nebenkosten", fmtEur(report.tax_data.operating_costs_income ?? null)],
+      ["14", "Sonstige Einnahmen", fmtEur(report.tax_data.other_income ?? null)],
+    ] as const;
+  }, [report]);
+
+  const anlageVExpenseRows = useMemo(() => {
+    if (!report) return [];
+    const taxData = report.tax_data;
+    return [
+      ["33", "AfA Gebäude", fmtEur(taxData.depreciation_building ?? null)],
+      ["34", "AfA Außenanlagen", fmtEur(taxData.depreciation_outdoor ?? null)],
+      ["35", "AfA Inventar", fmtEur(taxData.depreciation_fixtures ?? null)],
+      ["39", "Erhaltungsaufwand", fmtEur(taxData.maintenance_costs ?? null)],
+      ["46", "Grundsteuer", fmtEur(taxData.property_tax ?? null)],
+      ["47", "Schuldzinsen", fmtEur(taxData.loan_interest ?? null)],
+      ["48", "Versicherungen", fmtEur(taxData.insurance ?? null)],
+      ["49", "Hausverwaltung / Hausgeld", fmtEur(taxData.property_management ?? null)],
+      ["50", "Sonstige Werbungskosten", fmtEur(sumMiscExpenses(taxData))],
+      ["60", "Sonderabschreibung § 7b", fmtEur(taxData.special_deduction_7b ?? null)],
+      ["61", "Weitere Sonderabzüge", fmtEur(taxData.special_deduction_renovation ?? null)],
+    ] as const;
+  }, [report]);
+
   if (!report) {
     return (
       <main className="min-h-screen bg-white px-4 py-10 text-slate-900">
@@ -35,13 +74,16 @@ export default function GbrTaxPdfPage() {
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-8 print:bg-white print:px-0 print:py-0">
       <style jsx global>{`
+        @page {
+          size: A4;
+          margin: 12mm;
+        }
         @media print {
           .print-hide { display: none !important; }
           .print-page {
             break-after: page;
             page-break-after: always;
             box-shadow: none !important;
-            border: none !important;
             margin: 0 !important;
           }
           .print-page:last-child {
@@ -53,9 +95,9 @@ export default function GbrTaxPdfPage() {
 
       <section className="mx-auto mb-6 flex max-w-5xl items-center justify-between print-hide">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">PDF-Vorschau FE / FB {taxYear}</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">ELSTER-PDF-Vorschau {taxYear}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Druckoptimierte Ansicht analog zur offiziellen Struktur, inkl. Anlage FE und allen Anlage-FB-Seiten.
+            Formularartige Druckansicht mit Anlage V, Anlage FE und allen Anlage-FB-Seiten.
           </p>
         </div>
         <div className="flex gap-3">
@@ -85,106 +127,254 @@ export default function GbrTaxPdfPage() {
       </section>
 
       <div className="mx-auto max-w-5xl space-y-6">
-        <PrintPage title={`Anlage FE ${taxYear}`} subtitle={`${report.gbr.name || report.property_name || "GbR"} · ${report.property_address ?? ""}`}>
-          <FieldGrid
-            rows={[
+        <ElsterPage
+          formTitle={`Anlage V ${taxYear}`}
+          formSubtitle="Einkünfte aus Vermietung und Verpachtung"
+          propertyName={report.property_name || "Immobilie"}
+          propertyAddress={report.property_address}
+        >
+          <InfoStrip
+            items={[
+              ["Steuerjahr", String(report.tax_year)],
+              ["Steuer-Nr.", report.tax_data.tax_ref || "—"],
+              ["Beteiligung", report.tax_data.ownership_share_pct != null ? fmtIntPct(report.tax_data.ownership_share_pct) : "—"],
+              ["Objektart", report.tax_data.property_type || "—"],
+            ]}
+          />
+
+          <ElsterSection title="1. Objektangaben">
+            <FormGrid
+              rows={[
+                ["1-8", "Anschrift / Objekt", `${report.property_name || "—"}${report.property_address ? `, ${report.property_address}` : ""}`],
+                ["4", "Baujahr", report.tax_data.build_year ? String(report.tax_data.build_year) : "—"],
+                ["5", "Anschaffungsdatum", fmtDate(report.tax_data.acquisition_date)],
+                ["6", "Gebäudekosten", fmtEur(report.tax_data.acquisition_cost_building ?? null)],
+              ]}
+            />
+          </ElsterSection>
+
+          <ElsterSection title="2. Einnahmen">
+            <FormGrid rows={anlageVIncomeRows} />
+          </ElsterSection>
+
+          <ElsterSection title="3. Werbungskosten / AfA / Sonderabzüge">
+            <FormGrid rows={anlageVExpenseRows} />
+          </ElsterSection>
+
+          <ElsterSection title="4. Ergänzende Berechnungsbasis">
+            <FormGrid
+              rows={[
+                ["", "Vermietungsanteil", fmtPct(report.gbr.rental_share_pct)],
+                ["", "Quelle Vermietungsanteil", report.gbr.rental_share_source === "override" ? "Manuell" : "Automatisch"],
+                ["", "Teilweise Eigennutzung", report.gbr.teilweise_eigennutzung ? "Ja" : "Nein"],
+                ["", "Eigennutzungstage", String(report.gbr.eigennutzung_tage)],
+                ["", "Gesamttage", String(report.gbr.gesamt_tage)],
+              ]}
+            />
+          </ElsterSection>
+        </ElsterPage>
+
+        <ElsterPage
+          formTitle={`Anlage FE ${taxYear}`}
+          formSubtitle="Erklärung zur gesonderten und einheitlichen Feststellung"
+          propertyName={report.gbr.name || report.property_name || "GbR"}
+          propertyAddress={report.property_address}
+        >
+          <InfoStrip
+            items={[
               ["Gesellschaft", report.gbr.name || "—"],
               ["Steuernummer", report.gbr.steuernummer || "—"],
               ["Finanzamt", report.gbr.finanzamt || "—"],
-              ["Steuerjahr", String(report.tax_year)],
-              ["Feststellungserklärung", report.gbr.feststellungserklaerung ? "Ja" : "Nein"],
-              ["Teilweise Eigennutzung", report.gbr.teilweise_eigennutzung ? "Ja" : "Nein"],
-              ["Vermietungsanteil", `${(report.gbr.rental_share_pct * 100).toFixed(2).replace(".", ",")} %`],
-              ["Quelle Vermietungsanteil", report.gbr.rental_share_source === "override" ? "Manuell" : "Automatisch"],
+              ["Gesellschafter", String(report.gbr.partner_count)],
             ]}
           />
-          <SectionTitle title="Einkünfte aus Vermietung und Verpachtung" />
-          <FieldGrid
-            rows={[
-              ["Gesamteinnahmen", fmtEur(report.fe.total_income)],
-              ["Werbungskosten gesamt", fmtEur(report.fe.total_expenses)],
-              ["AfA gesamt", fmtEur(report.fe.depreciation_total)],
-              ["Sonderabzüge gesamt", fmtEur(report.fe.special_deductions_total)],
-              ["Ergebnis vor Partnerwerten", fmtEur(report.fe.collective_result)],
-              ["Sonderwerbungskosten Partner", fmtEur(report.fe.partner_special_expenses_total)],
-              ["Festzustellendes Ergebnis", fmtEur(report.fe.final_result)],
-            ]}
-          />
-          {report.warnings.length > 0 && (
-            <>
-              <SectionTitle title="Hinweise" />
-              <ul className="space-y-1 text-sm text-slate-700">
-                {report.warnings.map((warning) => <li key={warning}>• {warning}</li>)}
-              </ul>
-            </>
-          )}
-        </PrintPage>
 
-        {report.fb.map((partner, index) => (
-          <PrintPage
-            key={partner.partner_id}
-            title={`Anlage FB ${taxYear}`}
-            subtitle={`${partner.partner_name} · ${partner.anteil_pct.toFixed(2)} % Beteiligung`}
-            footer={`Seite ${index + 2}`}
-          >
-            <FieldGrid
+          <ElsterSection title="1. Angaben zur Gesellschaft">
+            <FormGrid
               rows={[
-                ["Gesellschafter", partner.partner_name],
-                ["E-Mail", partner.email || "—"],
-                ["Beteiligungsquote", `${partner.anteil_pct.toFixed(2)} %`],
-                ["Einnahmenanteil", fmtEur(partner.total_income)],
-                ["Werbungskostenanteil", fmtEur(partner.total_expenses)],
-                ["AfA-Anteil", fmtEur(partner.depreciation_total)],
-                ["Sonderabzüge", fmtEur(partner.special_deductions_total)],
-                ["Sonderwerbungskosten", fmtEur(partner.partner_special_expenses)],
-                ["Ergebnis vor Partnerwerten", fmtEur(partner.result_before_partner_adjustments)],
-                ["Zuzurechnendes Ergebnis", fmtEur(partner.result)],
+                ["1", "Feststellungserklärung", report.gbr.feststellungserklaerung ? "Ja" : "Nein"],
+                ["2", "Sonderwerbungskosten je Partner", report.gbr.sonder_werbungskosten ? "Ja" : "Nein"],
+                ["3", "Teilweise Eigennutzung", report.gbr.teilweise_eigennutzung ? "Ja" : "Nein"],
+                ["4", "Gesamte Beteiligungsquote", `${report.gbr.partner_total_share_pct.toFixed(2).replace(".", ",")} %`],
               ]}
             />
-          </PrintPage>
+          </ElsterSection>
+
+          <ElsterSection title="2. Festzustellende Einkünfte">
+            <FormGrid
+              rows={[
+                ["20", "Gesamteinnahmen V+V", fmtEur(report.fe.total_income)],
+                ["21", "Werbungskosten gesamt", fmtEur(report.fe.total_expenses)],
+                ["22", "AfA gesamt", fmtEur(report.fe.depreciation_total)],
+                ["23", "Sonderabzüge gesamt", fmtEur(report.fe.special_deductions_total)],
+                ["24", "Ergebnis vor Partnerwerten", fmtEur(report.fe.collective_result)],
+                ["25", "Sonderwerbungskosten Partner", fmtEur(report.fe.partner_special_expenses_total)],
+                ["26", "Festzustellendes Ergebnis", fmtEur(report.fe.final_result)],
+              ]}
+            />
+          </ElsterSection>
+
+          {report.warnings.length > 0 && (
+            <ElsterSection title="3. Hinweise">
+              <NoticeBox>
+                {report.warnings.map((warning) => (
+                  <p key={warning}>{warning}</p>
+                ))}
+              </NoticeBox>
+            </ElsterSection>
+          )}
+        </ElsterPage>
+
+        {report.fb.map((partner, index) => (
+          <ElsterPage
+            key={partner.partner_id}
+            formTitle={`Anlage FB ${taxYear}`}
+            formSubtitle="Anteilige Zurechnung für Gesellschafter"
+            propertyName={partner.partner_name}
+            propertyAddress={partner.email}
+            pageLabel={`FB ${index + 1}/${report.fb.length}`}
+          >
+            <InfoStrip
+              items={[
+                ["Gesellschafter", partner.partner_name],
+                ["E-Mail", partner.email || "—"],
+                ["Beteiligungsquote", `${partner.anteil_pct.toFixed(2).replace(".", ",")} %`],
+                ["Steuerjahr", String(report.tax_year)],
+              ]}
+            />
+
+            <ElsterSection title="1. Zurechnungsdaten">
+              <FormGrid
+                rows={[
+                  ["30", "Einnahmenanteil", fmtEur(partner.total_income)],
+                  ["31", "Werbungskostenanteil", fmtEur(partner.total_expenses)],
+                  ["32", "AfA-Anteil", fmtEur(partner.depreciation_total)],
+                  ["33", "Sonderabzüge", fmtEur(partner.special_deductions_total)],
+                  ["34", "Sonderwerbungskosten", fmtEur(partner.partner_special_expenses)],
+                  ["35", "Ergebnis vor Partnerwerten", fmtEur(partner.result_before_partner_adjustments)],
+                  ["36", "Zuzurechnendes Ergebnis", fmtEur(partner.result)],
+                ]}
+              />
+            </ElsterSection>
+          </ElsterPage>
         ))}
       </div>
     </main>
   );
 }
 
-function PrintPage({
-  title,
-  subtitle,
-  footer,
+function sumMiscExpenses(taxData: TaxData) {
+  return (
+    Number(taxData.hoa_fees ?? 0) +
+    Number(taxData.water_sewage ?? 0) +
+    Number(taxData.waste_disposal ?? 0) +
+    Number(taxData.bank_fees ?? 0) +
+    Number(taxData.other_expenses ?? 0)
+  );
+}
+
+function ElsterPage({
+  formTitle,
+  formSubtitle,
+  propertyName,
+  propertyAddress,
+  pageLabel,
   children,
 }: {
-  title: string;
-  subtitle?: string;
-  footer?: string;
+  formTitle: string;
+  formSubtitle: string;
+  propertyName: string;
+  propertyAddress?: string | null;
+  pageLabel?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="print-page rounded-2xl border border-slate-300 bg-white p-10 shadow-sm">
-      <header className="mb-8 border-b border-slate-200 pb-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">MyImmoHub Export</p>
-        <h2 className="mt-2 text-3xl font-semibold text-slate-900">{title}</h2>
-        {subtitle && <p className="mt-2 text-sm text-slate-500">{subtitle}</p>}
+    <section className="print-page overflow-hidden rounded-sm border border-slate-400 bg-white p-8 shadow-sm">
+      <header className="border-b border-slate-300 pb-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">Mein ELSTER · Formularansicht</p>
+            <h2 className="text-2xl font-semibold text-slate-900">{formTitle}</h2>
+            <p className="text-sm text-slate-600">{formSubtitle}</p>
+          </div>
+          <div className="min-w-[11rem] rounded-sm border border-slate-400 px-3 py-2 text-right">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Vordruck</p>
+            <p className="mt-1 text-sm font-medium text-slate-900">{pageLabel || formTitle}</p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-[1.1fr_0.9fr]">
+          <HeaderField label="Steuerpflichtiger / Gesellschaft" value={propertyName} />
+          <HeaderField label="Objekt / Zusatz" value={propertyAddress || "—"} />
+        </div>
       </header>
-      <div className="space-y-8">{children}</div>
-      {footer && <footer className="mt-10 border-t border-slate-200 pt-4 text-xs text-slate-400">{footer}</footer>}
+
+      <div className="space-y-6 pt-5">{children}</div>
     </section>
   );
 }
 
-function SectionTitle({ title }: { title: string }) {
-  return <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">{title}</h3>;
+function HeaderField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-sm border border-slate-300 px-3 py-2">
+      <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">{label}</p>
+      <p className="mt-1 text-sm text-slate-900">{value}</p>
+    </div>
+  );
 }
 
-function FieldGrid({ rows }: { rows: [string, string][] }) {
+function InfoStrip({ items }: { items: [string, string][] }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {rows.map(([label, value]) => (
-        <div key={label} className="rounded-xl border border-slate-200 px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{label}</p>
-          <p className="mt-2 text-base text-slate-900">{value}</p>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {items.map(([label, value]) => (
+        <div key={label} className="rounded-sm border border-slate-300 px-3 py-2">
+          <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">{label}</p>
+          <p className="mt-1 text-sm font-medium text-slate-900">{value}</p>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ElsterSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <div className="border-b border-slate-300 pb-2">
+        <h3 className="text-sm font-medium uppercase tracking-[0.16em] text-slate-700">{title}</h3>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function FormGrid({ rows }: { rows: ReadonlyArray<readonly [string, string, string]> }) {
+  return (
+    <div className="overflow-hidden rounded-sm border border-slate-300">
+      <div className="grid grid-cols-[72px_1.1fr_0.9fr] bg-slate-100 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+        <div className="border-r border-slate-300 px-3 py-2">Zeile</div>
+        <div className="border-r border-slate-300 px-3 py-2">Feld</div>
+        <div className="px-3 py-2">Wert</div>
+      </div>
+      {rows.map(([line, label, value], index) => (
+        <div key={`${line}-${label}`} className={`grid grid-cols-[72px_1.1fr_0.9fr] ${index !== rows.length - 1 ? "border-b border-slate-300" : ""}`}>
+          <div className="flex items-center border-r border-slate-300 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700">
+            {line || "—"}
+          </div>
+          <div className="border-r border-slate-300 px-3 py-2 text-sm text-slate-800">{label}</div>
+          <div className="px-3 py-2">
+            <div className="min-h-[2.25rem] rounded-sm border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900">
+              {value}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function NoticeBox({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="space-y-2 rounded-sm border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+      {children}
     </div>
   );
 }

@@ -9,11 +9,10 @@ export const metadata: Metadata = {
   description: "MyImmoHub ist das Property-Management-Tool für deutsche Privatvermieter.",
   icons: {
     icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/favicon.ico" },
+      { url: "/icon.svg?v=2", type: "image/svg+xml" },
     ],
-    shortcut: ["/favicon.ico"],
-    apple: ["/icon.svg"],
+    shortcut: ["/icon.svg?v=2"],
+    apple: ["/icon.svg?v=2"],
   },
 };
 
