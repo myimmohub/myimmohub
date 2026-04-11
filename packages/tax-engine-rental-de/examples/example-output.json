@@ -1,0 +1,17 @@
+{
+  "status": "ok",
+  "classification": {
+    "ownershipModel": "single_owner",
+    "rentalMode": "long_term_residential",
+    "incomeRegime": "section_21_rental",
+    "filingProfile": "est1a_v"
+  },
+  "filingRecommendation": {
+    "filingProfile": "est1a_v",
+    "requiresAssessment": false,
+    "requiresHolidaySupplement": false,
+    "requiresVSonstige": false,
+    "requiresFWSideAdapter": false,
+    "requiresManualReview": false
+  }
+}

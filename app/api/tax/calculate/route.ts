@@ -9,6 +9,8 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { calculateTaxFromTransactions } from "@/lib/tax/calculateTaxFromTransactions";
+import { runRentalTaxEngineFromExistingData } from "@/lib/tax/rentalTaxEngineBridge";
+import type { TaxData } from "@/types/tax";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -30,7 +32,7 @@ export async function POST(request: Request) {
   // Load property
   const { data: prop } = await supabase
     .from("properties")
-    .select("id, kaufpreis, gebaeudewert, grundwert, inventarwert, baujahr, afa_satz, kaufdatum, address, type")
+    .select("id, name, kaufpreis, gebaeudewert, grundwert, inventarwert, baujahr, afa_satz, kaufdatum, address, type")
     .eq("id", property_id)
     .eq("user_id", user.id)
     .single();
@@ -48,6 +50,18 @@ export async function POST(request: Request) {
   const { data: categories } = await supabase
     .from("categories")
     .select("label, typ, anlage_v, gruppe");
+
+  const [
+    { data: gbrSettings },
+    { data: taxSettings },
+    { data: depreciationItems },
+    { data: maintenanceItems },
+  ] = await Promise.all([
+    supabase.from("gbr_settings").select("*, gbr_partner(*)").eq("property_id", property_id).maybeSingle(),
+    supabase.from("tax_settings").select("eigennutzung_tage, gesamt_tage, rental_share_override_pct").eq("property_id", property_id).maybeSingle(),
+    supabase.from("tax_depreciation_items").select("*").eq("property_id", property_id).eq("tax_year", tax_year).order("created_at", { ascending: true }),
+    supabase.from("tax_maintenance_distributions").select("*").eq("property_id", property_id).order("source_year", { ascending: true }),
+  ]);
 
   const calculated = calculateTaxFromTransactions(
     (txData ?? []) as { date: string; amount: number; category: string | null; anlage_v_zeile: number | null }[],
@@ -84,7 +98,24 @@ export async function POST(request: Request) {
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json(data);
+    const engine = runRentalTaxEngineFromExistingData({
+      property: { id: prop.id, name: prop.name ?? null, address: prop.address ?? null },
+      taxData: data as TaxData,
+      gbrSettings: gbrSettings ?? null,
+      taxSettings: taxSettings ?? null,
+      depreciationItems: depreciationItems ?? [],
+      maintenanceDistributions: maintenanceItems ?? [],
+      partnerTaxValues: [],
+    });
+    return NextResponse.json({
+      ...data,
+      _engine: {
+        status: engine.status,
+        filing_profile: engine.filingRecommendation.filingProfile,
+        blocking_errors: engine.blockingErrors.map((item) => item.message),
+        review_flags: engine.reviewFlags.map((item) => item.message),
+      },
+    });
   }
 
   // Neuen Eintrag erstellen
@@ -95,5 +126,22 @@ export async function POST(request: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  const engine = runRentalTaxEngineFromExistingData({
+    property: { id: prop.id, name: prop.name ?? null, address: prop.address ?? null },
+    taxData: data as TaxData,
+    gbrSettings: gbrSettings ?? null,
+    taxSettings: taxSettings ?? null,
+    depreciationItems: depreciationItems ?? [],
+    maintenanceDistributions: maintenanceItems ?? [],
+    partnerTaxValues: [],
+  });
+  return NextResponse.json({
+    ...data,
+    _engine: {
+      status: engine.status,
+      filing_profile: engine.filingRecommendation.filingProfile,
+      blocking_errors: engine.blockingErrors.map((item) => item.message),
+      review_flags: engine.reviewFlags.map((item) => item.message),
+    },
+  });
 }

@@ -206,4 +206,14 @@ export interface GbrTaxReport {
     line_totals: StructuredTaxLineTotals;
     warnings: StructuredTaxWarning[];
   };
+  engine?: {
+    status: "ok" | "blocking_error" | "review_required";
+    filing_profile: string;
+    ownership_model: string;
+    rental_mode: string;
+    income_regime: string;
+    blocking_errors: string[];
+    review_flags: string[];
+    warnings: string[];
+  };
 }

@@ -204,8 +204,25 @@ export default function GbrTaxYearPage() {
           <MetricCard label="Partner" value={String(report.gbr.partner_count)} />
           <MetricCard label="Anteile gesamt" value={`${report.gbr.partner_total_share_pct.toFixed(2)} %`} />
           <MetricCard label="Anlage FE Ergebnis" value={fmtEur(report.fe.final_result)} tone={report.fe.final_result < 0 ? "positive" : "neutral"} />
-          <MetricCard label="Feststellung" value={report.gbr.feststellungserklaerung ? "Aktiv" : "Inaktiv"} />
+          <MetricCard label="Engine-Status" value={report.engine?.status === "ok" ? "OK" : report.engine?.status === "review_required" ? "Prüfen" : report.engine?.status === "blocking_error" ? "Blockiert" : report.gbr.feststellungserklaerung ? "Aktiv" : "Inaktiv"} />
         </div>
+
+        {report.engine && (
+          <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Tax Engine</h2>
+              <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                Klassifikation und sichere Routing-Entscheidung aus der neuen Rental-Tax-Engine
+              </p>
+            </div>
+            <div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
+              <MetricCard label="Filing-Profil" value={report.engine.filing_profile} />
+              <MetricCard label="Ownership" value={report.engine.ownership_model} />
+              <MetricCard label="Rental Mode" value={report.engine.rental_mode} />
+              <MetricCard label="Income Regime" value={report.engine.income_regime} />
+            </div>
+          </section>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">

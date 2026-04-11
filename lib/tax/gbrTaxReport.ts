@@ -10,6 +10,12 @@ import type {
 import { computeStructuredTaxData } from "@/lib/tax/structuredTaxLogic";
 import { mergeDuplicatePartners, mergePartnerTaxValuesByNormalizedName, normalizePartnerName } from "@/lib/tax/partnerNormalization";
 import { computeRentalShare } from "@/lib/tax/rentalShare";
+import {
+  findOwnerAllocation,
+  runRentalTaxEngineFromExistingData,
+  summarizeEngineWarnings,
+  summarizeOwnerSpecialExpense,
+} from "@/lib/tax/rentalTaxEngineBridge";
 
 export type GbrPartner = {
   id: string;
@@ -61,6 +67,8 @@ export type GbrPartnerAllocation = {
   total_expenses: number;
   depreciation_total: number;
   special_deductions_total: number;
+  partner_special_expenses: number;
+  result_before_partner_adjustments: number;
   result: number;
 };
 
@@ -101,6 +109,16 @@ export type GbrTaxReport = {
     maintenance_distributions: ComputedTaxMaintenanceDistributionItem[];
     line_totals: StructuredTaxLineTotals;
     warnings: StructuredTaxWarning[];
+  };
+  engine?: {
+    status: "ok" | "blocking_error" | "review_required";
+    filing_profile: string;
+    ownership_model: string;
+    rental_mode: string;
+    income_regime: string;
+    blocking_errors: string[];
+    review_flags: string[];
+    warnings: string[];
   };
 };
 
@@ -223,10 +241,34 @@ export function buildGbrTaxReport(args: {
   const totals = calculateTaxTotals(adjustedTaxData);
   warnings.push(...structured.warnings.map((item) => item.message));
 
+  const engineOutput = runRentalTaxEngineFromExistingData({
+    property,
+    taxData: adjustedTaxData,
+    gbrSettings,
+    partnerTaxValues: partnerTaxValues.map((item) => ({
+      id: `${item.gbr_partner_id}-${taxData.tax_year}`,
+      gbr_partner_id: item.gbr_partner_id,
+      tax_year: taxData.tax_year,
+      special_expenses: item.special_expenses ?? 0,
+      note: item.note ?? null,
+    })),
+    taxSettings,
+    depreciationItems,
+    maintenanceDistributions,
+  });
+  warnings.push(...summarizeEngineWarnings(engineOutput));
+
   const fb = partners.map((partner) => {
     const factor = num(partner.anteil) / 100;
     const partnerSpecialExpenses = round2(partnerTaxMap.get(normalizePartnerName(partner.name)) ?? 0);
-    const resultBeforePartnerAdjustments = round2(totals.result * factor);
+    const engineAllocation = findOwnerAllocation(engineOutput, partner.id);
+    const resultBeforePartnerAdjustments = engineAllocation
+      ? round2(engineAllocation.resultCents / 100 - engineAllocation.specialItemsCents / 100)
+      : round2(totals.result * factor);
+    const partnerIncome = engineAllocation ? round2(engineAllocation.revenueCents / 100) : round2(totals.totalIncome * factor);
+    const partnerExpenses = engineAllocation ? round2(engineAllocation.expenseCents / 100) : round2(totals.totalExpenses * factor);
+    const partnerDepreciation = engineAllocation ? round2(engineAllocation.depreciationCents / 100) : round2(totals.depreciationTotal * factor);
+    const engineSpecialExpenses = summarizeOwnerSpecialExpense(engineOutput, partner.id);
     const allocation = {
       partner_id: partner.id,
       partner_name: partner.name,
@@ -237,7 +279,7 @@ export function buildGbrTaxReport(args: {
       rent_prior_year: round2(num(taxData.rent_prior_year) * factor),
       operating_costs_income: round2(num(taxData.operating_costs_income) * factor),
       other_income: round2(num(taxData.other_income) * factor),
-      total_income: round2(totals.totalIncome * factor),
+      total_income: partnerIncome,
       loan_interest: round2(num(adjustedTaxData.loan_interest) * factor),
       property_tax: round2(num(adjustedTaxData.property_tax) * factor),
       hoa_fees: round2(num(adjustedTaxData.hoa_fees) * factor),
@@ -248,12 +290,14 @@ export function buildGbrTaxReport(args: {
       bank_fees: round2(num(adjustedTaxData.bank_fees) * factor),
       maintenance_costs: round2(num(adjustedTaxData.maintenance_costs) * factor),
       other_expenses: round2(num(adjustedTaxData.other_expenses) * factor),
-      total_expenses: round2(totals.totalExpenses * factor),
-      depreciation_total: round2(totals.depreciationTotal * factor),
+      total_expenses: partnerExpenses,
+      depreciation_total: partnerDepreciation,
       special_deductions_total: round2(totals.specialDeductionsTotal * factor),
-      partner_special_expenses: partnerSpecialExpenses,
+      partner_special_expenses: engineSpecialExpenses || partnerSpecialExpenses,
       result_before_partner_adjustments: resultBeforePartnerAdjustments,
-      result: round2(resultBeforePartnerAdjustments - partnerSpecialExpenses),
+      result: engineAllocation
+        ? round2(engineAllocation.resultCents / 100)
+        : round2(resultBeforePartnerAdjustments - partnerSpecialExpenses),
     };
 
     return allocation;
@@ -296,6 +340,16 @@ export function buildGbrTaxReport(args: {
       maintenance_distributions: structured.maintenanceDistributions,
       line_totals: structured.lineTotals,
       warnings: structured.warnings,
+    },
+    engine: {
+      status: engineOutput.status,
+      filing_profile: engineOutput.filingRecommendation.filingProfile,
+      ownership_model: engineOutput.classification.ownershipModel,
+      rental_mode: engineOutput.classification.rentalMode,
+      income_regime: engineOutput.classification.incomeRegime,
+      blocking_errors: engineOutput.blockingErrors.map((item) => item.message),
+      review_flags: engineOutput.reviewFlags.map((item) => item.message),
+      warnings: engineOutput.warnings.map((item) => item.message),
     },
   };
 }

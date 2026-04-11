@@ -82,6 +82,23 @@ export default function GbrTaxExportPage() {
           </p>
         </div>
 
+        {report.engine && (
+          <div className={`rounded-xl border px-5 py-4 ${
+            report.engine.status === "ok"
+              ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30"
+              : report.engine.status === "review_required"
+                ? "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30"
+                : "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30"
+          }`}>
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+              Tax-Engine Status: {report.engine.status}
+            </p>
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+              Filing-Profil {report.engine.filing_profile} · Ownership {report.engine.ownership_model} · Rental Mode {report.engine.rental_mode}
+            </p>
+          </div>
+        )}
+
         <div className="flex justify-end">
           <Link
             href={`/dashboard/properties/${id}/tax/${taxYear}/gbr/pdf`}

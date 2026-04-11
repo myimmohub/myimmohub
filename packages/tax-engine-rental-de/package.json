@@ -1,0 +1,8 @@
+{
+  "name": "tax-engine-rental-de",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/api/index.ts",
+  "types": "./src/api/index.ts"
+}

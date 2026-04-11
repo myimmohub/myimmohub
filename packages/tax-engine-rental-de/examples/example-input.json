@@ -1,0 +1,88 @@
+{
+  "policyPackId": "de-rental-2025",
+  "formPackId": "elster-income-2025",
+  "taxYear": 2025,
+  "taxSubject": {
+    "id": "subject_1",
+    "displayName": "Max Mustermann",
+    "subjectKind": "person",
+    "residencyStatus": "unlimited_tax",
+    "filingCountry": "DE",
+    "owners": [
+      {
+        "id": "owner_1",
+        "role": "legal_owner",
+        "personType": "natural_person",
+        "firstName": "Max",
+        "lastName": "Mustermann"
+      }
+    ]
+  },
+  "properties": [
+    {
+      "id": "property_1",
+      "displayName": "Wohnung Musterstraße",
+      "propertyType": "apartment",
+      "countryCode": "DE",
+      "yearBuilt": 1998,
+      "isResidential": true
+    }
+  ],
+  "usageYears": [
+    {
+      "id": "usage_1",
+      "propertyId": "property_1",
+      "taxYear": 2025,
+      "totalDays": 365,
+      "rentalDays": 365,
+      "vacancyDays": 0
+    }
+  ],
+  "ownershipPeriods": [
+    {
+      "id": "period_1",
+      "propertyId": "property_1",
+      "ownerId": "owner_1",
+      "startDate": "2025-01-01",
+      "endDate": "2025-12-31",
+      "numerator": 1,
+      "denominator": 1,
+      "reason": "initial"
+    }
+  ],
+  "revenues": [
+    {
+      "id": "revenue_1",
+      "propertyId": "property_1",
+      "taxYear": 2025,
+      "bookingDate": "2025-01-03",
+      "category": "cold_rent",
+      "grossCents": 1200000
+    }
+  ],
+  "expenses": [
+    {
+      "id": "expense_1",
+      "propertyId": "property_1",
+      "taxYear": 2025,
+      "bookingDate": "2025-01-11",
+      "description": "Grundsteuer",
+      "amountCents": 160000,
+      "category": "property_tax",
+      "allocationMode": "full"
+    }
+  ],
+  "assets": [
+    {
+      "id": "asset_1",
+      "propertyId": "property_1",
+      "assetType": "building",
+      "description": "Gebäude",
+      "acquisitionCostCents": 25000000
+    }
+  ],
+  "maintenancePlans": [],
+  "loans": [],
+  "ownerSpecificItems": [],
+  "filingsContext": {}
+}
