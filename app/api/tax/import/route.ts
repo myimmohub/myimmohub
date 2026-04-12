@@ -72,6 +72,11 @@ label, source_year, total_amount, classification, deduction_mode, distribution_y
 Wenn konkrete AfA-Positionen oder verteilte Erhaltungsaufwände erkennbar sind, befülle diese Arrays.
 Wenn das Dokument dafür keine belastbare Aufteilung enthält, lasse die Arrays leer statt zu raten.`;
 
+const TEXT_FALLBACK_PROMPT = `Extrahiere aus dem folgenden OCR-/PDF-Text dieselben Steuerfelder wie zuvor.
+Antworte ausschließlich mit einem JSON-Objekt und denselben Feldnamen.
+Wenn etwas nicht sicher erkennbar ist, setze es auf null.
+Gib zusätzlich ein Objekt confidence zurück.`;
+
 type ImportRequest = {
   property_id: string;
   tax_year: number;
@@ -272,6 +277,171 @@ function round2(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+function extractJsonText(raw: string) {
+  let jsonStr = raw.trim();
+  if (jsonStr.startsWith("```")) {
+    jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+  }
+
+  try {
+    return JSON.parse(jsonStr) as Record<string, unknown>;
+  } catch {
+    const firstBrace = jsonStr.indexOf("{");
+    const lastBrace = jsonStr.lastIndexOf("}");
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      return JSON.parse(jsonStr.slice(firstBrace, lastBrace + 1)) as Record<string, unknown>;
+    }
+    throw new Error("Antwort enthielt kein parsebares JSON.");
+  }
+}
+
+async function callAnthropicJsonFromPdf(args: {
+  pdfBase64: string;
+  apiKey: string;
+}) {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": args.apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 4096,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "document",
+              source: {
+                type: "base64",
+                media_type: "application/pdf",
+                data: args.pdfBase64,
+              },
+            },
+            {
+              type: "text",
+              text:
+                "Extrahiere alle erkennbaren Steuerdaten aus diesem Dokument als JSON. Berücksichtige Anlage V, FE/FB sowie AfA-Komponenten. Wenn AfA fuer Inventar, Ausstattung, Einbaukueche oder sonstige bewegliche Wirtschaftsgueter erkennbar ist, liefere diese ausdruecklich sowohl im Feld depreciation_fixtures als auch - falls moeglich - in depreciation_items.",
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Claude API ${response.status}: ${errorBody || response.statusText}`);
+  }
+
+  const result = (await response.json()) as {
+    content: { type: string; text?: string }[];
+  };
+
+  const textBlock = result.content.find((c) => c.type === "text");
+  if (!textBlock?.text) throw new Error("Keine Textantwort von Claude.");
+  return extractJsonText(textBlock.text);
+}
+
+async function callAnthropicTextFromPdf(args: {
+  pdfBase64: string;
+  apiKey: string;
+}) {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": args.apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 4096,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "document",
+              source: {
+                type: "base64",
+                media_type: "application/pdf",
+                data: args.pdfBase64,
+              },
+            },
+            {
+              type: "text",
+              text: "Lies den Text aus diesem Steuerdokument vollständig aus. Gib nur den erkannten Text zurück.",
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Claude OCR ${response.status}: ${errorBody || response.statusText}`);
+  }
+
+  const result = (await response.json()) as {
+    content: { type: string; text?: string }[];
+  };
+  const text = result.content
+    .filter((block) => block.type === "text" && typeof block.text === "string")
+    .map((block) => block.text)
+    .join("\n")
+    .trim();
+  if (!text) throw new Error("OCR-Fallback lieferte keinen Text.");
+  return text;
+}
+
+async function callAnthropicJsonFromText(args: {
+  text: string;
+  apiKey: string;
+}) {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": args.apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 4096,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `${TEXT_FALLBACK_PROMPT}\n\nDokumenttext:\n${args.text.slice(0, 120000)}`,
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Claude Text-Analyse ${response.status}: ${errorBody || response.statusText}`);
+  }
+
+  const result = (await response.json()) as {
+    content: { type: string; text?: string }[];
+  };
+  const textBlock = result.content.find((c) => c.type === "text");
+  if (!textBlock?.text) throw new Error("Text-Fallback lieferte keine JSON-Antwort.");
+  return extractJsonText(textBlock.text);
+}
+
 function inferMaintenanceSourceYear(
   item: ImportedMaintenanceDistribution,
   taxYear: number,
@@ -448,78 +618,41 @@ export async function POST(request: Request) {
   let extractedFields: Record<string, unknown>;
   let confidence: Record<string, string> = {};
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  try {
+    const parsed = await callAnthropicJsonFromPdf({
+      pdfBase64: pdf_base64,
+      apiKey: ANTHROPIC_API_KEY,
+    });
+    confidence = (parsed.confidence ?? {}) as Record<string, string>;
+    delete parsed.confidence;
+    extractedFields = parsed;
+  } catch (directError) {
+    console.error("Direct PDF tax import failed, trying OCR fallback:", directError);
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": ANTHROPIC_API_KEY,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 4096,
-          system: SYSTEM_PROMPT,
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "document",
-                  source: {
-                    type: "base64",
-                    media_type: "application/pdf",
-                    data: pdf_base64,
-                  },
-                },
-                {
-                  type: "text",
-                  text:
-                    "Extrahiere alle erkennbaren Steuerdaten aus diesem Dokument als JSON. Berücksichtige Anlage V, FE/FB sowie AfA-Komponenten. Wenn AfA fuer Inventar, Ausstattung, Einbaukueche oder sonstige bewegliche Wirtschaftsgueter erkennbar ist, liefere diese ausdruecklich sowohl im Feld depreciation_fixtures als auch - falls moeglich - in depreciation_items.",
-                },
-              ],
-            },
-          ],
-        }),
+      const extractedText = await callAnthropicTextFromPdf({
+        pdfBase64: pdf_base64,
+        apiKey: ANTHROPIC_API_KEY,
       });
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        console.error("Claude API error:", response.status, errorBody);
-        if (attempt === 0) continue; // retry once
-        return NextResponse.json({ error: "Fehler bei der KI-Analyse." }, { status: 500 });
-      }
-
-      const result = (await response.json()) as {
-        content: { type: string; text?: string }[];
-      };
-
-      const textBlock = result.content.find((c) => c.type === "text");
-      if (!textBlock?.text) {
-        if (attempt === 0) continue;
-        return NextResponse.json({ error: "Keine Antwort von der KI." }, { status: 500 });
-      }
-
-      // Parse JSON — handle markdown code fences
-      let jsonStr = textBlock.text.trim();
-      if (jsonStr.startsWith("```")) {
-        jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-      }
-
-      const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+      const parsed = await callAnthropicJsonFromText({
+        text: extractedText,
+        apiKey: ANTHROPIC_API_KEY,
+      });
       confidence = (parsed.confidence ?? {}) as Record<string, string>;
       delete parsed.confidence;
       extractedFields = parsed;
-      break;
-    } catch (e) {
-      if (attempt === 0) continue;
-      console.error("PDF import error:", e);
-      return NextResponse.json({ error: "Fehler beim Verarbeiten der KI-Antwort." }, { status: 500 });
+    } catch (fallbackError) {
+      console.error("PDF import fallback error:", fallbackError);
+      const detail = fallbackError instanceof Error ? fallbackError.message : "Unbekannter Fehler.";
+      return NextResponse.json(
+        {
+          error: "Fehler bei der KI-Analyse.",
+          details: detail,
+        },
+        { status: 500 },
+      );
     }
   }
 
-  // @ts-expect-error — extractedFields is set in the loop or we return early
   if (!extractedFields) {
     return NextResponse.json({ error: "Extraktion fehlgeschlagen." }, { status: 500 });
   }

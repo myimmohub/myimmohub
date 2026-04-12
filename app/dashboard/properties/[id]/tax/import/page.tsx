@@ -188,7 +188,7 @@ export default function TaxImportPage() {
           setExistingId(data.existing_id);
           setError(`Für ${taxYear} existiert bereits ein Eintrag. Klicke erneut um zu überschreiben.`);
         } else {
-          setError(data.error ?? "Fehler beim Import.");
+          setError(data.details ? `${data.error ?? "Fehler beim Import."} ${data.details}` : (data.error ?? "Fehler beim Import."));
         }
         setUploading(false);
         return;
