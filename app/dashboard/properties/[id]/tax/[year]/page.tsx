@@ -72,6 +72,14 @@ export default function TaxYearPage() {
 
   const [property, setProperty] = useState<Property | null>(null);
   const [taxData, setTaxData] = useState<TaxData | null>(null);
+  const [reconciliation, setReconciliation] = useState<null | {
+    items: Array<{ type: string; label: string; source_year: number | null; gross_amount: number; deductible_amount: number; included: boolean; exclusion_reason: string | null }>;
+    einnahmen: number;
+    total_deductible_with_afa: number;
+    afa: number;
+    result_before_partner: number;
+  }>(null);
+  const [showReconciliation, setShowReconciliation] = useState(false);
   const [gbrSettings, setGbrSettings] = useState<GbrSettingsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -188,7 +196,14 @@ export default function TaxYearPage() {
       body: JSON.stringify({ property_id: id, tax_year: taxYear }),
     });
     if (!res.ok) return false;
-    setTaxData(await res.json());
+    const json = await res.json();
+    if (json._reconciliation) {
+      setReconciliation(json._reconciliation);
+      const { _reconciliation: _, _engine: __, ...taxDataOnly } = json;
+      setTaxData(taxDataOnly);
+    } else {
+      setTaxData(json);
+    }
     return true;
   }, [id, taxYear]);
 
@@ -849,6 +864,113 @@ export default function TaxYearPage() {
                 </div>
               );
             })}
+
+            {reconciliation && (
+              <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <button
+                  type="button"
+                  onClick={() => setShowReconciliation((v) => !v)}
+                  className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Reconciliation — Werbungskosten-Nachweis</p>
+                    <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                      Alle berücksichtigten und ausgeschlossenen Posten auf einen Blick
+                    </p>
+                  </div>
+                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                    {showReconciliation ? "Ausblenden" : "Einblenden"}
+                  </span>
+                </button>
+
+                {showReconciliation && (
+                  <div className="border-t border-slate-100 dark:border-slate-800">
+                    {/* Summary row */}
+                    <div className="grid grid-cols-2 gap-4 px-5 py-4 md:grid-cols-4 bg-slate-50 dark:bg-slate-800/40">
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Einnahmen</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          {reconciliation.einnahmen.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Werbungskosten gesamt</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          {reconciliation.total_deductible_with_afa.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">davon AfA</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          {reconciliation.afa.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Ergebnis</p>
+                        <p className={`mt-1 text-sm font-semibold ${reconciliation.result_before_partner < 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                          {reconciliation.result_before_partner.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Item table */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Bezeichnung</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Typ</th>
+                            <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 dark:text-slate-400">Brutto</th>
+                            <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 dark:text-slate-400">Absetzbar (ELSTER)</th>
+                            <th className="px-4 py-2.5 text-center text-xs font-medium text-slate-500 dark:text-slate-400">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {reconciliation.items.map((item, idx) => (
+                            <tr
+                              key={idx}
+                              className={item.included ? "" : "opacity-50"}
+                            >
+                              <td className="px-4 py-2.5 text-slate-800 dark:text-slate-200">
+                                {item.label}
+                                {item.source_year != null && (
+                                  <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                    {item.source_year}
+                                  </span>
+                                )}
+                                {item.exclusion_reason && (
+                                  <span className="ml-2 text-xs text-red-500 dark:text-red-400">({item.exclusion_reason})</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">
+                                {item.type === "transaction" ? "Transaktion" : item.type === "maintenance_distribution" ? "Instandhaltungsverteilung" : "AfA"}
+                              </td>
+                              <td className="px-4 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">
+                                {item.gross_amount.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 })}
+                              </td>
+                              <td className="px-4 py-2.5 text-right tabular-nums font-medium text-slate-900 dark:text-slate-100">
+                                {item.deductible_amount.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 })}
+                              </td>
+                              <td className="px-4 py-2.5 text-center">
+                                {item.included ? (
+                                  <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                    ✓ berücksichtigt
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                    ausgeschlossen
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
 
             <section
               id="depreciation-items-card"

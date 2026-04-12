@@ -9,8 +9,9 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { calculateTaxFromTransactions } from "@/lib/tax/calculateTaxFromTransactions";
+import { computeStructuredTaxData, isDistributionActiveForYear } from "@/lib/tax/structuredTaxLogic";
 import { runRentalTaxEngineFromExistingData } from "@/lib/tax/rentalTaxEngineBridge";
-import type { TaxData } from "@/types/tax";
+import type { TaxData, TaxDepreciationItem, TaxMaintenanceDistributionItem } from "@/types/tax";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -89,6 +90,140 @@ export async function POST(request: Request) {
     .eq("tax_year", tax_year)
     .single();
 
+  // ── Mietanteil berechnen ────────────────────────────────────────────────────
+  // Basis für Instandhaltungsverteilungen und AfA-Proration
+  const rentalSharePct = effectiveTaxSettings?.rental_share_override_pct != null
+    ? effectiveTaxSettings.rental_share_override_pct / 100
+    : effectiveTaxSettings?.eigennutzung_tage != null && effectiveTaxSettings?.gesamt_tage != null
+      ? Math.max(0, Math.min(1, 1 - effectiveTaxSettings.eigennutzung_tage / effectiveTaxSettings.gesamt_tage))
+      : 1.0;
+
+  // ── Hilfsfunktion: Structured Tax Data berechnen & in DB schreiben ──────────
+  async function applyStructuredData(baseData: TaxData): Promise<{ finalData: TaxData; reconciliation: ReturnType<typeof buildReconciliation> }> {
+    const structured = computeStructuredTaxData({
+      taxData: baseData,
+      taxYear: tax_year,
+      rentalSharePct,
+      depreciationItems: (depreciationItems ?? []) as TaxDepreciationItem[],
+      maintenanceDistributions: (maintenanceItems ?? []) as TaxMaintenanceDistributionItem[],
+    });
+
+    // Nur Felder aus dem strukturierten Ergebnis schreiben, die tatsächlich berechnet wurden
+    const structuredPatch: Record<string, unknown> = {};
+    if (structured.lineTotals.maintenance_costs != null) {
+      structuredPatch.maintenance_costs = structured.lineTotals.maintenance_costs;
+    }
+    if (structured.lineTotals.depreciation_building != null) {
+      structuredPatch.depreciation_building = structured.taxData.depreciation_building;
+    }
+    if (structured.lineTotals.depreciation_outdoor != null) {
+      structuredPatch.depreciation_outdoor = structured.taxData.depreciation_outdoor;
+    }
+    if (structured.lineTotals.depreciation_fixtures != null) {
+      structuredPatch.depreciation_fixtures = structured.taxData.depreciation_fixtures;
+    }
+
+    let finalData = structured.taxData;
+    if (Object.keys(structuredPatch).length > 0 && baseData.id) {
+      const { data: patched } = await supabase
+        .from("tax_data")
+        .update(structuredPatch)
+        .eq("id", baseData.id)
+        .select()
+        .single();
+      if (patched) finalData = patched as TaxData;
+    }
+
+    return { finalData, reconciliation: buildReconciliation(structured, finalData) };
+  }
+
+  function buildReconciliation(
+    structured: ReturnType<typeof computeStructuredTaxData>,
+    finalData: TaxData,
+  ) {
+    const allDists = (maintenanceItems ?? []) as TaxMaintenanceDistributionItem[];
+    const items = [
+      // Transaktionsbasierte Einnahmen & Ausgaben
+      ...Object.entries({
+        rent_income:           "Mieteinnahmen",
+        operating_costs_income:"Nebenkostenerstattungen",
+        other_income:          "Sonstige Einnahmen",
+        loan_interest:         "Schuldzinsen (Transaktion)",
+        property_tax:          "Grundsteuer (Transaktion)",
+        insurance:             "Versicherung (Transaktion)",
+        hoa_fees:              "Hausgeld/WEG (Transaktion)",
+        water_sewage:          "Wasser/Abwasser (Transaktion)",
+        waste_disposal:        "Müllentsorgung (Transaktion)",
+        property_management:   "Hausverwaltung (Transaktion)",
+        bank_fees:             "Kontoführung (Transaktion)",
+        other_expenses:        "Sonstige Werbungskosten (Transaktion)",
+      }).filter(([k]) => finalData[k as keyof TaxData] != null && finalData[k as keyof TaxData] !== 0)
+        .map(([k, label]) => ({
+          type: "transaction" as const,
+          label,
+          source_year: null as number | null,
+          gross_amount: Number(finalData[k as keyof TaxData]),
+          deductible_amount: Number(finalData[k as keyof TaxData]),
+          included: true,
+          exclusion_reason: null as string | null,
+        })),
+      // Instandhaltungsverteilungen
+      ...allDists.map((item) => {
+        const active = isDistributionActiveForYear(item, tax_year);
+        const computed = structured.maintenanceDistributions.find((d) => d.id === item.id);
+        return {
+          type: "maintenance_distribution" as const,
+          label: item.label,
+          source_year: item.source_year,
+          gross_amount: Number(item.total_amount),
+          deductible_amount: computed?.deductible_amount_elster ?? 0,
+          included: active,
+          exclusion_reason: !active
+            ? item.status !== "active"
+              ? `Status: ${item.status}`
+              : `Nicht aktiv für ${tax_year} (Quelljahr ${item.source_year}, Verteilung ${item.distribution_years} J.)`
+            : null,
+        };
+      }),
+      // AfA-Posten
+      ...structured.depreciationItems.map((item) => ({
+        type: "depreciation_item" as const,
+        label: item.label,
+        source_year: null as number | null,
+        gross_amount: Number(item.gross_annual_amount),
+        deductible_amount: item.deductible_amount_elster,
+        included: true,
+        exclusion_reason: null as string | null,
+      })),
+      // Gebäude-AfA aus Property-Daten (falls keine expliziten AfA-Posten)
+      ...(structured.depreciationItems.length === 0 && finalData.depreciation_building
+        ? [{
+            type: "depreciation_item" as const,
+            label: "Gebäude-AfA (automatisch berechnet)",
+            source_year: null as number | null,
+            gross_amount: Number(finalData.depreciation_building),
+            deductible_amount: Number(finalData.depreciation_building),
+            included: true,
+            exclusion_reason: null as string | null,
+          }]
+        : []),
+    ];
+
+    const einnahmen = Number(finalData.rent_income ?? 0)
+      + Number(finalData.operating_costs_income ?? 0)
+      + Number(finalData.other_income ?? 0);
+    const werbungskosten = items
+      .filter((i) => i.included && i.type !== "transaction" || (i.type === "transaction" && !["rent_income","operating_costs_income","other_income"].some(k => i.label.toLowerCase().includes("einnahme") || i.label.toLowerCase().includes("erstattung"))))
+      .reduce((sum, i) => sum + i.deductible_amount, 0);
+    const afa = Number(finalData.depreciation_building ?? 0)
+      + Number(finalData.depreciation_outdoor ?? 0)
+      + Number(finalData.depreciation_fixtures ?? 0);
+    const total_deductible_with_afa = items.filter((i) => i.included).reduce((sum, i) => sum + i.deductible_amount, 0);
+    const result_before_partner = einnahmen - total_deductible_with_afa;
+
+    return { items, einnahmen, total_deductible_with_afa, afa, result_before_partner };
+  }
+
   if (existing) {
     // Nur Felder updaten die noch null sind oder import_source = 'calculated'
     const updates: Record<string, unknown> = {};
@@ -109,9 +244,13 @@ export async function POST(request: Request) {
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // ── Structured Data (Instandhaltungsverteilungen + AfA-Posten) persistieren ─
+    const { finalData, reconciliation } = await applyStructuredData(data as TaxData);
+
     const engine = runRentalTaxEngineFromExistingData({
       property: { id: prop.id, name: prop.name ?? null, address: prop.address ?? null },
-      taxData: data as TaxData,
+      taxData: finalData,
       gbrSettings: gbrSettings ?? null,
       taxSettings: effectiveTaxSettings,
       depreciationItems: depreciationItems ?? [],
@@ -119,13 +258,14 @@ export async function POST(request: Request) {
       partnerTaxValues: [],
     });
     return NextResponse.json({
-      ...data,
+      ...finalData,
       _engine: {
         status: engine.status,
         filing_profile: engine.filingRecommendation.filingProfile,
         blocking_errors: engine.blockingErrors.map((item) => item.message),
         review_flags: engine.reviewFlags.map((item) => item.message),
       },
+      _reconciliation: reconciliation,
     });
   }
 
@@ -137,9 +277,13 @@ export async function POST(request: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // ── Structured Data persistieren ─────────────────────────────────────────────
+  const { finalData, reconciliation } = await applyStructuredData(data as TaxData);
+
   const engine = runRentalTaxEngineFromExistingData({
     property: { id: prop.id, name: prop.name ?? null, address: prop.address ?? null },
-    taxData: data as TaxData,
+    taxData: finalData,
     gbrSettings: gbrSettings ?? null,
     taxSettings: effectiveTaxSettings,
     depreciationItems: depreciationItems ?? [],
@@ -147,12 +291,13 @@ export async function POST(request: Request) {
     partnerTaxValues: [],
   });
   return NextResponse.json({
-    ...data,
+    ...finalData,
     _engine: {
       status: engine.status,
       filing_profile: engine.filingRecommendation.filingProfile,
       blocking_errors: engine.blockingErrors.map((item) => item.message),
       review_flags: engine.reviewFlags.map((item) => item.message),
     },
+    _reconciliation: reconciliation,
   });
 }
