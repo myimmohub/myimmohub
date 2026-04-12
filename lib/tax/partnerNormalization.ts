@@ -35,7 +35,13 @@ export function formatDateForDisplay(value: string | null | undefined) {
   if (deMatch) return `${deMatch[1].padStart(2, "0")}.${deMatch[2].padStart(2, "0")}.${deMatch[3]}`;
 
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("de-DE");
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("de-DE", {
+    timeZone: "Europe/Berlin",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
 }
 
 export function mergeDuplicatePartners<T extends BasicPartner>(partners: T[]) {

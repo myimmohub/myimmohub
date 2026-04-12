@@ -42,10 +42,12 @@ teilweise_eigennutzung, eigennutzung_tage, gesamt_tage, rental_share_override_pc
 partners, expense_blocks, depreciation_items, maintenance_distributions
 
 Wichtig:
+- Datumswerte immer als exaktes Kalenderdatum ausgeben, bevorzugt DD.MM.YYYY oder YYYY-MM-DD. Keine Uhrzeiten oder ISO-Timestamps mit Zeitzonen ausgeben.
 - maintenance_costs nur fuer sofort abzugsfaehigen Erhaltungsaufwand verwenden.
 - Auf mehrere Jahre verteilte Erhaltungsaufwaende nach §§ 11a, 11b EStG / § 82b EStDV immer in maintenance_distributions abbilden.
 - special_deduction_renovation nur fuer echte steuerliche Sonderabschreibungen / Sonderabzuege verwenden, NICHT fuer verteilten Erhaltungsaufwand aus Vorjahren oder dem aktuellen Jahr.
 - Wenn Zeilen wie "davon abzuziehen", "Werbungskosten aus 2022" oder "auf bis zu 5 Jahre zu verteilende Erhaltungsaufwendungen" vorkommen, gehoeren diese in maintenance_distributions.
+- Fuer jeden sichtbaren Vorjahresblock wie "aus 2022" oder "aus 2023" bitte einen eigenen maintenance_distributions-Eintrag erzeugen.
 
 partners ist ein Array von Objekten mit:
 name, anteil_pct, email, special_expenses, note
@@ -237,12 +239,29 @@ function asNullableDateString(value: unknown): string | null {
     return `${deMatch[3]}-${month}-${day}`;
   }
 
+  const isoDateTimeMatch = raw.match(/^(\d{4}-\d{2}-\d{2})T/);
+  if (isoDateTimeMatch) {
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+      const formatter = new Intl.DateTimeFormat("sv-SE", {
+        timeZone: "Europe/Berlin",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+      return formatter.format(parsed);
+    }
+  }
+
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return raw;
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, "0");
-  const day = String(parsed.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  const formatter = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return formatter.format(parsed);
 }
 
 function asObjectArray(value: unknown) {
@@ -281,6 +300,81 @@ function normalizeImportedMaintenanceDistribution(
     deduction_mode: looksDistributed ? "distributed" : "immediate",
     distribution_years: distributionYears,
   };
+}
+
+function inferDistributionYearsFromText(value: string, fallback: number) {
+  const match = value.match(/verteilt\s+auf\s+(\d+)\s+jahre/i);
+  if (!match) return fallback;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function buildFallbackMaintenanceDistributionsFromExpenseBlocks(args: {
+  blocks: ImportedExpenseBlock[];
+  taxYear: number;
+  existing: ImportedMaintenanceDistribution[];
+}) {
+  const seenYears = new Set(args.existing.map((item) => item.source_year).filter((value): value is number => value != null));
+
+  return args.blocks.reduce<ImportedMaintenanceDistribution[]>((acc, block) => {
+    const normalizedKey = normalizePartnerName(block.key).replace(/\s+/g, "_");
+    const combined = `${block.key} ${block.label} ${block.detail ?? ""}`;
+    const isMaintenanceLike =
+      normalizedKey.includes("maintenance") ||
+      normalizedKey.includes("erhaltungsaufwand") ||
+      /erhaltungsaufwand/i.test(combined);
+
+    if (!isMaintenanceLike || block.amount == null || block.amount <= 0) return acc;
+
+    const yearFromKey = `${block.key} ${block.label}`.match(/\b(20\d{2})\b/);
+    const sourceYear = yearFromKey ? Number(yearFromKey[1]) : args.taxYear;
+    if (seenYears.has(sourceYear)) return acc;
+
+    const minimumYears = Math.max(1, args.taxYear - sourceYear + 1);
+    const distributionYears = inferDistributionYearsFromText(combined, sourceYear < args.taxYear ? minimumYears : 3);
+
+    acc.push({
+      label: block.label,
+      source_year: sourceYear,
+      total_amount: round2(block.amount),
+      classification: "maintenance_expense",
+      deduction_mode: "distributed",
+      distribution_years: distributionYears,
+      current_year_share_override: round2(block.amount),
+      apply_rental_ratio: false,
+      note: block.detail ?? "Aus ELSTER-Kostenblock abgeleitet",
+    });
+    seenYears.add(sourceYear);
+    return acc;
+  }, []);
+}
+
+function reconcileMaintenanceDistributionsWithExpenseBlocks(args: {
+  blocks: ImportedExpenseBlock[];
+  taxYear: number;
+  distributions: ImportedMaintenanceDistribution[];
+}) {
+  const blockByYear = new Map<number, ImportedExpenseBlock>();
+
+  for (const block of args.blocks) {
+    const combined = `${block.key} ${block.label} ${block.detail ?? ""}`;
+    if (!/erhaltungsaufwand|maintenance/i.test(combined)) continue;
+    const yearMatch = combined.match(/\b(20\d{2})\b/);
+    const sourceYear = yearMatch ? Number(yearMatch[1]) : args.taxYear;
+    if (block.amount == null || block.amount <= 0) continue;
+    blockByYear.set(sourceYear, block);
+  }
+
+  return args.distributions.map((item) => {
+    const block = item.source_year != null ? blockByYear.get(item.source_year) : null;
+    if (!block || block.amount == null || block.amount <= 0) return item;
+    return {
+      ...item,
+      current_year_share_override: round2(block.amount),
+      apply_rental_ratio: false,
+      note: [item.note, "ELSTER-Jahresbetrag aus Kostenblock übernommen"].filter(Boolean).join(" · "),
+    };
+  });
 }
 
 export async function POST(request: Request) {
@@ -542,6 +636,20 @@ export async function POST(request: Request) {
   supplementalData.maintenance_distributions = supplementalData.maintenance_distributions.map((item) =>
     normalizeImportedMaintenanceDistribution(item, tax_year),
   );
+  if (supplementalData.expense_blocks.length > 0) {
+    supplementalData.maintenance_distributions.push(
+      ...buildFallbackMaintenanceDistributionsFromExpenseBlocks({
+        blocks: supplementalData.expense_blocks,
+        taxYear: tax_year,
+        existing: supplementalData.maintenance_distributions,
+      }),
+    );
+    supplementalData.maintenance_distributions = reconcileMaintenanceDistributionsWithExpenseBlocks({
+      blocks: supplementalData.expense_blocks,
+      taxYear: tax_year,
+      distributions: supplementalData.maintenance_distributions,
+    });
+  }
   supplementalData.partners = Array.from(
     supplementalData.partners.reduce((acc, partner) => {
       const key = normalizePartnerName(partner.name);

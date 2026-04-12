@@ -53,12 +53,15 @@ export default function GbrTaxPdfPage() {
     });
     const otherExpensesBucket = lineSummary.expense_buckets.find((bucket) => bucket.key === "other_expenses")
       ?? lineSummary.expense_buckets.find((bucket) => bucket.key.includes("other"));
+    const maintenanceTotal = lineSummary.expense_buckets
+      .filter((bucket) => bucket.key.includes("maintenance") || bucket.key.includes("erhaltungsaufwand"))
+      .reduce((sum, bucket) => sum + bucket.amount, 0);
 
     return [
       ["33", "AfA Gebäude", fmtEur(taxData.depreciation_building ?? null)],
       ["34", "AfA Außenanlagen", fmtEur(taxData.depreciation_outdoor ?? null)],
       ["35", "AfA Inventar", fmtEur(taxData.depreciation_fixtures ?? null)],
-      ["39", "Erhaltungsaufwand", fmtEur(taxData.maintenance_costs ?? null)],
+      ["39", "Erhaltungsaufwand", fmtEur(maintenanceTotal !== 0 ? maintenanceTotal : (taxData.maintenance_costs ?? null))],
       ["46", "Grundsteuer", fmtEur(taxData.property_tax ?? null)],
       ["47", "Schuldzinsen", fmtEur(taxData.loan_interest ?? null)],
       ["48", "Versicherungen", fmtEur(taxData.insurance ?? null)],

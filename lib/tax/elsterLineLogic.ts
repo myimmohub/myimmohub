@@ -58,13 +58,19 @@ function readImportedExpenseBlocks(taxData: TaxData) {
 }
 
 function normalizeImportedExpenseKey(value: string) {
-  return value
+  const normalized = value
     .trim()
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+
+  if (["umgelegte_kosten", "allocated_costs"].includes(normalized)) return "allocated_costs";
+  if (["nicht_umgelegte_kosten", "non_allocated_costs"].includes(normalized)) return "non_allocated_costs";
+  if (["sonstige_kosten", "other_expenses", "sonstige_werbungskosten"].includes(normalized)) return "other_expenses";
+  if (normalized.includes("maintenance") || normalized.includes("erhaltungsaufwand")) return normalized;
+  return normalized;
 }
 
 function buildExpenseBucketsFromImport(taxData: TaxData) {
@@ -147,7 +153,7 @@ export function buildElsterLineSummary(
 
   const importedExpenseBuckets = buildExpenseBucketsFromImport(taxData);
   const maintenanceBuckets = buildMaintenanceBuckets(options.maintenanceDistributions ?? [], taxYear);
-  const hasImportedMaintenanceBlock = importedExpenseBuckets.some((bucket) => bucket.key.includes("maintenance"));
+  const importedNonMaintenanceBuckets = importedExpenseBuckets.filter((bucket) => !bucket.key.includes("maintenance") && !bucket.key.includes("erhaltungsaufwand"));
 
   const fallbackExpenseBuckets: ElsterLineBucket[] = [
     {
@@ -178,8 +184,8 @@ export function buildElsterLineSummary(
 
   const expenseBuckets = importedExpenseBuckets.length > 0
     ? [
-        ...importedExpenseBuckets,
-        ...(!hasImportedMaintenanceBlock ? maintenanceBuckets : []),
+        ...importedNonMaintenanceBuckets,
+        ...maintenanceBuckets,
       ].filter((bucket) => bucket.amount !== 0)
     : fallbackExpenseBuckets;
 
