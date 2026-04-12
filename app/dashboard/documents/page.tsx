@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -76,41 +76,42 @@ export default function DocumentsPage() {
   const [filterCategory, setFilterCategory] = useState<DocumentCategory | "">("");
   const [filterProperty, setFilterProperty] = useState("");
 
+  const loadDocuments = useCallback(async () => {
+    setIsLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
+    const [docsRes, inboxRes, propsRes] = await Promise.all([
+      fetch("/api/documents"),
+      fetch("/api/inbox"),
+      supabase.from("properties").select("id, name").eq("user_id", user.id).order("name"),
+    ]);
+
+    if (!docsRes.ok || !inboxRes.ok) {
+      const docsBody = docsRes.ok ? null : await docsRes.json().catch(() => null) as { error?: string } | null;
+      const inboxBody = inboxRes.ok ? null : await inboxRes.json().catch(() => null) as { error?: string } | null;
+      setError(docsBody?.error ?? inboxBody?.error ?? "Dokumente konnten nicht geladen werden.");
+    } else {
+      setDocuments(await docsRes.json() as DocumentItem[]);
+      setInboxItems(await inboxRes.json() as InboxItem[]);
+      setError(null);
+    }
+
+    setProperties((propsRes.data ?? []) as PropertyRef[]);
+    setIsLoading(false);
+  }, []);
+
   useEffect(() => {
     const tab = new URLSearchParams(window.location.search).get("tab");
     if (tab === "eingang") setActiveTab("eingang");
   }, []);
 
   useEffect(() => {
-    const load = async () => {
-      setIsLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setIsLoading(false);
-        return;
-      }
-
-      const [docsRes, inboxRes, propsRes] = await Promise.all([
-        fetch("/api/documents"),
-        fetch("/api/inbox"),
-        supabase.from("properties").select("id, name").eq("user_id", user.id).order("name"),
-      ]);
-
-      if (!docsRes.ok || !inboxRes.ok) {
-        const docsBody = docsRes.ok ? null : await docsRes.json().catch(() => null) as { error?: string } | null;
-        const inboxBody = inboxRes.ok ? null : await inboxRes.json().catch(() => null) as { error?: string } | null;
-        setError(docsBody?.error ?? inboxBody?.error ?? "Dokumente konnten nicht geladen werden.");
-      } else {
-        setDocuments(await docsRes.json() as DocumentItem[]);
-        setInboxItems(await inboxRes.json() as InboxItem[]);
-      }
-
-      setProperties((propsRes.data ?? []) as PropertyRef[]);
-      setIsLoading(false);
-    };
-
-    void load();
-  }, []);
+    void loadDocuments();
+  }, [loadDocuments]);
 
   const filteredDocuments = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -194,10 +195,29 @@ export default function DocumentsPage() {
 
   const handleFetchEmails = async () => {
     setIsFetchingEmails(true);
-    await fetch("/api/email-fetch", { method: "POST" });
+    const res = await fetch("/api/email-fetch", { method: "POST" });
     setIsFetchingEmails(false);
-    setToast("E-Mails wurden abgerufen");
+    if (!res.ok) {
+      const body = await res.json().catch(() => null) as { error?: string } | null;
+      setToast(body?.error ?? "E-Mails konnten nicht abgerufen werden");
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+
+    const body = await res.json() as {
+      emails_processed: number;
+      attachments_saved: number;
+      errors: number;
+    };
+    if (body.attachments_saved > 0) {
+      setToast(`${body.attachments_saved} Anhang/Anhänge übernommen`);
+    } else if (body.emails_processed > 0) {
+      setToast("E-Mails gelesen, aber keine importierbaren Anhänge gefunden");
+    } else {
+      setToast("Keine neuen ungelesenen E-Mails gefunden");
+    }
     setTimeout(() => setToast(null), 2000);
+    await loadDocuments();
   };
 
   const propertyName = (propertyId: string | null) =>

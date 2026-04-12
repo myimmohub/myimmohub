@@ -10,6 +10,7 @@
 import type { TaxData } from "@/types/tax";
 
 type Transaction = {
+  id?: string;
   date: string;
   amount: number;
   category: string | null;
@@ -279,13 +280,20 @@ export function calculateTaxFromTransactions(
   property: PropertyForTax,
   taxYear: number,
   dbCategories?: DbCategory[],
+  excludedTransactionIds?: string[],
 ): Partial<TaxData> {
   const von = `${taxYear}-01-01`;
   const bis = `${taxYear}-12-31`;
+  const excludedIds = new Set(excludedTransactionIds ?? []);
 
   // Nur kategorisierte Transaktionen im Steuerjahr
   const relevant = transactions.filter(
-    (t) => t.date >= von && t.date <= bis && t.category != null && t.category !== "aufgeteilt",
+    (t) =>
+      t.date >= von &&
+      t.date <= bis &&
+      t.category != null &&
+      t.category !== "aufgeteilt" &&
+      !(t.id && excludedIds.has(t.id)),
   );
 
   // DB-Kategorien als Map: label → DbCategory

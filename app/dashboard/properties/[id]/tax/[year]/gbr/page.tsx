@@ -103,6 +103,7 @@ export default function GbrTaxYearPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         property_id: id,
+        tax_year: taxYear,
         rental_share_override_pct: normalized,
       }),
     });

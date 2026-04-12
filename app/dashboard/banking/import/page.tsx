@@ -22,7 +22,8 @@ const AUTO_MAP: Record<DbFieldKey, string[]> = {
   amount:      ["betrag", "amount", "umsatz", "betrag eur", "betrag (eur)", "umsatz eur"],
   description: ["verwendungszweck", "beschreibung", "description", "buchungstext", "betreff"],
   counterpart: ["auftraggeber / begünstigter", "auftraggeber/begünstigter", "empfänger",
-                "auftraggeber", "begünstigter", "name", "kontoinhaber", "beguenstigter"],
+                "auftraggeber", "begünstigter", "name", "kontoinhaber", "beguenstigter",
+                "name zahlungsbeteiligter", "zahlungsbeteiligter"],
 };
 
 type ParsedCsv = {

@@ -131,6 +131,7 @@ export interface TaxMaintenanceDistributionItem {
   source_year: number;
   label: string;
   total_amount: number;
+  source_transaction_ids?: string[] | null;
   classification: "maintenance_expense" | "production_cost" | "depreciation";
   deduction_mode: "immediate" | "distributed";
   distribution_years: number;

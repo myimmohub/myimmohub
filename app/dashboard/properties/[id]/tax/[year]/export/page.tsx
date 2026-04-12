@@ -32,11 +32,11 @@ export default function TaxExportPage() {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const [{ data: prop }, { data: entries }, gbrRes, { data: taxSettingsData }, logicRes] = await Promise.all([
+      const [{ data: prop }, { data: entries }, gbrRes, taxSettingsRes, logicRes] = await Promise.all([
         supabase.from("properties").select("id, name, address").eq("id", id).eq("user_id", user.id).single(),
         supabase.from("tax_data").select("*").eq("property_id", id).eq("tax_year", taxYear).limit(1),
         fetch(`/api/settings/gbr?property_id=${id}`),
-        supabase.from("tax_settings").select("eigennutzung_tage, gesamt_tage, rental_share_override_pct").eq("property_id", id).maybeSingle(),
+        fetch(`/api/settings/tax?property_id=${id}&tax_year=${taxYear}`),
         fetch(`/api/tax/logic-items?property_id=${id}&tax_year=${taxYear}`),
       ]);
       setProperty(prop as Property | null);
@@ -45,7 +45,9 @@ export default function TaxExportPage() {
         const gbr = await gbrRes.json() as { id?: string };
         setHasGbr(Boolean(gbr.id));
       }
-      setTaxSettings((taxSettingsData as TaxSettingsSummary | null) ?? null);
+      if (taxSettingsRes.ok) {
+        setTaxSettings(await taxSettingsRes.json() as TaxSettingsSummary);
+      }
       if (logicRes.ok) {
         const logic = await logicRes.json() as {
           depreciation_items: TaxDepreciationItem[];

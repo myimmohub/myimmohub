@@ -572,30 +572,34 @@ export async function POST(request: Request) {
   if (hasTaxSettingsContent) {
     const { data: existingTaxSettings, error: existingTaxSettingsError } = await supabase
       .from("tax_settings")
-      .select("property_id, objekttyp, eigennutzung_tage, gesamt_tage, rental_share_override_pct, kleinunternehmer, option_ust")
+      .select("property_id, tax_year, objekttyp, eigennutzung_tage, gesamt_tage, rental_share_override_pct, kleinunternehmer, option_ust")
       .eq("property_id", property_id)
-      .maybeSingle();
+      .in("tax_year", [0, tax_year])
+      .order("tax_year", { ascending: false })
+      .limit(1);
 
     if (existingTaxSettingsError) {
       return NextResponse.json({ error: `Steuer-Einstellungen konnten nicht geladen werden: ${existingTaxSettingsError.message}` }, { status: 500 });
     }
+    const resolvedExistingTaxSettings = existingTaxSettings?.[0] ?? null;
 
     const resolvedRentalShareOverride =
       supplementalData.eigennutzung_tage != null || supplementalData.gesamt_tage != null
         ? null
-        : supplementalData.rental_share_override_pct ?? existingTaxSettings?.rental_share_override_pct ?? null;
+        : supplementalData.rental_share_override_pct ?? resolvedExistingTaxSettings?.rental_share_override_pct ?? null;
 
     const { error: taxSettingsSaveError } = await supabase
       .from("tax_settings")
       .upsert({
         property_id,
-        objekttyp: existingTaxSettings?.objekttyp ?? "dauervermietung",
-        eigennutzung_tage: supplementalData.eigennutzung_tage ?? existingTaxSettings?.eigennutzung_tage ?? 0,
-        gesamt_tage: supplementalData.gesamt_tage ?? existingTaxSettings?.gesamt_tage ?? 365,
+        tax_year,
+        objekttyp: resolvedExistingTaxSettings?.objekttyp ?? "dauervermietung",
+        eigennutzung_tage: supplementalData.eigennutzung_tage ?? resolvedExistingTaxSettings?.eigennutzung_tage ?? 0,
+        gesamt_tage: supplementalData.gesamt_tage ?? resolvedExistingTaxSettings?.gesamt_tage ?? 365,
         rental_share_override_pct: resolvedRentalShareOverride,
-        kleinunternehmer: existingTaxSettings?.kleinunternehmer ?? false,
-        option_ust: existingTaxSettings?.option_ust ?? false,
-      }, { onConflict: "property_id" });
+        kleinunternehmer: resolvedExistingTaxSettings?.kleinunternehmer ?? false,
+        option_ust: resolvedExistingTaxSettings?.option_ust ?? false,
+      }, { onConflict: "property_id,tax_year" });
 
     if (taxSettingsSaveError) {
       return NextResponse.json({ error: `Steuer-Einstellungen konnten nicht gespeichert werden: ${taxSettingsSaveError.message}` }, { status: 500 });

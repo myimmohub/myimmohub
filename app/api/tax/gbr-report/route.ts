@@ -29,14 +29,20 @@ export async function GET(request: Request) {
     { data: property, error: propertyError },
     { data: taxData, error: taxError },
     { data: gbrSettings, error: gbrError },
-    { data: taxSettings, error: taxSettingsError },
+    { data: taxSettingsRows, error: taxSettingsError },
     { data: depreciationItems, error: depreciationError },
     { data: maintenanceItems, error: maintenanceError },
   ] = await Promise.all([
     supabase.from("properties").select("id, name, address").eq("id", propertyId).eq("user_id", user.id).single(),
     supabase.from("tax_data").select("*").eq("property_id", propertyId).eq("tax_year", taxYear).single(),
     supabase.from("gbr_settings").select("*, gbr_partner(*)").eq("property_id", propertyId).maybeSingle(),
-    supabase.from("tax_settings").select("eigennutzung_tage, gesamt_tage, rental_share_override_pct").eq("property_id", propertyId).maybeSingle(),
+    supabase
+      .from("tax_settings")
+      .select("eigennutzung_tage, gesamt_tage, rental_share_override_pct, tax_year")
+      .eq("property_id", propertyId)
+      .in("tax_year", [0, taxYear])
+      .order("tax_year", { ascending: false })
+      .limit(1),
     supabase.from("tax_depreciation_items").select("*").eq("property_id", propertyId).eq("tax_year", taxYear).order("created_at", { ascending: true }),
     supabase.from("tax_maintenance_distributions").select("*").eq("property_id", propertyId).order("source_year", { ascending: true }),
   ]);
@@ -78,7 +84,7 @@ export async function GET(request: Request) {
     taxData: taxData as TaxData,
     gbrSettings: (gbrSettings as GbrSettingsSummary | null) ?? null,
     partnerTaxValues: partnerTaxValues ?? [],
-    taxSettings: (taxSettings as TaxSettingsSummary | null) ?? null,
+    taxSettings: (taxSettingsRows?.[0] as TaxSettingsSummary | null) ?? null,
     depreciationItems: depreciationItems ?? [],
     maintenanceDistributions: (maintenanceItems ?? []).filter((item) => isDistributionActiveForYear(item, taxYear)),
   });

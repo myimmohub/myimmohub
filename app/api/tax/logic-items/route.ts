@@ -43,9 +43,40 @@ export async function GET(request: Request) {
   if (depreciationError) return NextResponse.json({ error: depreciationError.message }, { status: 500 });
   if (maintenanceError) return NextResponse.json({ error: maintenanceError.message }, { status: 500 });
 
+  const activeMaintenanceItems = (maintenanceItems ?? []).filter((item) => isDistributionActiveForYear(item, taxYear));
+  const linkedTransactionIds = Array.from(new Set(
+    activeMaintenanceItems.flatMap((item) => Array.isArray(item.source_transaction_ids) ? item.source_transaction_ids : []),
+  ));
+  const rangeStart = `${taxYear}-01-01`;
+  const rangeEnd = `${taxYear}-12-31`;
+  const [
+    { data: candidateTransactions, error: candidateTransactionsError },
+    { data: linkedTransactions, error: linkedTransactionsError },
+  ] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("id, date, amount, description, counterpart, category, is_tax_deductible, anlage_v_zeile")
+      .eq("property_id", propertyId)
+      .gte("date", rangeStart)
+      .lte("date", rangeEnd)
+      .lt("amount", 0)
+      .order("date", { ascending: false }),
+    linkedTransactionIds.length > 0
+      ? supabase
+          .from("transactions")
+          .select("id, date, amount, description, counterpart, category, is_tax_deductible, anlage_v_zeile")
+          .in("id", linkedTransactionIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (candidateTransactionsError) return NextResponse.json({ error: candidateTransactionsError.message }, { status: 500 });
+  if (linkedTransactionsError) return NextResponse.json({ error: linkedTransactionsError.message }, { status: 500 });
+
   return NextResponse.json({
     depreciation_items: depreciationItems ?? [],
-    maintenance_distributions: (maintenanceItems ?? []).filter((item) => isDistributionActiveForYear(item, taxYear)),
+    maintenance_distributions: activeMaintenanceItems,
+    candidate_transactions: candidateTransactions ?? [],
+    linked_transactions: linkedTransactions ?? [],
   });
 }
 
@@ -92,6 +123,9 @@ export async function POST(request: Request) {
     source_year: Number(body.item.source_year),
     label: String(body.item.label ?? ""),
     total_amount: Number(body.item.total_amount ?? 0),
+    source_transaction_ids: Array.isArray(body.item.source_transaction_ids)
+      ? body.item.source_transaction_ids.filter((value): value is string => typeof value === "string" && value.length > 0)
+      : [],
     classification:
       body.item.classification === "production_cost" || body.item.classification === "depreciation"
         ? body.item.classification

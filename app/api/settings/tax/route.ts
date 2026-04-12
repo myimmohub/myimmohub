@@ -2,22 +2,32 @@ import { NextResponse } from "next/server";
 import { getUser } from "@/lib/supabase/getUser";
 import { serviceRoleClient } from "@/lib/supabase/queries";
 
+function normalizeTaxYear(value: unknown) {
+  const numeric = Number(value ?? 0);
+  return Number.isFinite(numeric) && numeric > 0 ? Math.round(numeric) : 0;
+}
+
 export async function GET(request: Request) {
   const { data: { user } } = await getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
   const url = new URL(request.url);
   const propertyId = url.searchParams.get("property_id");
+  const taxYear = normalizeTaxYear(url.searchParams.get("tax_year"));
   if (!propertyId) return NextResponse.json({ error: "property_id fehlt." }, { status: 400 });
 
   const db = serviceRoleClient();
-  const { data, error } = await db
+  const queryYears = taxYear > 0 ? [0, taxYear] : [0];
+  const { data: rows, error } = await db
     .from("tax_settings")
     .select("*")
     .eq("property_id", propertyId)
-    .maybeSingle();
+    .in("tax_year", queryYears)
+    .order("tax_year", { ascending: false })
+    .limit(1);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const data = rows?.[0] ?? null;
 
   // If no tax_settings exist yet, prefill from property data
   if (!data) {
@@ -44,6 +54,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       property_id: propertyId,
+      tax_year: taxYear,
       objekttyp: "dauervermietung",
       eigennutzung_tage: 0,
       gesamt_tage: 365,
@@ -65,11 +76,13 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as Record<string, unknown>;
   if (!body.property_id) return NextResponse.json({ error: "property_id fehlt." }, { status: 400 });
+  const taxYear = normalizeTaxYear(body.tax_year);
 
   const db = serviceRoleClient();
+  const payload = { ...body, tax_year: taxYear, updated_at: new Date().toISOString() };
   const { error } = await db
     .from("tax_settings")
-    .upsert({ ...body, updated_at: new Date().toISOString() }, { onConflict: "property_id" });
+    .upsert(payload, { onConflict: "property_id,tax_year" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

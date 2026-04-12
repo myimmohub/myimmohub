@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   // Load transactions
   const { data: txData } = await supabase
     .from("transactions")
-    .select("date, amount, category, anlage_v_zeile")
+    .select("id, date, amount, category, anlage_v_zeile")
     .eq("property_id", property_id)
     .eq("user_id", user.id);
 
@@ -58,16 +58,27 @@ export async function POST(request: Request) {
     { data: maintenanceItems },
   ] = await Promise.all([
     supabase.from("gbr_settings").select("*, gbr_partner(*)").eq("property_id", property_id).maybeSingle(),
-    supabase.from("tax_settings").select("eigennutzung_tage, gesamt_tage, rental_share_override_pct").eq("property_id", property_id).maybeSingle(),
+    supabase
+      .from("tax_settings")
+      .select("eigennutzung_tage, gesamt_tage, rental_share_override_pct, tax_year")
+      .eq("property_id", property_id)
+      .in("tax_year", [0, tax_year])
+      .order("tax_year", { ascending: false })
+      .limit(1),
     supabase.from("tax_depreciation_items").select("*").eq("property_id", property_id).eq("tax_year", tax_year).order("created_at", { ascending: true }),
     supabase.from("tax_maintenance_distributions").select("*").eq("property_id", property_id).order("source_year", { ascending: true }),
   ]);
+  const effectiveTaxSettings = taxSettings?.[0] ?? null;
+  const excludedTransactionIds = Array.from(new Set(
+    (maintenanceItems ?? []).flatMap((item) => Array.isArray(item.source_transaction_ids) ? item.source_transaction_ids : []),
+  ));
 
   const calculated = calculateTaxFromTransactions(
-    (txData ?? []) as { date: string; amount: number; category: string | null; anlage_v_zeile: number | null }[],
+    (txData ?? []) as { id: string; date: string; amount: number; category: string | null; anlage_v_zeile: number | null }[],
     prop as { kaufpreis: number | null; gebaeudewert: number | null; grundwert: number | null; inventarwert: number | null; baujahr: number | null; afa_satz: number | null; kaufdatum: string | null; address: string | null; type: string | null },
     tax_year,
     (categories ?? []) as { label: string; typ: string; anlage_v: string | null; gruppe: string }[],
+    excludedTransactionIds,
   );
 
   // Upsert: nur berechnete Felder setzen, manuelle Werte nicht überschreiben
@@ -102,7 +113,7 @@ export async function POST(request: Request) {
       property: { id: prop.id, name: prop.name ?? null, address: prop.address ?? null },
       taxData: data as TaxData,
       gbrSettings: gbrSettings ?? null,
-      taxSettings: taxSettings ?? null,
+      taxSettings: effectiveTaxSettings,
       depreciationItems: depreciationItems ?? [],
       maintenanceDistributions: maintenanceItems ?? [],
       partnerTaxValues: [],
@@ -130,7 +141,7 @@ export async function POST(request: Request) {
     property: { id: prop.id, name: prop.name ?? null, address: prop.address ?? null },
     taxData: data as TaxData,
     gbrSettings: gbrSettings ?? null,
-    taxSettings: taxSettings ?? null,
+    taxSettings: effectiveTaxSettings,
     depreciationItems: depreciationItems ?? [],
     maintenanceDistributions: maintenanceItems ?? [],
     partnerTaxValues: [],

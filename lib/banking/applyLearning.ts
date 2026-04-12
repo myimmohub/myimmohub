@@ -9,8 +9,8 @@
  *
  * Matching-Priorität (absteigend):
  *   1. Auftraggeber (normalisiert) + Verwendungszweck-Präfix (40 Zeichen)
- *   2. Auftraggeber allein (wenn eindeutig, mind. 4 Zeichen)
- *   3. Verwendungszweck-Präfix allein (mind. 5 Zeichen)
+ *   2. Verwendungszweck-Präfix allein (mind. 5 Zeichen)
+ *   3. Auftraggeber allein nur dann, wenn beide Beschreibungen praktisch leer sind
  *
  * Neu übernommene Transaktionen erhalten confidence = 0.95 (hohes Vertrauen,
  * da Nutzers eigene Bestätigung als Grundlage dient) und is_confirmed = false,
@@ -60,13 +60,13 @@ function makeKeys(counterpart: string | null, description: string | null): strin
   if (cp.length >= 4 && desc.length >= 4) {
     keys.push(`cp:${cp}|desc:${desc}`);
   }
-  // Mittlere Spezifität: nur Auftraggeber
-  if (cp.length >= 4) {
-    keys.push(`cp:${cp}`);
-  }
-  // Niedrigste Spezifität: nur Verwendungszweck
+  // Mittlere Spezifität: nur Verwendungszweck
   if (desc.length >= 5) {
     keys.push(`desc:${desc}`);
+  }
+  // Niedrigste Spezifität: nur Auftraggeber, aber nur bei praktisch leerer Beschreibung
+  if (cp.length >= 4 && desc.length < 5) {
+    keys.push(`cp_only:${cp}`);
   }
 
   return keys;

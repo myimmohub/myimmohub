@@ -1,7 +1,7 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser, type AddressObject } from "mailparser";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { classifyDocument } from "@/lib/ai/classifyDocument";
+import { classifyDocument, type Property } from "@/lib/ai/classifyDocument";
 import { extractText } from "@/lib/ai/extractText";
 import { sanitizeFileName, ALLOWED_TYPES } from "@/lib/constants";
 
@@ -85,6 +85,8 @@ async function fetchRawEmails(gmailUser: string, gmailPassword: string): Promise
 async function processEmails(
   raw: RawEmail[],
   supabase: SupabaseClient,
+  userId: string | null,
+  properties: Property[],
 ): Promise<ProcessedEmail[]> {
   const results: ProcessedEmail[] = [];
 
@@ -122,13 +124,13 @@ async function processEmails(
       const { data: doc, error: insertError } = await supabase
         .from("documents")
         .insert({
-          user_id: null,
+          user_id: userId,
           property_id: null,
           storage_path: storagePath,
           file_name: safeName,
           original_filename: filename,
           source: "email",
-          status: "pending_analysis",
+          status: "pending_review",
           email_from: from,
           email_subject: subject,
         })
@@ -146,7 +148,7 @@ async function processEmails(
 
       if (textForClassification) {
         try {
-          const classification = await classifyDocument(textForClassification, []);
+          const classification = await classifyDocument(textForClassification, properties);
           const { error: updateError } = await supabase
             .from("documents")
             .update({
@@ -154,6 +156,8 @@ async function processEmails(
               category: classification.category,
               amount: classification.amount,
               document_date: classification.date,
+              counterpart: classification.counterpart,
+              suggested_property_id: classification.property_id,
               ai_confidence: classification.confidence,
               status: "pending_review",
             })
@@ -180,7 +184,10 @@ async function processEmails(
   return results;
 }
 
-export async function fetchGmailEmails(): Promise<ProcessedEmail[]> {
+export async function fetchGmailEmails(args?: {
+  userId?: string | null;
+  properties?: Property[];
+}): Promise<ProcessedEmail[]> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const gmailUser = process.env.GMAIL_USER;
@@ -199,5 +206,5 @@ export async function fetchGmailEmails(): Promise<ProcessedEmail[]> {
   const raw = await fetchRawEmails(gmailUser, gmailPassword);
 
   // Phase 2: Supabase — IMAP connection is already closed
-  return processEmails(raw, supabase);
+  return processEmails(raw, supabase, args?.userId ?? null, args?.properties ?? []);
 }
