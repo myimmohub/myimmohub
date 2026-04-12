@@ -292,6 +292,29 @@ type ParsedElsterTextData = {
   maintenance_distributions: ImportedMaintenanceDistribution[];
 };
 
+function hasOfficialElsterMarker(value: string | null | undefined) {
+  return (value ?? "").toLowerCase().includes("offiziellem elster-block");
+}
+
+function expenseBlockPriority(block: ImportedExpenseBlock) {
+  const detail = block.detail ?? "";
+  let score = 0;
+  if (hasOfficialElsterMarker(detail)) score += 100;
+  if (detail.toLowerCase().includes("elster")) score += 40;
+  if (block.amount != null) score += Math.min(20, Math.abs(block.amount) / 1000);
+  return score;
+}
+
+function maintenanceDistributionPriority(item: ImportedMaintenanceDistribution) {
+  const note = item.note ?? "";
+  let score = 0;
+  if (hasOfficialElsterMarker(note)) score += 100;
+  if (note.toLowerCase().includes("elster")) score += 40;
+  if (item.current_year_share_override != null) score += 20;
+  if (item.total_amount != null) score += Math.min(20, Math.abs(item.total_amount) / 1000);
+  return score;
+}
+
 function parseOfficialElsterValuesFromText(args: {
   text: string;
   taxYear: number;
@@ -794,21 +817,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Extraktion fehlgeschlagen." }, { status: 500 });
   }
 
-  const shouldAugmentFromText =
-    asNullableString(extractedFields.acquisition_date) == null ||
-    asNullableNumber(extractedFields.depreciation_fixtures) == null ||
-    asObjectArray(extractedFields.expense_blocks).length < 3 ||
-    asObjectArray(extractedFields.maintenance_distributions).length < 3;
-
-  if (shouldAugmentFromText) {
-    try {
-      extractedTextForAugmentation = await callAnthropicTextFromPdf({
-        pdfBase64: pdf_base64,
-        apiKey: ANTHROPIC_API_KEY,
-      });
-    } catch (textAugmentationError) {
-      console.error("Tax import text augmentation failed:", textAugmentationError);
-    }
+  try {
+    extractedTextForAugmentation = await callAnthropicTextFromPdf({
+      pdfBase64: pdf_base64,
+      apiKey: ANTHROPIC_API_KEY,
+    });
+  } catch (textAugmentationError) {
+    console.error("Tax import text augmentation failed:", textAugmentationError);
   }
 
   // Build tax_data record
@@ -954,12 +969,13 @@ export async function POST(request: Request) {
         acc.set(key, { ...block, key });
         return acc;
       }
-      const nextAmount = block.amount ?? 0;
-      const existingAmount = existing.amount ?? 0;
-      if (Math.abs(nextAmount) >= Math.abs(existingAmount)) {
+      const nextPriority = expenseBlockPriority(block);
+      const existingPriority = expenseBlockPriority(existing);
+      if (nextPriority > existingPriority) {
         acc.set(key, { ...existing, ...block, key });
-      } else if (!existing.detail && block.detail) {
-        existing.detail = block.detail;
+      } else {
+        if (!existing.detail && block.detail) existing.detail = block.detail;
+        if ((existing.amount == null || existing.amount === 0) && block.amount != null) existing.amount = block.amount;
       }
       return acc;
     }, new Map<string, ImportedExpenseBlock>()).values(),
@@ -969,6 +985,25 @@ export async function POST(request: Request) {
   }
   supplementalData.maintenance_distributions = supplementalData.maintenance_distributions.map((item) =>
     normalizeImportedMaintenanceDistribution(item, tax_year),
+  );
+  supplementalData.maintenance_distributions = Array.from(
+    supplementalData.maintenance_distributions.reduce((acc, item) => {
+      const key = `${item.source_year ?? tax_year}:${item.classification}:${item.deduction_mode}`;
+      const existing = acc.get(key);
+      if (!existing) {
+        acc.set(key, { ...item });
+        return acc;
+      }
+      if (maintenanceDistributionPriority(item) > maintenanceDistributionPriority(existing)) {
+        acc.set(key, { ...existing, ...item });
+      } else {
+        if (existing.current_year_share_override == null && item.current_year_share_override != null) {
+          existing.current_year_share_override = item.current_year_share_override;
+        }
+        if (!existing.note && item.note) existing.note = item.note;
+      }
+      return acc;
+    }, new Map<string, ImportedMaintenanceDistribution>()).values(),
   );
   if (supplementalData.expense_blocks.length > 0) {
     supplementalData.maintenance_distributions.push(

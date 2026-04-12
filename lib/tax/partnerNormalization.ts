@@ -18,8 +18,13 @@ function compactWhitespace(value: string) {
 }
 
 export function normalizePartnerName(value: string) {
+  const commaParts = value.split(",").map((part) => part.trim()).filter(Boolean);
+  const reordered = commaParts.length >= 2
+    ? `${commaParts.slice(1).join(" ")} ${commaParts[0]}`
+    : value;
+
   return compactWhitespace(
-    value
+    reordered
       .replace(/,/g, " ")
       .replace(TITLE_PATTERN, " ")
       .replace(/\./g, " ")

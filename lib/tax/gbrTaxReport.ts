@@ -203,6 +203,12 @@ export function buildGbrTaxReport(args: {
   const warnings: string[] = [];
   const rawPartners = gbrSettings?.gbr_partner ?? [];
   const { partners, duplicateWarnings } = mergeDuplicatePartners(rawPartners);
+  const effectiveGbrSettings = gbrSettings
+    ? {
+        ...gbrSettings,
+        gbr_partner: partners,
+      }
+    : null;
   const partnerTaxMap = mergePartnerTaxValuesByNormalizedName(partnerTaxValues, rawPartners);
   const rentalShare = computeRentalShare(taxSettings ?? {});
   const totalDays = rentalShare.gesamt_tage;
@@ -213,20 +219,20 @@ export function buildGbrTaxReport(args: {
     partners.reduce((sum, partner) => sum + num(partner.anteil), 0),
   );
 
-  if (!gbrSettings) warnings.push("Keine GbR-Stammdaten gefunden.");
+  if (!effectiveGbrSettings) warnings.push("Keine GbR-Stammdaten gefunden.");
   if (partners.length === 0) warnings.push("Es sind keine GbR-Partner hinterlegt.");
   warnings.push(...duplicateWarnings);
   warnings.push(...rentalShare.warnings);
   if (partners.length > 0 && Math.abs(partnerTotalSharePct - 100) > 0.01) {
     warnings.push(`Die Partneranteile summieren sich auf ${partnerTotalSharePct.toFixed(2)} % statt 100 %.`);
   }
-  if (gbrSettings && !gbrSettings.feststellungserklaerung) {
+  if (effectiveGbrSettings && !effectiveGbrSettings.feststellungserklaerung) {
     warnings.push("Die gesonderte und einheitliche Feststellungserklärung ist in den GbR-Einstellungen nicht aktiviert.");
   }
-  if (gbrSettings?.sonder_werbungskosten && partnerTaxValues.length === 0 && partners.length > 0) {
+  if (effectiveGbrSettings?.sonder_werbungskosten && partnerTaxValues.length === 0 && partners.length > 0) {
     warnings.push("Sonderwerbungskosten sind aktiviert, aber für dieses Steuerjahr ist noch kein Partnerwert hinterlegt.");
   }
-  if (gbrSettings?.teilweise_eigennutzung && selfUseDays > 0) {
+  if (effectiveGbrSettings?.teilweise_eigennutzung && selfUseDays > 0) {
     warnings.push(`Teilweise Eigennutzung aktiv: Kürzungsfaktor ${(rentalSharePct * 100).toFixed(2)} % (${rentalShareSource === "override" ? "manuell" : "automatisch"}).`);
   }
 
@@ -255,7 +261,7 @@ export function buildGbrTaxReport(args: {
   const engineOutput = runRentalTaxEngineFromExistingData({
     property,
     taxData: adjustedTaxData,
-    gbrSettings,
+    gbrSettings: effectiveGbrSettings,
     partnerTaxValues: partnerTaxValues.map((item) => ({
       id: `${item.gbr_partner_id}-${taxData.tax_year}`,
       gbr_partner_id: item.gbr_partner_id,
@@ -323,12 +329,12 @@ export function buildGbrTaxReport(args: {
     warnings,
     tax_data: adjustedTaxData,
     gbr: {
-      name: gbrSettings?.name ?? "",
-      steuernummer: gbrSettings?.steuernummer ?? "",
-      finanzamt: gbrSettings?.finanzamt ?? "",
-      feststellungserklaerung: gbrSettings?.feststellungserklaerung ?? false,
-      sonder_werbungskosten: gbrSettings?.sonder_werbungskosten ?? false,
-      teilweise_eigennutzung: gbrSettings?.teilweise_eigennutzung ?? false,
+      name: effectiveGbrSettings?.name ?? "",
+      steuernummer: effectiveGbrSettings?.steuernummer ?? "",
+      finanzamt: effectiveGbrSettings?.finanzamt ?? "",
+      feststellungserklaerung: effectiveGbrSettings?.feststellungserklaerung ?? false,
+      sonder_werbungskosten: effectiveGbrSettings?.sonder_werbungskosten ?? false,
+      teilweise_eigennutzung: effectiveGbrSettings?.teilweise_eigennutzung ?? false,
       partner_count: partners.length,
       partner_total_share_pct: partnerTotalSharePct,
       eigennutzung_tage: selfUseDays,
