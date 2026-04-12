@@ -40,6 +40,12 @@ gbr_name, gbr_steuernummer, gbr_finanzamt, feststellungserklaerung,
 teilweise_eigennutzung, eigennutzung_tage, gesamt_tage, rental_share_override_pct,
 partners, expense_blocks, depreciation_items, maintenance_distributions
 
+Wichtig:
+- maintenance_costs nur fuer sofort abzugsfaehigen Erhaltungsaufwand verwenden.
+- Auf mehrere Jahre verteilte Erhaltungsaufwaende nach §§ 11a, 11b EStG / § 82b EStDV immer in maintenance_distributions abbilden.
+- special_deduction_renovation nur fuer echte steuerliche Sonderabschreibungen / Sonderabzuege verwenden, NICHT fuer verteilten Erhaltungsaufwand aus Vorjahren oder dem aktuellen Jahr.
+- Wenn Zeilen wie "davon abzuziehen", "Werbungskosten aus 2022" oder "auf bis zu 5 Jahre zu verteilende Erhaltungsaufwendungen" vorkommen, gehoeren diese in maintenance_distributions.
+
 partners ist ein Array von Objekten mit:
 name, anteil_pct, email, special_expenses, note
 
@@ -208,8 +214,34 @@ function asNullableBoolean(value: unknown): boolean | null {
   return null;
 }
 
+function asNullableDateString(value: unknown): string | null {
+  const raw = asNullableString(value);
+  if (!raw) return null;
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+
+  const deMatch = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (deMatch) {
+    const day = deMatch[1].padStart(2, "0");
+    const month = deMatch[2].padStart(2, "0");
+    return `${deMatch[3]}-${month}-${day}`;
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function asObjectArray(value: unknown) {
   return Array.isArray(value) ? value as Record<string, unknown>[] : [];
+}
+
+function round2(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 export async function POST(request: Request) {
@@ -367,7 +399,7 @@ export async function POST(request: Request) {
     ownership_share_pct: asNullableNumber(extractedFields.ownership_share_pct),
     property_type: asNullableString(extractedFields.property_type),
     build_year: asNullableInteger(extractedFields.build_year),
-    acquisition_date: asNullableString(extractedFields.acquisition_date),
+    acquisition_date: asNullableDateString(extractedFields.acquisition_date),
     acquisition_cost_building: asNullableNumber(extractedFields.acquisition_cost_building),
     rent_income: asNullableNumber(extractedFields.rent_income),
     deposits_received: asNullableNumber(extractedFields.deposits_received),
@@ -486,6 +518,42 @@ export async function POST(request: Request) {
       return acc;
     }, new Map<string, ImportedPartner>()).values(),
   );
+
+  if (supplementalData.maintenance_distributions.length > 0 && (taxData.special_deduction_renovation ?? 0) > 0) {
+    const inferredRentalSharePct =
+      supplementalData.rental_share_override_pct != null
+        ? supplementalData.rental_share_override_pct
+        : supplementalData.gesamt_tage != null && supplementalData.gesamt_tage > 0
+          ? Math.max(
+              0,
+              Math.min(
+                1,
+                1 - ((supplementalData.eigennutzung_tage ?? 0) / supplementalData.gesamt_tage),
+              ),
+            )
+          : null;
+
+    const proratedMaintenanceAmount = round2(
+      supplementalData.maintenance_distributions.reduce((sum, item) => {
+        const currentYearShare =
+          item.current_year_share_override != null
+            ? item.current_year_share_override
+            : item.total_amount != null && (item.distribution_years ?? 0) > 0
+              ? item.total_amount / (item.distribution_years ?? 1)
+              : 0;
+        if (currentYearShare <= 0) return sum;
+        const deductibleShare = item.apply_rental_ratio === false || inferredRentalSharePct == null
+          ? currentYearShare
+          : currentYearShare * inferredRentalSharePct;
+        return sum + deductibleShare;
+      }, 0),
+    );
+
+    if (Math.abs(proratedMaintenanceAmount - (taxData.special_deduction_renovation ?? 0)) <= 2) {
+      taxData.special_deduction_renovation = null;
+      supplementalData.import_notes.push("Ein als Sonderabzug erkannter Betrag wurde als verteilter Erhaltungsaufwand erkannt und daher nicht als Sonderabzug übernommen.");
+    }
+  }
   if (
     supplementalData.depreciation_items.every((item) => item.item_type !== "movable_asset") &&
     (taxData.depreciation_fixtures ?? 0) > 0

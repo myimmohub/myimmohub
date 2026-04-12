@@ -59,6 +59,12 @@ type ImportResult = {
   supplemental_data?: SupplementalPreview;
 };
 
+type ImportNotePresentation = {
+  tone: "info" | "success" | "warning";
+  title: string;
+  body: string;
+};
+
 const CONFIDENCE_COLORS: Record<TaxConfidence | "null", { dot: string; label: string }> = {
   high:   { dot: "bg-emerald-500", label: "Sicher" },
   medium: { dot: "bg-amber-400",   label: "Prüfen" },
@@ -72,6 +78,54 @@ const fmtVal = (val: unknown, type: string) => {
   if (type === "date") return new Date(val as string).toLocaleDateString("de-DE");
   return String(val);
 };
+
+function presentImportNote(note: string): ImportNotePresentation {
+  if (note.includes("Verteilungsblöcke wurden erkannt, aber nicht übernommen")) {
+    return {
+      tone: "warning",
+      title: "Erkannte Verteilungsblöcke wurden nicht automatisch übernommen",
+      body: "Im PDF wurden verteilte Aufwendungen erkannt. Für dieses Objekt gibt es aber bereits gespeicherte Steuerlogik-Einträge. Damit nichts doppelt angelegt oder überschrieben wird, wurden die neuen Blöcke nur als Hinweis angezeigt. Du kannst die bestehenden Verteilungsblöcke auf der Jahresseite prüfen und bei Bedarf manuell ergänzen.",
+    };
+  }
+
+  if (note.includes("AfA-Positionen wurden erkannt, aber nicht übernommen")) {
+    return {
+      tone: "warning",
+      title: "Erkannte AfA-Positionen wurden nicht automatisch übernommen",
+      body: "Das PDF enthält AfA-Komponenten, für dieses Jahr sind aber bereits AfA-Einträge vorhanden. Die App hat daher nichts automatisch überschrieben. Bitte die AfA-Komponenten auf der Jahresseite kurz vergleichen und fehlende Positionen bei Bedarf ergänzen.",
+    };
+  }
+
+  if (note.includes("AfA Inventar wurde aus dem PDF-Feld depreciation_fixtures als AfA-Komponente ergänzt")) {
+    return {
+      tone: "success",
+      title: "AfA Inventar wurde übernommen",
+      body: "Das PDF enthielt einen Wert für Inventar / Ausstattung. Daraus wurde automatisch eine passende AfA-Komponente erzeugt.",
+    };
+  }
+
+  if (note.includes("AfA-Position(en) aus dem PDF übernommen")) {
+    return {
+      tone: "success",
+      title: "AfA-Positionen übernommen",
+      body: note,
+    };
+  }
+
+  if (note.includes("Verteilungsblock/-blöcke aus dem PDF übernommen")) {
+    return {
+      tone: "success",
+      title: "Verteilungsblöcke übernommen",
+      body: note,
+    };
+  }
+
+  return {
+    tone: "info",
+    title: "Import-Hinweis",
+    body: note,
+  };
+}
 
 export default function TaxImportPage() {
   const { id } = useParams<{ id: string }>();
@@ -390,11 +444,22 @@ export default function TaxImportPage() {
                     <div className="space-y-4 px-5 py-4">
                       {result.supplemental_data.import_notes.length > 0 && (
                         <div className="space-y-2">
-                          {result.supplemental_data.import_notes.map((note) => (
-                            <p key={note} className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                              {note}
-                            </p>
-                          ))}
+                          {result.supplemental_data.import_notes.map((note) => {
+                            const presentation = presentImportNote(note);
+                            const toneClasses =
+                              presentation.tone === "success"
+                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                                : presentation.tone === "warning"
+                                  ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                                  : "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300";
+
+                            return (
+                              <div key={note} className={`rounded-lg px-3 py-2 text-sm ${toneClasses}`}>
+                                <p className="font-medium">{presentation.title}</p>
+                                <p className="mt-1">{presentation.body}</p>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
 

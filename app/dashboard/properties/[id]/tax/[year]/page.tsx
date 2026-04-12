@@ -1403,14 +1403,16 @@ function buildDefaultDepreciationItems(args: {
 }): LocalDepreciationItem[] {
   const { property, taxYear, taxData } = args;
   const items: LocalDepreciationItem[] = [];
-  const buildingAmount = Math.max(
-    0,
-    Number(
-      property.afa_jahresbetrag ??
-      taxData?.depreciation_building ??
-      deriveAnnualAmount(property.gebaeudewert, property.afa_satz, property.baujahr),
-    ),
-  );
+  const derivedBuildingAmount = deriveAnnualAmount(property.gebaeudewert, property.afa_satz, property.baujahr);
+  const hasPropertyBuildingAmount = Number(property.afa_jahresbetrag ?? 0) > 0;
+  const hasDerivedBuildingAmount = derivedBuildingAmount > 0;
+  const buildingAmountSource =
+    hasPropertyBuildingAmount
+      ? Number(property.afa_jahresbetrag)
+      : hasDerivedBuildingAmount
+        ? derivedBuildingAmount
+        : Number(taxData?.depreciation_building ?? 0);
+  const buildingAmount = Math.max(0, Number(buildingAmountSource));
 
   if (buildingAmount > 0) {
     items.push({
@@ -1420,7 +1422,7 @@ function buildDefaultDepreciationItems(args: {
       item_type: "building",
       label: `Gebäude · ${property.name}`,
       gross_annual_amount: round2(buildingAmount),
-      apply_rental_ratio: true,
+      apply_rental_ratio: hasPropertyBuildingAmount || hasDerivedBuildingAmount,
     });
   }
 
@@ -1433,7 +1435,7 @@ function buildDefaultDepreciationItems(args: {
       item_type: "movable_asset",
       label: "Inventar",
       gross_annual_amount: round2(fixturesAmount),
-      apply_rental_ratio: true,
+      apply_rental_ratio: false,
     });
   }
 
@@ -1446,7 +1448,7 @@ function buildDefaultDepreciationItems(args: {
       item_type: "outdoor",
       label: "Außenanlagen",
       gross_annual_amount: round2(outdoorAmount),
-      apply_rental_ratio: true,
+      apply_rental_ratio: false,
     });
   }
 

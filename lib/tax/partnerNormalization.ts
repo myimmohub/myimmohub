@@ -31,6 +31,8 @@ export function formatDateForDisplay(value: string | null | undefined) {
   if (!value) return "—";
   const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (isoMatch) return `${isoMatch[3]}.${isoMatch[2]}.${isoMatch[1]}`;
+  const deMatch = value.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (deMatch) return `${deMatch[1].padStart(2, "0")}.${deMatch[2].padStart(2, "0")}.${deMatch[3]}`;
 
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("de-DE");
