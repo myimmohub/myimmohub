@@ -11,6 +11,8 @@ import { calcElsterEuroFromCents, fromCents, ratioToBasisPoints, toCents } from 
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 const num = (value: number | null | undefined) => Number(value ?? 0);
+const sumAmounts = <T extends { deductible_amount_elster: number }>(items: T[]) =>
+  items.reduce((sum, item) => sum + item.deductible_amount_elster, 0);
 const taxFieldForItemType: Record<TaxDepreciationItem["item_type"], ComputedTaxDepreciationItem["tax_field"]> = {
   building: "depreciation_building",
   outdoor: "depreciation_outdoor",
@@ -174,24 +176,19 @@ export function computeStructuredTaxData(args: {
   }).filter((item) => item.affects_tax_year);
 
   if (computedMaintenanceDistributions.length > 0) {
-    depreciationLineTotals.maintenance_costs = computedMaintenanceDistributions
-      .filter((item) => item.tax_field === "maintenance_costs")
-      .reduce(
-        (sum, item) => sum + item.deductible_amount_elster,
-        0,
-      );
-    depreciationLineTotals.depreciation_building = computedMaintenanceDistributions
-      .filter((item) => item.tax_field === "depreciation_building")
-      .reduce(
-        (sum, item) => sum + item.deductible_amount_elster,
-        depreciationLineTotals.depreciation_building ?? 0,
-      );
-    depreciationLineTotals.depreciation_fixtures = computedMaintenanceDistributions
-      .filter((item) => item.tax_field === "depreciation_fixtures")
-      .reduce(
-        (sum, item) => sum + item.deductible_amount_elster,
-        depreciationLineTotals.depreciation_fixtures ?? 0,
-      );
+    const maintenanceExpenseItems = computedMaintenanceDistributions.filter((item) => item.tax_field === "maintenance_costs");
+    const buildingAfaItems = computedMaintenanceDistributions.filter((item) => item.tax_field === "depreciation_building");
+    const fixturesAfaItems = computedMaintenanceDistributions.filter((item) => item.tax_field === "depreciation_fixtures");
+
+    if (maintenanceExpenseItems.length > 0) {
+      depreciationLineTotals.maintenance_costs = sumAmounts(maintenanceExpenseItems);
+    }
+    if (buildingAfaItems.length > 0) {
+      depreciationLineTotals.depreciation_building = (depreciationLineTotals.depreciation_building ?? 0) + sumAmounts(buildingAfaItems);
+    }
+    if (fixturesAfaItems.length > 0) {
+      depreciationLineTotals.depreciation_fixtures = (depreciationLineTotals.depreciation_fixtures ?? 0) + sumAmounts(fixturesAfaItems);
+    }
   }
 
   const nextTaxData: TaxData = { ...taxData };

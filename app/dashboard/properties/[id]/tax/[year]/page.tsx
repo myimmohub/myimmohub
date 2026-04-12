@@ -43,6 +43,12 @@ type CandidateTransaction = {
   is_tax_deductible: boolean | null;
   anlage_v_zeile: number | null;
 };
+type YearlyChecklistItem = {
+  label: string;
+  targetId?: string;
+  href?: string;
+  actionLabel: string;
+};
 
 const CONFIDENCE_DOT: Record<TaxConfidence | "null", string> = {
   high:   "bg-emerald-500",
@@ -88,6 +94,15 @@ export default function TaxYearPage() {
   const [logicError, setLogicError] = useState<string | null>(null);
   const [savingLogicId, setSavingLogicId] = useState<string | null>(null);
   const [deletingLogicId, setDeletingLogicId] = useState<string | null>(null);
+  const [highlightedSectionId, setHighlightedSectionId] = useState<string | null>(null);
+
+  const jumpToSection = useCallback((targetId: string) => {
+    setHighlightedSectionId(targetId);
+    document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => {
+      setHighlightedSectionId((current) => (current === targetId ? null : current));
+    }, 1800);
+  }, []);
 
   const loadLogicItems = useCallback(async () => {
     const res = await fetch(`/api/tax/logic-items?property_id=${id}&tax_year=${taxYear}`);
@@ -143,7 +158,12 @@ export default function TaxYearPage() {
         };
         setDepreciationItems(
           logic.depreciation_items.length > 0
-            ? logic.depreciation_items
+            ? mergeMissingPrefillDepreciationItems({
+                existingItems: logic.depreciation_items,
+                property: prop as Property | null,
+                taxYear,
+                taxData: firstTaxData,
+              })
             : prop
               ? buildDefaultDepreciationItems({ property: prop as Property, taxYear, taxData: firstTaxData })
               : [],
@@ -476,24 +496,40 @@ export default function TaxYearPage() {
   const missingCount = TAX_FIELDS.length - filledCount;
   const gbrTotals = displayTaxData ? calculateTaxTotals(displayTaxData) : null;
   const yearlyChecklist = useMemo(() => {
-    const openItems: string[] = [];
+    const openItems: YearlyChecklistItem[] = [];
     if ((taxSettings?.gesamt_tage ?? 0) <= 0) {
-      openItems.push("Gesamttage fehlen");
+      openItems.push({
+        label: "Gesamttage fehlen",
+        targetId: "jahreswerte-card",
+        actionLabel: "Zu den Jahreswerten",
+      });
     }
     if (gbrSettings && !gbrSettings.feststellungserklaerung) {
-      openItems.push("GbR-Feststellung ist noch nicht aktiviert");
+      openItems.push({
+        label: "GbR-Feststellung ist noch nicht aktiviert",
+        href: `/dashboard/settings/gbr?property_id=${id}`,
+        actionLabel: "Zu den GbR-Einstellungen",
+      });
     }
     if (candidateTransactions.length > 0 && maintenanceDistributions.length === 0) {
-      openItems.push("Mögliche verteilte Buchungen noch nicht geprüft");
+      openItems.push({
+        label: "Mögliche verteilte Buchungen noch nicht geprüft",
+        targetId: "maintenance-distributions-card",
+        actionLabel: "Zu den Verteilungsblöcken",
+      });
     }
     if (maintenanceDistributions.some((item) => (item.source_transaction_ids?.length ?? 0) === 0)) {
-      openItems.push("Ein oder mehrere Verteilungsblöcke haben noch keine Buchung");
+      openItems.push({
+        label: "Ein oder mehrere Verteilungsblöcke haben noch keine Buchung",
+        targetId: "maintenance-distributions-card",
+        actionLabel: "Zu den Verteilungsblöcken",
+      });
     }
     return {
       status: openItems.length === 0 ? "vollständig" : openItems.length <= 2 ? "prüfen" : "unvollständig",
       openItems,
     };
-  }, [taxSettings, gbrSettings, candidateTransactions.length, maintenanceDistributions]);
+  }, [taxSettings, gbrSettings, candidateTransactions.length, maintenanceDistributions, id]);
 
   if (loading) return <Skeleton />;
 
@@ -598,15 +634,42 @@ export default function TaxYearPage() {
           </div>
           {yearlyChecklist.openItems.length > 0 && (
             <div className="border-t border-slate-100 px-5 py-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300">
-              {yearlyChecklist.openItems.map((item) => (
-                <p key={item}>{item}</p>
-              ))}
+              <div className="space-y-2">
+                {yearlyChecklist.openItems.map((item) => (
+                  <div key={item.label} className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <p>{item.label}</p>
+                    {item.href ? (
+                      <Link
+                        href={item.href}
+                        className="inline-flex items-center gap-2 self-start rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        {item.actionLabel}
+                      </Link>
+                    ) : item.targetId ? (
+                      <button
+                        type="button"
+                        onClick={() => jumpToSection(item.targetId!)}
+                        className="inline-flex items-center gap-2 self-start rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        {item.actionLabel}
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </section>
 
         {taxSettings && (
-          <section id="jahreswerte-card" className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <section
+            id="jahreswerte-card"
+            className={`rounded-xl border bg-white shadow-sm transition-all duration-500 dark:bg-slate-900 ${
+              highlightedSectionId === "jahreswerte-card"
+                ? "border-blue-400 ring-2 ring-blue-500/20 dark:border-blue-500"
+                : "border-slate-200 dark:border-slate-800"
+            }`}
+          >
             <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Jahreswerte für Eigennutzung</h3>
               <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
@@ -755,7 +818,14 @@ export default function TaxYearPage() {
               );
             })}
 
-            <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <section
+              id="depreciation-items-card"
+              className={`rounded-xl border bg-white shadow-sm transition-all duration-500 dark:bg-slate-900 ${
+                highlightedSectionId === "depreciation-items-card"
+                  ? "border-blue-400 ring-2 ring-blue-500/20 dark:border-blue-500"
+                  : "border-slate-200 dark:border-slate-800"
+              }`}
+            >
               <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-3 dark:border-slate-800">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">AfA-Komponenten</h3>
@@ -862,7 +932,14 @@ export default function TaxYearPage() {
               )}
             </section>
 
-            <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <section
+              id="maintenance-distributions-card"
+              className={`rounded-xl border bg-white shadow-sm transition-all duration-500 dark:bg-slate-900 ${
+                highlightedSectionId === "maintenance-distributions-card"
+                  ? "border-blue-400 ring-2 ring-blue-500/20 dark:border-blue-500"
+                  : "border-slate-200 dark:border-slate-800"
+              }`}
+            >
               <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-3 dark:border-slate-800">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Klassifizierte Ausgaben</h3>
@@ -908,9 +985,9 @@ export default function TaxYearPage() {
                     <thead>
                       <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
                         <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Bezeichnung</th>
-                        <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Buchungen</th>
                         <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Klasse</th>
                         <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Abzug</th>
+                        <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Buchungen</th>
                         <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">Ursprung</th>
                         <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">Gesamt</th>
                         <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">Jahre</th>
@@ -923,6 +1000,7 @@ export default function TaxYearPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {maintenanceDistributions.map((item) => {
+                        const isNewItem = item.id.startsWith("new-");
                         const computed = structuredTax?.maintenanceDistributions.find((candidate) => candidate.id === item.id);
                         const selectedTransactionIds = item.source_transaction_ids ?? [];
                         const selectedTransactions = selectedTransactionIds
@@ -960,48 +1038,6 @@ export default function TaxYearPage() {
                                 placeholder="z. B. Erhaltungsaufwand 2024"
                               />
                             </td>
-                            <td className="px-4 py-3 align-top">
-                              <div className="w-72 space-y-2">
-                                <div className="flex justify-end">
-                                  <button
-                                    type="button"
-                                    onClick={() => assignVisibleTransactionsToMaintenance(item.id)}
-                                    className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                                  >
-                                    Alle sichtbaren übernehmen
-                                  </button>
-                                </div>
-                                <div className="max-h-36 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/60">
-                                  {availableForItem.length === 0 && selectedTransactions.length === 0 ? (
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">Keine passenden Banking-Buchungen im Jahr {taxYear} gefunden.</p>
-                                  ) : (
-                                    availableForItem.map((transaction) => (
-                                      <label key={transaction.id} className="flex items-start gap-2 rounded-md px-1 py-1 text-xs text-slate-600 dark:text-slate-300">
-                                        <input
-                                          type="checkbox"
-                                          checked={selectedTransactionIds.includes(transaction.id)}
-                                          onChange={(e) => toggleMaintenanceTransaction(item.id, transaction.id, e.target.checked)}
-                                        />
-                                        <span className="min-w-0">
-                                          <span className="block truncate font-medium text-slate-700 dark:text-slate-200">
-                                            {transaction.counterpart || transaction.description || "Buchung"}
-                                          </span>
-                                          <span className="block truncate text-slate-500 dark:text-slate-400">
-                                            {formatDateForDisplay(transaction.date)} · {Math.abs(Number(transaction.amount)).toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 })}
-                                            {transaction.description ? ` · ${transaction.description}` : ""}
-                                          </span>
-                                        </span>
-                                      </label>
-                                    ))
-                                  )}
-                                </div>
-                                {selectedTransactions.length > 0 && (
-                                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                    {selectedTransactions.length} Buchung(en) verknüpft. Nach dem Speichern werden diese Zahlungen aus den normalen Werbungskosten herausgerechnet und in diesem Block fortgeführt.
-                                  </p>
-                                )}
-                              </div>
-                            </td>
                             <td className="px-4 py-3">
                               <select
                                 value={item.classification ?? "maintenance_expense"}
@@ -1023,6 +1059,84 @@ export default function TaxYearPage() {
                                 <option value="immediate">sofort abziehen</option>
                                 <option value="distributed">verteilen</option>
                               </select>
+                            </td>
+                            <td className="px-4 py-3 align-top">
+                              <div className="w-72 space-y-2">
+                                {isNewItem ? (
+                                  <>
+                                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+                                      1. Kategorie festlegen
+                                      <br />
+                                      2. Danach passende Buchungen aus {taxYear} auswählen
+                                    </div>
+                                    <div className="flex justify-end">
+                                      <button
+                                        type="button"
+                                        onClick={() => assignVisibleTransactionsToMaintenance(item.id)}
+                                        className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                                      >
+                                        Alle sichtbaren übernehmen
+                                      </button>
+                                    </div>
+                                    <div className="max-h-36 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/60">
+                                      {availableForItem.length === 0 && selectedTransactions.length === 0 ? (
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">Keine passenden Banking-Buchungen im Jahr {taxYear} gefunden.</p>
+                                      ) : (
+                                        availableForItem.map((transaction) => (
+                                          <label key={transaction.id} className="flex items-start gap-2 rounded-md px-1 py-1 text-xs text-slate-600 dark:text-slate-300">
+                                            <input
+                                              type="checkbox"
+                                              checked={selectedTransactionIds.includes(transaction.id)}
+                                              onChange={(e) => toggleMaintenanceTransaction(item.id, transaction.id, e.target.checked)}
+                                            />
+                                            <span className="min-w-0">
+                                              <span className="block truncate font-medium text-slate-700 dark:text-slate-200">
+                                                {transaction.counterpart || transaction.description || "Buchung"}
+                                              </span>
+                                              <span className="block truncate text-slate-500 dark:text-slate-400">
+                                                {formatDateForDisplay(transaction.date)} · {Math.abs(Number(transaction.amount)).toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 })}
+                                                {transaction.description ? ` · ${transaction.description}` : ""}
+                                              </span>
+                                            </span>
+                                          </label>
+                                        ))
+                                      )}
+                                    </div>
+                                    {selectedTransactions.length > 0 && (
+                                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                        {selectedTransactions.length} Buchung(en) ausgewählt. Nach dem Speichern werden diese Zahlungen aus den normalen Werbungskosten herausgerechnet und in diesem Block fortgeführt.
+                                      </p>
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+                                    <p className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                                      Fortgeführter Verteilungsblock
+                                    </p>
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                      Die Ursprungsbuchung stammt aus {item.source_year ?? "einem Vorjahr"} und ist hier deshalb nicht erneut auswählbar.
+                                    </p>
+                                    {selectedTransactions.length > 0 ? (
+                                      <div className="space-y-1">
+                                        {selectedTransactions.map((transaction) => (
+                                          <div key={transaction.id} className="rounded-md bg-white px-2 py-1.5 text-[11px] text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+                                            <p className="truncate font-medium text-slate-700 dark:text-slate-200">
+                                              {transaction.counterpart || transaction.description || "Buchung"}
+                                            </p>
+                                            <p className="truncate text-slate-500 dark:text-slate-400">
+                                              {formatDateForDisplay(transaction.date)} · {Math.abs(Number(transaction.amount)).toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 })}
+                                            </p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                        Keine verknüpfte Einzelbuchung hinterlegt. Der Block wird über die gespeicherten Vorjahreswerte fortgeführt.
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </td>
                             <td className="px-4 py-3">
                               <input
@@ -1229,10 +1343,10 @@ export default function TaxYearPage() {
                 <div className="flex gap-3">
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowCalculationPrep(false);
-                      document.getElementById("jahreswerte-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }}
+                      onClick={() => {
+                        setShowCalculationPrep(false);
+                        jumpToSection("jahreswerte-card");
+                      }}
                     className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                   >
                     Jahreswerte prüfen
@@ -1337,6 +1451,29 @@ function buildDefaultDepreciationItems(args: {
   }
 
   return items;
+}
+
+function mergeMissingPrefillDepreciationItems(args: {
+  existingItems: TaxDepreciationItem[];
+  property: Property | null;
+  taxYear: number;
+  taxData: TaxData | null;
+}): LocalDepreciationItem[] {
+  const { existingItems, property, taxYear, taxData } = args;
+  if (!property) return existingItems;
+
+  const prefills = buildDefaultDepreciationItems({ property, taxYear, taxData });
+  const presentTypes = new Set(
+    existingItems
+      .filter((item) => Number(item.gross_annual_amount ?? 0) > 0)
+      .map((item) => item.item_type),
+  );
+
+  const missingPrefills = prefills.filter(
+    (item) => Number(item.gross_annual_amount ?? 0) > 0 && !presentTypes.has(item.item_type ?? "building"),
+  );
+
+  return [...existingItems, ...missingPrefills];
 }
 
 function deriveAnnualAmount(
