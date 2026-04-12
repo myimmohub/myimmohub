@@ -237,25 +237,14 @@ function asNullableDateString(value: unknown): string | null {
   const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
 
+  const isoLikeMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s]/);
+  if (isoLikeMatch) return `${isoLikeMatch[1]}-${isoLikeMatch[2]}-${isoLikeMatch[3]}`;
+
   const deMatch = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   if (deMatch) {
     const day = deMatch[1].padStart(2, "0");
     const month = deMatch[2].padStart(2, "0");
     return `${deMatch[3]}-${month}-${day}`;
-  }
-
-  const isoDateTimeMatch = raw.match(/^(\d{4}-\d{2}-\d{2})T/);
-  if (isoDateTimeMatch) {
-    const parsed = new Date(raw);
-    if (!Number.isNaN(parsed.getTime())) {
-      const formatter = new Intl.DateTimeFormat("sv-SE", {
-        timeZone: "Europe/Berlin",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      });
-      return formatter.format(parsed);
-    }
   }
 
   const parsed = new Date(raw);
@@ -275,6 +264,153 @@ function asObjectArray(value: unknown) {
 
 function round2(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function normalizePdfText(value: string) {
+  return value
+    .replace(/\u00a0/g, " ")
+    .replace(/[–—]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseGermanAmount(value: string | null | undefined) {
+  if (!value) return null;
+  const normalized = value
+    .replace(/\s/g, "")
+    .replace(/\.(?=\d{3}(?:\D|$))/g, "")
+    .replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+type ParsedElsterTextData = {
+  acquisition_date: string | null;
+  depreciation_building: number | null;
+  depreciation_fixtures: number | null;
+  expense_blocks: ImportedExpenseBlock[];
+  maintenance_distributions: ImportedMaintenanceDistribution[];
+};
+
+function parseOfficialElsterValuesFromText(args: {
+  text: string;
+  taxYear: number;
+}): ParsedElsterTextData {
+  const flat = normalizePdfText(args.text);
+  const taxYear = args.taxYear;
+
+  const parseAmount = (pattern: RegExp) => {
+    const match = flat.match(pattern);
+    return parseGermanAmount(match?.[1] ?? null);
+  };
+
+  const acquisitionDate =
+    flat.match(/Angeschafft am (\d{2}\.\d{2}\.\d{4})/i)?.[1] ??
+    flat.match(/Anschaffungsdatum (\d{2}\.\d{2}\.\d{4})/i)?.[1] ??
+    null;
+
+  const expenseBlocks: ImportedExpenseBlock[] = [];
+  const pushExpenseBlock = (key: string, label: string, amount: number | null, detail: string | null = null) => {
+    if (amount == null || amount <= 0) return;
+    expenseBlocks.push({ key, label, amount: round2(amount), detail });
+  };
+
+  const allocatedCosts = parseAmount(/75 Abzugsfähige Werbungskosten ([\d.,]+)/i);
+  const nonAllocatedCosts = parseAmount(/78 Abzugsfähige Werbungskosten ([\d.,]+)/i);
+  const otherExpenses = parseAmount(/82 Abzugsfähige Werbungskosten ([\d.,]+)/i);
+  const maintenanceCurrentDeductible = parseAmount(/60 Abzugsfähige Werbungskosten ([\d.,]+)/i);
+  const maintenanceCurrentGrossShare = parseAmount(/59 Gesamtbetrag in EUR, Ct ([\d.,]+)/i);
+  const maintenanceCurrentTotal = parseAmount(/57 Gesamtaufwand 20\d{2} ([\d.,]+)/i);
+  const maintenance2022Gross = parseAmount(/68 Gesamtbetrag in EUR, Ct ([\d.,]+)/i);
+  const maintenance2022Deductible = parseAmount(/69 Abzugsfähige Werbungskosten ([\d.,]+)/i);
+  const maintenance2023Gross = parseAmount(/71 Gesamtbetrag in EUR, Ct ([\d.,]+)/i);
+  const maintenance2023Deductible = parseAmount(/72 Abzugsfähige Werbungskosten ([\d.,]+)/i);
+
+  pushExpenseBlock(
+    "allocated_costs",
+    "Umlagefähige laufende Kosten",
+    allocatedCosts,
+    "Aus offiziellem ELSTER-Block Zeile 75 übernommen",
+  );
+  pushExpenseBlock(
+    "non_allocated_costs",
+    "Nicht umlegbare Objektkosten",
+    nonAllocatedCosts,
+    "Aus offiziellem ELSTER-Block Zeile 78 übernommen",
+  );
+  pushExpenseBlock(
+    "other_expenses",
+    "Sonstige Werbungskosten",
+    otherExpenses,
+    "Aus offiziellem ELSTER-Block Zeile 82 übernommen",
+  );
+  pushExpenseBlock(
+    `maintenance_${taxYear}`,
+    `Verteilter Erhaltungsaufwand ${taxYear}`,
+    maintenanceCurrentDeductible,
+    "Aus offiziellem ELSTER-Block Zeile 60 übernommen",
+  );
+  pushExpenseBlock(
+    "maintenance_prior_year_2022",
+    "Verteilter Erhaltungsaufwand aus 2022",
+    maintenance2022Deductible,
+    "Aus offiziellem ELSTER-Block Zeile 69 übernommen",
+  );
+  pushExpenseBlock(
+    "maintenance_prior_year_2023",
+    "Verteilter Erhaltungsaufwand aus 2023",
+    maintenance2023Deductible,
+    "Aus offiziellem ELSTER-Block Zeile 72 übernommen",
+  );
+
+  const maintenanceDistributions: ImportedMaintenanceDistribution[] = [];
+  if (maintenanceCurrentTotal != null && maintenanceCurrentTotal > 0) {
+    maintenanceDistributions.push({
+      label: `Verteilter Erhaltungsaufwand ${taxYear}`,
+      source_year: taxYear,
+      total_amount: round2(maintenanceCurrentTotal),
+      classification: "maintenance_expense",
+      deduction_mode: "distributed",
+      distribution_years: 3,
+      current_year_share_override: maintenanceCurrentGrossShare != null ? round2(maintenanceCurrentGrossShare) : null,
+      apply_rental_ratio: true,
+      note: "Aus offiziellem ELSTER-Block Zeilen 57-60 übernommen",
+    });
+  }
+  if (maintenance2022Gross != null && maintenance2022Gross > 0) {
+    maintenanceDistributions.push({
+      label: "Verteilter Erhaltungsaufwand aus 2022",
+      source_year: 2022,
+      total_amount: round2(maintenance2022Gross),
+      classification: "maintenance_expense",
+      deduction_mode: "distributed",
+      distribution_years: Math.max(3, taxYear - 2022 + 1),
+      current_year_share_override: maintenance2022Deductible != null ? round2(maintenance2022Deductible) : null,
+      apply_rental_ratio: false,
+      note: "Aus offiziellem ELSTER-Block Zeilen 68-69 übernommen",
+    });
+  }
+  if (maintenance2023Gross != null && maintenance2023Gross > 0) {
+    maintenanceDistributions.push({
+      label: "Verteilter Erhaltungsaufwand aus 2023",
+      source_year: 2023,
+      total_amount: round2(maintenance2023Gross),
+      classification: "maintenance_expense",
+      deduction_mode: "distributed",
+      distribution_years: Math.max(2, taxYear - 2023 + 1),
+      current_year_share_override: maintenance2023Deductible != null ? round2(maintenance2023Deductible) : null,
+      apply_rental_ratio: false,
+      note: "Aus offiziellem ELSTER-Block Zeilen 71-72 übernommen",
+    });
+  }
+
+  return {
+    acquisition_date: acquisitionDate ? asNullableDateString(acquisitionDate) : null,
+    depreciation_building: parseAmount(/35 Abzugsfähige Werbungskosten ([\d.,]+)/i),
+    depreciation_fixtures: parseAmount(/45 Abzugsfähige Werbungskosten ([\d.,]+)/i),
+    expense_blocks: expenseBlocks,
+    maintenance_distributions: maintenanceDistributions,
+  };
 }
 
 function extractJsonText(raw: string) {
@@ -617,6 +753,7 @@ export async function POST(request: Request) {
   // Call Claude API with PDF
   let extractedFields: Record<string, unknown>;
   let confidence: Record<string, string> = {};
+  let extractedTextForAugmentation: string | null = null;
 
   try {
     const parsed = await callAnthropicJsonFromPdf({
@@ -657,6 +794,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Extraktion fehlgeschlagen." }, { status: 500 });
   }
 
+  const shouldAugmentFromText =
+    asNullableString(extractedFields.acquisition_date) == null ||
+    asNullableNumber(extractedFields.depreciation_fixtures) == null ||
+    asObjectArray(extractedFields.expense_blocks).length < 3 ||
+    asObjectArray(extractedFields.maintenance_distributions).length < 3;
+
+  if (shouldAugmentFromText) {
+    try {
+      extractedTextForAugmentation = await callAnthropicTextFromPdf({
+        pdfBase64: pdf_base64,
+        apiKey: ANTHROPIC_API_KEY,
+      });
+    } catch (textAugmentationError) {
+      console.error("Tax import text augmentation failed:", textAugmentationError);
+    }
+  }
+
   // Build tax_data record
   const taxData = {
     property_id,
@@ -690,6 +844,32 @@ export async function POST(request: Request) {
     import_source: "pdf_import",
     import_confidence: confidence as TaxImportConfidenceMap,
   };
+
+  if (extractedTextForAugmentation) {
+    const parsedFromText = parseOfficialElsterValuesFromText({
+      text: extractedTextForAugmentation,
+      taxYear: tax_year,
+    });
+    if (parsedFromText.acquisition_date) {
+      taxData.acquisition_date = parsedFromText.acquisition_date;
+    }
+    if (parsedFromText.depreciation_building != null) {
+      taxData.depreciation_building = parsedFromText.depreciation_building;
+    }
+    if (parsedFromText.depreciation_fixtures != null) {
+      taxData.depreciation_fixtures = parsedFromText.depreciation_fixtures;
+    }
+    extractedFields.expense_blocks = [
+      ...asObjectArray(extractedFields.expense_blocks),
+      ...parsedFromText.expense_blocks,
+    ];
+    extractedFields.maintenance_distributions = [
+      ...asObjectArray(extractedFields.maintenance_distributions),
+      ...parsedFromText.maintenance_distributions.map((item) => ({
+        ...item,
+      })),
+    ];
+  }
 
   const supplementalData: ImportedSupplementalData = {
     gbr_name: asNullableString(extractedFields.gbr_name),
@@ -766,6 +946,27 @@ export async function POST(request: Request) {
     }, []),
     import_notes: [],
   };
+  supplementalData.expense_blocks = Array.from(
+    supplementalData.expense_blocks.reduce((acc, block) => {
+      const key = normalizePartnerName(block.key).replace(/\s+/g, "_");
+      const existing = acc.get(key);
+      if (!existing) {
+        acc.set(key, { ...block, key });
+        return acc;
+      }
+      const nextAmount = block.amount ?? 0;
+      const existingAmount = existing.amount ?? 0;
+      if (Math.abs(nextAmount) >= Math.abs(existingAmount)) {
+        acc.set(key, { ...existing, ...block, key });
+      } else if (!existing.detail && block.detail) {
+        existing.detail = block.detail;
+      }
+      return acc;
+    }, new Map<string, ImportedExpenseBlock>()).values(),
+  );
+  if (extractedTextForAugmentation) {
+    supplementalData.import_notes.push("Offizielle ELSTER-Kostenblöcke und Datumswerte wurden zusätzlich aus dem PDF-Text gegengeprüft.");
+  }
   supplementalData.maintenance_distributions = supplementalData.maintenance_distributions.map((item) =>
     normalizeImportedMaintenanceDistribution(item, tax_year),
   );

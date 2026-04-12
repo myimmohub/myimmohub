@@ -84,6 +84,19 @@ function buildExpenseBucketsFromImport(taxData: TaxData) {
     .filter((bucket) => bucket.amount !== 0);
 }
 
+function buildImportedMaintenanceBuckets(taxData: TaxData, taxYear: number) {
+  return buildExpenseBucketsFromImport(taxData)
+    .filter((bucket) => bucket.key.includes("maintenance") || bucket.key.includes("erhaltungsaufwand"))
+    .map((bucket) => {
+      const yearMatch = `${bucket.key} ${bucket.label}`.match(/\b(20\d{2})\b/);
+      const sourceYear = yearMatch ? Number(yearMatch[1]) : taxYear;
+      return {
+        ...bucket,
+        source_year: sourceYear,
+      };
+    });
+}
+
 function isComputedDistribution(
   item: ComputedTaxMaintenanceDistributionItem | TaxMaintenanceDistributionItem,
 ): item is ComputedTaxMaintenanceDistributionItem {
@@ -93,6 +106,7 @@ function isComputedDistribution(
 function buildMaintenanceBuckets(
   maintenanceDistributions: Array<ComputedTaxMaintenanceDistributionItem | TaxMaintenanceDistributionItem>,
   taxYear: number,
+  importedReferenceBuckets: Array<ElsterLineBucket & { source_year: number }> = [],
 ) {
   const grouped = new Map<number, number>();
   let residualImmediateMaintenance = 0;
@@ -115,6 +129,10 @@ function buildMaintenanceBuckets(
       continue;
     }
     grouped.set(item.source_year ?? taxYear, round2((grouped.get(item.source_year ?? taxYear) ?? 0) + amount));
+  }
+
+  for (const bucket of importedReferenceBuckets) {
+    grouped.set(bucket.source_year, round2(bucket.amount));
   }
 
   const buckets: ElsterLineBucket[] = Array.from(grouped.entries())
@@ -152,7 +170,8 @@ export function buildElsterLineSummary(
   ].filter((bucket) => bucket.amount !== 0);
 
   const importedExpenseBuckets = buildExpenseBucketsFromImport(taxData);
-  const maintenanceBuckets = buildMaintenanceBuckets(options.maintenanceDistributions ?? [], taxYear);
+  const importedMaintenanceBuckets = buildImportedMaintenanceBuckets(taxData, taxYear);
+  const maintenanceBuckets = buildMaintenanceBuckets(options.maintenanceDistributions ?? [], taxYear, importedMaintenanceBuckets);
   const importedNonMaintenanceBuckets = importedExpenseBuckets.filter((bucket) => !bucket.key.includes("maintenance") && !bucket.key.includes("erhaltungsaufwand"));
 
   const fallbackExpenseBuckets: ElsterLineBucket[] = [

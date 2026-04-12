@@ -73,11 +73,23 @@ export default function TaxYearPage() {
   const [property, setProperty] = useState<Property | null>(null);
   const [taxData, setTaxData] = useState<TaxData | null>(null);
   const [reconciliation, setReconciliation] = useState<null | {
-    items: Array<{ type: string; label: string; source_year: number | null; gross_amount: number; deductible_amount: number; included: boolean; exclusion_reason: string | null }>;
+    items: Array<{
+      type: string;
+      label: string;
+      target_block: string;
+      source_year: number | null;
+      gross_amount: number;
+      deductible_amount: number;
+      included: boolean;
+      exclusion_reason: string | null;
+    }>;
     einnahmen: number;
+    deductible_without_afa: number;
     total_deductible_with_afa: number;
     afa: number;
     result_before_partner: number;
+    expense_buckets?: Array<{ key: string; label: string; amount: number; detail?: string }>;
+    depreciation_buckets?: Array<{ key: string; label: string; amount: number; detail?: string }>;
   }>(null);
   const [showReconciliation, setShowReconciliation] = useState(false);
   const [gbrSettings, setGbrSettings] = useState<GbrSettingsSummary | null>(null);
@@ -199,7 +211,9 @@ export default function TaxYearPage() {
     const json = await res.json();
     if (json._reconciliation) {
       setReconciliation(json._reconciliation);
-      const { _reconciliation: _, _engine: __, ...taxDataOnly } = json;
+      const { _reconciliation, _engine, ...taxDataOnly } = json;
+      void _reconciliation;
+      void _engine;
       setTaxData(taxDataOnly);
     } else {
       setTaxData(json);
@@ -900,12 +914,18 @@ export default function TaxYearPage() {
                         </p>
                       </div>
                       <div>
+                        <p className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">ohne AfA</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          {reconciliation.deductible_without_afa.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div>
                         <p className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">davon AfA</p>
                         <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
                           {reconciliation.afa.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 })}
                         </p>
                       </div>
-                      <div>
+                      <div className="md:col-span-1">
                         <p className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Ergebnis</p>
                         <p className={`mt-1 text-sm font-semibold ${reconciliation.result_before_partner < 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                           {reconciliation.result_before_partner.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 })}
@@ -920,6 +940,7 @@ export default function TaxYearPage() {
                           <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
                             <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Bezeichnung</th>
                             <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Typ</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 dark:text-slate-400">Zielblock</th>
                             <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 dark:text-slate-400">Brutto</th>
                             <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 dark:text-slate-400">Absetzbar (ELSTER)</th>
                             <th className="px-4 py-2.5 text-center text-xs font-medium text-slate-500 dark:text-slate-400">Status</th>
@@ -944,6 +965,11 @@ export default function TaxYearPage() {
                               </td>
                               <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">
                                 {item.type === "transaction" ? "Transaktion" : item.type === "maintenance_distribution" ? "Instandhaltungsverteilung" : "AfA"}
+                              </td>
+                              <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">
+                                <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] dark:bg-slate-800">
+                                  {item.target_block}
+                                </span>
                               </td>
                               <td className="px-4 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">
                                 {item.gross_amount.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 })}

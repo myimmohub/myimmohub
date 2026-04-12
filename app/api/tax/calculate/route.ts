@@ -11,6 +11,7 @@ import { createServerClient } from "@supabase/ssr";
 import { calculateTaxFromTransactions } from "@/lib/tax/calculateTaxFromTransactions";
 import { computeStructuredTaxData, isDistributionActiveForYear } from "@/lib/tax/structuredTaxLogic";
 import { runRentalTaxEngineFromExistingData } from "@/lib/tax/rentalTaxEngineBridge";
+import { buildElsterLineSummary } from "@/lib/tax/elsterLineLogic";
 import type { TaxData, TaxDepreciationItem, TaxMaintenanceDistributionItem } from "@/types/tax";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -141,6 +142,20 @@ export async function POST(request: Request) {
     structured: ReturnType<typeof computeStructuredTaxData>,
     finalData: TaxData,
   ) {
+    const lineSummary = buildElsterLineSummary(finalData, {
+      maintenanceDistributions: structured.maintenanceDistributions,
+      taxYear: tax_year,
+    });
+    const inferTargetBlock = (label: string, type: "transaction" | "maintenance_distribution" | "depreciation_item", sourceYear: number | null) => {
+      if (type === "depreciation_item") return "depreciation";
+      if (type === "maintenance_distribution") return sourceYear != null && sourceYear < tax_year ? `maintenance_${sourceYear}` : `maintenance_${tax_year}`;
+      const normalized = label.toLowerCase();
+      if (normalized.includes("grundsteuer") || normalized.includes("versicherung")) return "non_allocated_costs";
+      if (normalized.includes("hausgeld") || normalized.includes("weg") || normalized.includes("wasser") || normalized.includes("müll")) return "allocated_costs";
+      if (normalized.includes("schuldzinsen") || normalized.includes("hausverwaltung") || normalized.includes("kontoführung")) return "financing_admin";
+      return "other_expenses";
+    };
+
     const allDists = (maintenanceItems ?? []) as TaxMaintenanceDistributionItem[];
     const items = [
       // Transaktionsbasierte Einnahmen & Ausgaben
@@ -161,6 +176,7 @@ export async function POST(request: Request) {
         .map(([k, label]) => ({
           type: "transaction" as const,
           label,
+          target_block: inferTargetBlock(label, "transaction", null),
           source_year: null as number | null,
           gross_amount: Number(finalData[k as keyof TaxData]),
           deductible_amount: Number(finalData[k as keyof TaxData]),
@@ -174,6 +190,7 @@ export async function POST(request: Request) {
         return {
           type: "maintenance_distribution" as const,
           label: item.label,
+          target_block: inferTargetBlock(item.label, "maintenance_distribution", item.source_year),
           source_year: item.source_year,
           gross_amount: Number(item.total_amount),
           deductible_amount: computed?.deductible_amount_elster ?? 0,
@@ -189,6 +206,7 @@ export async function POST(request: Request) {
       ...structured.depreciationItems.map((item) => ({
         type: "depreciation_item" as const,
         label: item.label,
+        target_block: inferTargetBlock(item.label, "depreciation_item", null),
         source_year: null as number | null,
         gross_amount: Number(item.gross_annual_amount),
         deductible_amount: item.deductible_amount_elster,
@@ -200,6 +218,7 @@ export async function POST(request: Request) {
         ? [{
             type: "depreciation_item" as const,
             label: "Gebäude-AfA (automatisch berechnet)",
+            target_block: "depreciation",
             source_year: null as number | null,
             gross_amount: Number(finalData.depreciation_building),
             deductible_amount: Number(finalData.depreciation_building),
@@ -209,19 +228,22 @@ export async function POST(request: Request) {
         : []),
     ];
 
-    const einnahmen = Number(finalData.rent_income ?? 0)
-      + Number(finalData.operating_costs_income ?? 0)
-      + Number(finalData.other_income ?? 0);
-    const werbungskosten = items
-      .filter((i) => i.included && i.type !== "transaction" || (i.type === "transaction" && !["rent_income","operating_costs_income","other_income"].some(k => i.label.toLowerCase().includes("einnahme") || i.label.toLowerCase().includes("erstattung"))))
-      .reduce((sum, i) => sum + i.deductible_amount, 0);
-    const afa = Number(finalData.depreciation_building ?? 0)
-      + Number(finalData.depreciation_outdoor ?? 0)
-      + Number(finalData.depreciation_fixtures ?? 0);
-    const total_deductible_with_afa = items.filter((i) => i.included).reduce((sum, i) => sum + i.deductible_amount, 0);
-    const result_before_partner = einnahmen - total_deductible_with_afa;
+    const einnahmen = lineSummary.income_total;
+    const afa = lineSummary.depreciation_total;
+    const deductible_without_afa = lineSummary.advertising_costs_total;
+    const total_deductible_with_afa = lineSummary.advertising_costs_total + lineSummary.depreciation_total + lineSummary.special_deductions_total;
+    const result_before_partner = lineSummary.result;
 
-    return { items, einnahmen, total_deductible_with_afa, afa, result_before_partner };
+    return {
+      items,
+      einnahmen,
+      deductible_without_afa,
+      total_deductible_with_afa,
+      afa,
+      result_before_partner,
+      expense_buckets: lineSummary.expense_buckets,
+      depreciation_buckets: lineSummary.depreciation_buckets,
+    };
   }
 
   if (existing) {
