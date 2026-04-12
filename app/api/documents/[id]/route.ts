@@ -71,3 +71,38 @@ export async function PATCH(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { data: { user } } = await getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+
+  const { id } = await params;
+  const db = serviceRoleClient();
+
+  const { data: doc, error: fetchError } = await db
+    .from("documents")
+    .select("id, storage_path, user_id")
+    .or(`user_id.eq.${user.id},user_id.is.null`)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (fetchError || !doc) {
+    return NextResponse.json({ error: "Dokument nicht gefunden." }, { status: 404 });
+  }
+
+  if (doc.storage_path) {
+    await db.storage.from("documents").remove([doc.storage_path]);
+  }
+
+  const { error: deleteError } = await db
+    .from("documents")
+    .delete()
+    .or(`user_id.eq.${user.id},user_id.is.null`)
+    .eq("id", id);
+
+  if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}

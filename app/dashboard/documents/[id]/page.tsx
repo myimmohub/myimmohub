@@ -3,16 +3,16 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { type DocumentCategory, CATEGORY_LABELS, ALL_CATEGORIES } from "@/lib/ai/categories";
 
 type PropertyRef = { id: string; name: string };
+type CategoryOption = { id: string; label: string; typ: string };
 
 type DocumentDetail = {
   id: string;
   file_name: string;
   original_filename: string | null;
   storage_path: string;
-  category: DocumentCategory | null;
+  category: string | null;
   amount: number | null;
   document_date: string | null;
   counterpart: string | null;
@@ -45,26 +45,33 @@ export default function DocumentDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [editCategory, setEditCategory] = useState<DocumentCategory | "">("");
+  const [editCategory, setEditCategory] = useState("");
   const [editAmount, setEditAmount] = useState("");
   const [editDate, setEditDate] = useState("");
   const [editPropertyId, setEditPropertyId] = useState("");
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
 
   useEffect(() => {
-    fetch(`/api/documents/${id}`)
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = (await res.json()) as { error?: string };
+    Promise.all([
+      fetch(`/api/documents/${id}`),
+      fetch("/api/settings/categories"),
+    ])
+      .then(async ([docRes, categoriesRes]) => {
+        if (!docRes.ok) {
+          const body = (await docRes.json()) as { error?: string };
           throw new Error(body.error ?? "Ladefehler");
         }
-        return res.json() as Promise<ApiResponse>;
-      })
-      .then((d) => {
-        setData(d);
-        setEditCategory(d.doc.category ?? "");
-        setEditAmount(d.doc.amount !== null ? String(d.doc.amount) : "");
-        setEditDate(d.doc.document_date ?? "");
-        setEditPropertyId(d.doc.property_id ?? "");
+        const docData = await docRes.json() as ApiResponse;
+        setData(docData);
+        setEditCategory(docData.doc.category ?? "");
+        setEditAmount(docData.doc.amount !== null ? String(docData.doc.amount) : "");
+        setEditDate(docData.doc.document_date ?? "");
+        setEditPropertyId(docData.doc.property_id ?? "");
+
+        if (categoriesRes.ok) {
+          const categories = await categoriesRes.json() as CategoryOption[];
+          setCategoryOptions(categories);
+        }
       })
       .catch((err: unknown) =>
         setError(err instanceof Error ? err.message : "Unbekannter Fehler."),
@@ -104,7 +111,7 @@ export default function DocumentDetailPage() {
         ...prev,
         doc: {
           ...prev.doc,
-          category: (editCategory as DocumentCategory) || null,
+          category: editCategory || null,
           amount: editAmount !== "" ? parseFloat(editAmount.replace(",", ".")) : null,
           document_date: editDate || null,
           property_id: editPropertyId || null,
@@ -238,12 +245,12 @@ export default function DocumentDetailPage() {
                     <Field label="Kategorie">
                       <select
                         value={editCategory}
-                        onChange={(e) => setEditCategory(e.target.value as DocumentCategory)}
+                        onChange={(e) => setEditCategory(e.target.value)}
                         className={inputClass}
                       >
                         <option value="">Keine Kategorie</option>
-                        {ALL_CATEGORIES.map((cat) => (
-                          <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
+                        {categoryOptions.map((cat) => (
+                          <option key={cat.id} value={cat.label}>{cat.label}</option>
                         ))}
                       </select>
                     </Field>
@@ -301,8 +308,8 @@ export default function DocumentDetailPage() {
                   <>
                     <MetaRow label="Kategorie">
                       {doc.category ? (
-                        <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                          {CATEGORY_LABELS[doc.category]}
+                          <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                          {doc.category}
                         </span>
                       ) : <Empty />}
                     </MetaRow>

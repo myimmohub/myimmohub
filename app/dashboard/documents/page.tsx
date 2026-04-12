@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { type DocumentCategory, CATEGORY_LABELS, ALL_CATEGORIES } from "@/lib/ai/categories";
 import { ALLOWED_TYPES, sanitizeFileName } from "@/lib/constants";
 
 type UploadStep = "idle" | "uploading" | "analysing" | "done" | "error";
@@ -12,6 +11,7 @@ type DocumentsTab = "eingang" | "alle";
 type UploadTab = "file" | "mail" | "csv";
 
 type PropertyRef = { id: string; name: string };
+type CategoryOption = { id: string; label: string; typ: string };
 type InboundMailbox = {
   alias: string;
   email: string | null;
@@ -24,7 +24,7 @@ type DocumentItem = {
   id: string;
   file_name: string;
   original_filename: string | null;
-  category: DocumentCategory | null;
+  category: string | null;
   amount: number | null;
   document_date: string | null;
   counterpart: string | null;
@@ -39,7 +39,7 @@ type InboxItem = {
   id: string;
   file_name: string;
   original_filename: string;
-  category: DocumentCategory | null;
+  category: string | null;
   amount: number | null;
   document_date: string | null;
   counterpart: string | null;
@@ -79,9 +79,12 @@ export default function DocumentsPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [isFetchingEmails, setIsFetchingEmails] = useState(false);
   const [inboundMailbox, setInboundMailbox] = useState<InboundMailbox | null>(null);
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
 
   const [search, setSearch] = useState("");
-  const [filterCategory, setFilterCategory] = useState<DocumentCategory | "">("");
+  const [filterCategory, setFilterCategory] = useState("");
   const [filterProperty, setFilterProperty] = useState("");
 
   const loadDocuments = useCallback(async () => {
@@ -92,11 +95,12 @@ export default function DocumentsPage() {
       return;
     }
 
-    const [docsRes, inboxRes, mailboxRes, propsRes] = await Promise.all([
+    const [docsRes, inboxRes, mailboxRes, propsRes, categoriesRes] = await Promise.all([
       fetch("/api/documents"),
       fetch("/api/inbox"),
       fetch("/api/settings/inbound-mailbox"),
       supabase.from("properties").select("id, name").eq("user_id", user.id).order("name"),
+      fetch("/api/settings/categories"),
     ]);
 
     if (!docsRes.ok || !inboxRes.ok) {
@@ -111,6 +115,9 @@ export default function DocumentsPage() {
 
     if (mailboxRes.ok) {
       setInboundMailbox(await mailboxRes.json() as InboundMailbox);
+    }
+    if (categoriesRes.ok) {
+      setCategoryOptions(await categoriesRes.json() as CategoryOption[]);
     }
 
     setProperties((propsRes.data ?? []) as PropertyRef[]);
@@ -233,6 +240,25 @@ export default function DocumentsPage() {
     await loadDocuments();
   };
 
+  const handleDeleteDocument = async (documentId: string) => {
+    setDeletingDocumentId(documentId);
+    const res = await fetch(`/api/documents/${documentId}`, { method: "DELETE" });
+    setDeletingDocumentId(null);
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => null) as { error?: string } | null;
+      setToast(body?.error ?? "Dokument konnte nicht gelöscht werden");
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+
+    setDocuments((current) => current.filter((doc) => doc.id !== documentId));
+    setInboxItems((current) => current.filter((doc) => doc.id !== documentId));
+    setDeleteConfirmId(null);
+    setToast("Dokument gelöscht");
+    setTimeout(() => setToast(null), 2000);
+  };
+
   const propertyName = (propertyId: string | null) =>
     propertyId ? properties.find((property) => property.id === propertyId)?.name ?? null : null;
 
@@ -327,7 +353,7 @@ export default function DocumentsPage() {
                       <div className="flex flex-wrap gap-2">
                         {item.category && (
                           <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                            {CATEGORY_LABELS[item.category]}
+                            {item.category}
                           </span>
                         )}
                         {item.amount != null && (
@@ -384,12 +410,12 @@ export default function DocumentsPage() {
               />
               <select
                 value={filterCategory}
-                onChange={(event) => setFilterCategory(event.target.value as DocumentCategory | "")}
+                onChange={(event) => setFilterCategory(event.target.value)}
                 className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               >
                 <option value="">Alle Kategorien</option>
-                {ALL_CATEGORIES.map((category) => (
-                  <option key={category} value={category}>{CATEGORY_LABELS[category]}</option>
+                {categoryOptions.map((category) => (
+                  <option key={category.id} value={category.label}>{category.label}</option>
                 ))}
               </select>
               <select
@@ -404,16 +430,17 @@ export default function DocumentsPage() {
               </select>
             </div>
 
-            <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 md:block">
-              <table className="w-full text-sm">
+            <div className="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 md:block">
+              <table className="min-w-[1080px] w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/60">
-                    <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Datum</th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Datei</th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Absender</th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Kategorie</th>
-                    <th className="px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">Betrag</th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Status</th>
+                    <th className="w-[120px] px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Datum</th>
+                    <th className="w-[320px] px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Datei</th>
+                    <th className="w-[220px] px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Absender</th>
+                    <th className="w-[170px] px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Kategorie</th>
+                    <th className="w-[140px] px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">Betrag</th>
+                    <th className="w-[140px] px-4 py-3 text-left font-medium text-slate-500 dark:text-slate-400">Status</th>
+                    <th className="w-[170px] px-4 py-3 text-right font-medium text-slate-500 dark:text-slate-400">Aktion</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -429,7 +456,7 @@ export default function DocumentsPage() {
                       <td className="px-4 py-3">
                         {doc.category ? (
                           <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                            {CATEGORY_LABELS[doc.category]}
+                            {doc.category}
                           </span>
                         ) : "—"}
                       </td>
@@ -442,6 +469,43 @@ export default function DocumentsPage() {
                             {STATUS_LABELS[doc.status] ?? doc.status}
                           </span>
                         ) : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          <Link
+                            href={`/dashboard/documents/${doc.id}`}
+                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                          >
+                            Öffnen
+                          </Link>
+                          {deleteConfirmId === doc.id ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteDocument(doc.id)}
+                                disabled={deletingDocumentId === doc.id}
+                                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-60"
+                              >
+                                {deletingDocumentId === doc.id ? "Löscht..." : "Ja, löschen"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteConfirmId(null)}
+                                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                              >
+                                Abbrechen
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setDeleteConfirmId(doc.id)}
+                              className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
+                            >
+                              Löschen
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -470,13 +534,45 @@ export default function DocumentsPage() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     {doc.category && (
                       <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                        {CATEGORY_LABELS[doc.category]}
+                        {doc.category}
                       </span>
                     )}
                     {doc.amount != null && (
                       <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                         {doc.amount.toLocaleString("de-DE", { style: "currency", currency: "EUR" })}
                       </span>
+                    )}
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    {deleteConfirmId === doc.id ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteDocument(doc.id)}
+                          disabled={deletingDocumentId === doc.id}
+                          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-60"
+                        >
+                          {deletingDocumentId === doc.id ? "Löscht..." : "Ja, löschen"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirmId(null)}
+                          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                        >
+                          Abbrechen
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setDeleteConfirmId(doc.id);
+                        }}
+                        className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
+                      >
+                        Löschen
+                      </button>
                     )}
                   </div>
                 </Link>
