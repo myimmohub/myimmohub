@@ -21,6 +21,7 @@ type PostmarkInboundPayload = {
   To: string;
   Subject: string;
   TextBody: string;
+  MailboxHash?: string;
   Attachments?: PostmarkAttachment[];
 };
 
@@ -36,11 +37,24 @@ function extractUserIdFromTo(to: string): string | null {
   return uuidRegex.test(localPart) ? localPart : null;
 }
 
+function extractAliasFromTo(to: string): string | null {
+  const email = to.split(",")[0].trim().replace(/^.*<(.+)>$/, "$1");
+  const localPart = email.split("@")[0]?.trim();
+  if (!localPart) return null;
+  if (localPart.includes("+")) {
+    const alias = localPart.split("+").slice(1).join("+").trim();
+    return alias || null;
+  }
+  return localPart;
+}
+
 export async function POST(request: Request) {
+  const url = new URL(request.url);
+  const queryToken = url.searchParams.get("token");
   // Optionale Token-Prüfung (Header: X-Webhook-Token)
   if (POSTMARK_WEBHOOK_TOKEN) {
     const token = request.headers.get("x-webhook-token");
-    if (token !== POSTMARK_WEBHOOK_TOKEN) {
+    if (token !== POSTMARK_WEBHOOK_TOKEN && queryToken !== POSTMARK_WEBHOOK_TOKEN) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
   }
@@ -58,13 +72,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { From: from, To: to, Subject: subject, TextBody: textBody, Attachments: attachments } = payload;
+  const {
+    From: from,
+    To: to,
+    Subject: subject,
+    TextBody: textBody,
+    MailboxHash: mailboxHash,
+    Attachments: attachments,
+  } = payload;
 
   if (!to) {
     return NextResponse.json({ error: "Missing To address." }, { status: 400 });
   }
 
-  const userId = extractUserIdFromTo(to);
+  const legacyUserId = extractUserIdFromTo(to);
+  const resolvedAlias = mailboxHash?.trim() || extractAliasFromTo(to);
+
+  let userId = legacyUserId;
+  if (!userId && resolvedAlias) {
+    const { data: mailbox } = await supabase
+      .from("user_inbound_mailboxes")
+      .select("user_id")
+      .eq("alias", resolvedAlias)
+      .eq("is_active", true)
+      .maybeSingle();
+    userId = mailbox?.user_id ?? null;
+  }
+
   if (!userId) {
     return NextResponse.json(
       { error: `Konnte user_id nicht aus Empfängeradresse ermitteln: ${to}` },

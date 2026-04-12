@@ -12,6 +12,13 @@ type DocumentsTab = "eingang" | "alle";
 type UploadTab = "file" | "mail" | "csv";
 
 type PropertyRef = { id: string; name: string };
+type InboundMailbox = {
+  alias: string;
+  email: string | null;
+  is_active: boolean;
+  mode: "postmark" | "unconfigured";
+  uses_custom_domain: boolean;
+};
 
 type DocumentItem = {
   id: string;
@@ -71,6 +78,7 @@ export default function DocumentsPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [isFetchingEmails, setIsFetchingEmails] = useState(false);
+  const [inboundMailbox, setInboundMailbox] = useState<InboundMailbox | null>(null);
 
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<DocumentCategory | "">("");
@@ -84,9 +92,10 @@ export default function DocumentsPage() {
       return;
     }
 
-    const [docsRes, inboxRes, propsRes] = await Promise.all([
+    const [docsRes, inboxRes, mailboxRes, propsRes] = await Promise.all([
       fetch("/api/documents"),
       fetch("/api/inbox"),
+      fetch("/api/settings/inbound-mailbox"),
       supabase.from("properties").select("id, name").eq("user_id", user.id).order("name"),
     ]);
 
@@ -98,6 +107,10 @@ export default function DocumentsPage() {
       setDocuments(await docsRes.json() as DocumentItem[]);
       setInboxItems(await inboxRes.json() as InboxItem[]);
       setError(null);
+    }
+
+    if (mailboxRes.ok) {
+      setInboundMailbox(await mailboxRes.json() as InboundMailbox);
     }
 
     setProperties((propsRes.data ?? []) as PropertyRef[]);
@@ -556,28 +569,45 @@ export default function DocumentsPage() {
             {uploadTab === "mail" && (
               <div className="mt-5 space-y-4">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/50">
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Postfach</p>
+                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Persönliches Postfach</p>
                   <div className="mt-2 flex items-center justify-between gap-3">
-                    <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{process.env.NEXT_PUBLIC_GMAIL_USER ?? "Keine Adresse konfiguriert"}</p>
-                    {process.env.NEXT_PUBLIC_GMAIL_USER && (
+                    <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                      {inboundMailbox?.email ?? "Noch nicht konfiguriert"}
+                    </p>
+                    {inboundMailbox?.email && (
                       <button
                         type="button"
-                        onClick={() => void navigator.clipboard.writeText(process.env.NEXT_PUBLIC_GMAIL_USER ?? "")}
+                        onClick={() => void navigator.clipboard.writeText(inboundMailbox.email ?? "")}
                         className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                       >
                         Kopieren
                       </button>
                     )}
                   </div>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                    {inboundMailbox?.mode === "postmark"
+                      ? inboundMailbox.uses_custom_domain
+                        ? "Mails an diese Adresse werden automatisch in den Dokumenteneingang übernommen."
+                        : "Postmark ist aktiv. Du kannst diese persönliche Adresse sofort nutzen; später kannst du optional noch eine eigene Domain darauf legen."
+                      : "Richte zuerst Postmark ein, dann erscheint hier automatisch die persönliche Adresse."}
+                  </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void handleFetchEmails()}
-                  disabled={isFetchingEmails}
-                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {isFetchingEmails ? "Abruf läuft..." : "E-Mails jetzt abrufen"}
-                </button>
+                {process.env.NEXT_PUBLIC_GMAIL_USER && (
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                    <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Legacy IMAP Abruf</p>
+                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                      Solange Postmark noch nicht vollständig live ist, kannst du den bisherigen Gmail-Abruf weiter als Fallback verwenden.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void handleFetchEmails()}
+                      disabled={isFetchingEmails}
+                      className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
+                    >
+                      {isFetchingEmails ? "Abruf läuft..." : "Gmail jetzt abrufen"}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
