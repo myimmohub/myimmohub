@@ -112,6 +112,56 @@ type ImportedSupplementalData = {
   import_notes: string[];
 };
 
+function normalizeDepreciationItemType(value: unknown): ImportedDepreciationItem["item_type"] | null {
+  const raw = asNullableString(value);
+  if (!raw) return null;
+
+  const normalized = raw
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  if (
+    [
+      "building",
+      "gebaude",
+      "afa_gebaude",
+      "abschreibung_gebaude",
+      "immovable_asset",
+    ].includes(normalized)
+  ) {
+    return "building";
+  }
+
+  if (["outdoor", "aussenanlagen", "aussenanlage", "outdoor_assets"].includes(normalized)) {
+    return "outdoor";
+  }
+
+  if (
+    [
+      "movable_asset",
+      "movable",
+      "fixtures",
+      "inventory",
+      "inventar",
+      "ausstattung",
+      "einbaukuche",
+      "einbaukueche",
+      "mobiliar",
+      "equipment",
+      "furniture",
+      "kitchen",
+    ].includes(normalized)
+  ) {
+    return "movable_asset";
+  }
+
+  return null;
+}
+
 function unwrapExtractedValue(value: unknown): unknown {
   if (value && typeof value === "object" && "value" in (value as Record<string, unknown>)) {
     return (value as Record<string, unknown>).value;
@@ -260,7 +310,8 @@ export async function POST(request: Request) {
                 },
                 {
                   type: "text",
-                  text: "Extrahiere alle Anlage-V-Felder aus diesem Dokument als JSON.",
+                  text:
+                    "Extrahiere alle erkennbaren Steuerdaten aus diesem Dokument als JSON. Berücksichtige Anlage V, FE/FB sowie AfA-Komponenten. Wenn AfA fuer Inventar, Ausstattung, Einbaukueche oder sonstige bewegliche Wirtschaftsgueter erkennbar ist, liefere diese ausdruecklich sowohl im Feld depreciation_fixtures als auch - falls moeglich - in depreciation_items.",
                 },
               ],
             },
@@ -384,11 +435,11 @@ export async function POST(request: Request) {
     }, []),
     depreciation_items: asObjectArray(extractedFields.depreciation_items).reduce<ImportedDepreciationItem[]>((acc, row) => {
       const label = asNullableString(row.label);
-      const itemType = asNullableString(row.item_type);
-      if (!label || !itemType || !["building", "outdoor", "movable_asset"].includes(itemType)) return acc;
+      const itemType = normalizeDepreciationItemType(row.item_type);
+      if (!label || !itemType) return acc;
       acc.push({
         label,
-        item_type: itemType as ImportedDepreciationItem["item_type"],
+        item_type: itemType,
         gross_annual_amount: asNullableNumber(row.gross_annual_amount),
         apply_rental_ratio: asNullableBoolean(row.apply_rental_ratio) ?? true,
       });
@@ -435,6 +486,18 @@ export async function POST(request: Request) {
       return acc;
     }, new Map<string, ImportedPartner>()).values(),
   );
+  if (
+    supplementalData.depreciation_items.every((item) => item.item_type !== "movable_asset") &&
+    (taxData.depreciation_fixtures ?? 0) > 0
+  ) {
+    supplementalData.depreciation_items.push({
+      label: "Inventar / Ausstattung",
+      item_type: "movable_asset",
+      gross_annual_amount: taxData.depreciation_fixtures,
+      apply_rental_ratio: true,
+    });
+    supplementalData.import_notes.push("AfA Inventar wurde aus dem PDF-Feld depreciation_fixtures als AfA-Komponente ergänzt.");
+  }
 
   // Upsert (overwrite if confirmed)
   const { data: saved, error: saveError } = overwrite

@@ -144,8 +144,11 @@ export default function DocumentsPage() {
     });
   }, [documents, filterCategory, filterProperty, search]);
 
-  const handleFileSelected = async (file: File) => {
-    if (!ALLOWED_TYPES.includes(file.type)) {
+  const handleFilesSelected = async (files: File[]) => {
+    if (files.length === 0) return;
+
+    const invalidFiles = files.filter((file) => !ALLOWED_TYPES.includes(file.type));
+    if (invalidFiles.length > 0) {
       setUploadError("Nur PDF, JPG und PNG sind erlaubt.");
       setUploadStep("error");
       return;
@@ -158,32 +161,38 @@ export default function DocumentsPage() {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) throw new Error("Nicht eingeloggt.");
 
-      const safeName = sanitizeFileName(file.name);
-      const storagePath = `${user.id}/uploads/${Date.now()}_${safeName}`;
+      let uploadedCount = 0;
 
-      const { error: storageError } = await supabase.storage
-        .from("documents")
-        .upload(storagePath, file, { contentType: file.type, upsert: false });
-      if (storageError) throw new Error(storageError.message);
+      for (const file of files) {
+        const safeName = sanitizeFileName(file.name);
+        const storagePath = `${user.id}/uploads/${Date.now()}_${safeName}`;
 
-      setUploadStep("analysing");
-      const res = await fetch("/api/documents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          storagePath,
-          fileName: safeName,
-          originalFilename: file.name,
-        }),
-      });
+        const { error: storageError } = await supabase.storage
+          .from("documents")
+          .upload(storagePath, file, { contentType: file.type, upsert: false });
+        if (storageError) throw new Error(storageError.message);
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => null) as { error?: string } | null;
-        throw new Error(body?.error ?? "Analyse fehlgeschlagen.");
+        setUploadStep("analysing");
+        const res = await fetch("/api/documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storagePath,
+            fileName: safeName,
+            originalFilename: file.name,
+          }),
+        });
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => null) as { error?: string } | null;
+          throw new Error(body?.error ?? `Analyse fehlgeschlagen für ${file.name}.`);
+        }
+
+        uploadedCount += 1;
       }
 
       setUploadStep("done");
-      setToast("Dokument hochgeladen");
+      setToast(uploadedCount === 1 ? "Dokument hochgeladen" : `${uploadedCount} Dokumente hochgeladen`);
       setTimeout(() => {
         setModalOpen(false);
         router.refresh();
@@ -638,17 +647,18 @@ export default function DocumentsPage() {
                   </div>
                   <div>
                     <p className="font-medium text-slate-700 dark:text-slate-300">Datei auswählen</p>
-                    <p className="mt-1 text-sm text-slate-500">PDF, JPG oder PNG werden direkt analysiert.</p>
+                    <p className="mt-1 text-sm text-slate-500">PDF, JPG oder PNG können auch gesammelt ausgewählt und direkt analysiert werden.</p>
                   </div>
                 </button>
                 <input
                   ref={fileInputRef}
                   type="file"
+                  multiple
                   accept={ALLOWED_TYPES.join(",")}
                   className="hidden"
                   onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) void handleFileSelected(file);
+                    const files = Array.from(event.target.files ?? []);
+                    if (files.length > 0) void handleFilesSelected(files);
                   }}
                 />
                 {uploadStep !== "idle" && (
