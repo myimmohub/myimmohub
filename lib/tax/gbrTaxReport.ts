@@ -10,6 +10,7 @@ import type {
 import { computeStructuredTaxData } from "@/lib/tax/structuredTaxLogic";
 import { mergeDuplicatePartners, mergePartnerTaxValuesByNormalizedName, normalizePartnerName } from "@/lib/tax/partnerNormalization";
 import { computeRentalShare } from "@/lib/tax/rentalShare";
+import { buildElsterLineSummary } from "@/lib/tax/elsterLineLogic";
 import {
   findOwnerAllocation,
   runRentalTaxEngineFromExistingData,
@@ -238,7 +239,17 @@ export function buildGbrTaxReport(args: {
   });
 
   const adjustedTaxData: TaxData = { ...structured.taxData };
-  const totals = calculateTaxTotals(adjustedTaxData);
+  const lineSummary = buildElsterLineSummary(adjustedTaxData, {
+    maintenanceDistributions: structured.maintenanceDistributions,
+    taxYear: taxData.tax_year,
+  });
+  const totals = {
+    totalIncome: lineSummary.income_total,
+    totalExpenses: lineSummary.advertising_costs_total,
+    depreciationTotal: lineSummary.depreciation_total,
+    specialDeductionsTotal: lineSummary.special_deductions_total,
+    result: lineSummary.result,
+  };
   warnings.push(...structured.warnings.map((item) => item.message));
 
   const engineOutput = runRentalTaxEngineFromExistingData({

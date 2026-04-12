@@ -89,7 +89,9 @@ export default function TaxYearPage() {
   const [maintenanceDistributions, setMaintenanceDistributions] = useState<LocalMaintenanceDistribution[]>([]);
   const [candidateTransactions, setCandidateTransactions] = useState<CandidateTransaction[]>([]);
   const [linkedTransactions, setLinkedTransactions] = useState<CandidateTransaction[]>([]);
-  const [transactionSearch, setTransactionSearch] = useState("");
+  const [transactionNameFilter, setTransactionNameFilter] = useState("");
+  const [transactionCategoryFilter, setTransactionCategoryFilter] = useState("");
+  const [transactionAmountFilter, setTransactionAmountFilter] = useState("");
   const [showOnlyUnassignedTransactions, setShowOnlyUnassignedTransactions] = useState(true);
   const [logicError, setLogicError] = useState<string | null>(null);
   const [savingLogicId, setSavingLogicId] = useState<string | null>(null);
@@ -401,7 +403,57 @@ export default function TaxYearPage() {
     return ids;
   }, [maintenanceDistributions]);
 
-  const normalizedTransactionSearch = transactionSearch.trim().toLocaleLowerCase("de-DE");
+  const normalizedTransactionNameFilter = transactionNameFilter.trim().toLocaleLowerCase("de-DE");
+  const normalizedTransactionCategoryFilter = transactionCategoryFilter.trim().toLocaleLowerCase("de-DE");
+  const normalizedTransactionAmountFilter = transactionAmountFilter.trim().replace(/\s/g, "").replace(",", ".");
+  const availableTransactionCategories = useMemo(() => (
+    Array.from(
+      new Set(
+        candidateTransactions
+          .map((transaction) => transaction.category?.trim())
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ).sort((a, b) => a.localeCompare(b, "de-DE"))
+  ), [candidateTransactions]);
+
+  const transactionMatchesFilters = useCallback((transaction: CandidateTransaction) => {
+    if (normalizedTransactionCategoryFilter) {
+      const categoryValue = transaction.category?.trim().toLocaleLowerCase("de-DE") ?? "";
+      if (categoryValue !== normalizedTransactionCategoryFilter) return false;
+    }
+
+    if (normalizedTransactionNameFilter) {
+      const haystack = [
+        transaction.counterpart,
+        transaction.description,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("de-DE");
+      if (!haystack.includes(normalizedTransactionNameFilter)) return false;
+    }
+
+    if (normalizedTransactionAmountFilter) {
+      const absoluteAmount = Math.abs(Number(transaction.amount ?? 0));
+      const amountVariants = [
+        absoluteAmount.toFixed(2),
+        absoluteAmount.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\s/g, "").replace(",", "."),
+        absoluteAmount.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\s/g, ""),
+      ];
+      if (!amountVariants.some((value) => value.includes(normalizedTransactionAmountFilter))) return false;
+    }
+
+    return true;
+  }, [normalizedTransactionAmountFilter, normalizedTransactionCategoryFilter, normalizedTransactionNameFilter]);
+
+  const getAvailableTransactionsForItem = useCallback((selectedTransactionIds: string[]) => (
+    candidateTransactions.filter((transaction) => {
+      const isSelectedOnThisItem = selectedTransactionIds.includes(transaction.id);
+      const isUsedElsewhere = usedTransactionIds.has(transaction.id) && !isSelectedOnThisItem;
+      if (showOnlyUnassignedTransactions && isUsedElsewhere) return false;
+      return transactionMatchesFilters(transaction);
+    })
+  ), [candidateTransactions, showOnlyUnassignedTransactions, transactionMatchesFilters, usedTransactionIds]);
 
   const toggleMaintenanceTransaction = (itemId: string, transactionId: string, checked: boolean) => {
     setMaintenanceDistributions((current) => current.map((candidate) => {
@@ -434,27 +486,7 @@ export default function TaxYearPage() {
       if (candidate.id !== itemId) return candidate;
 
       const selectedIds = new Set(candidate.source_transaction_ids ?? []);
-      const visibleTransactions = candidateTransactions.filter((transaction) => {
-        const isSelectedOnThisItem = selectedIds.has(transaction.id);
-        const isUsedElsewhere = usedTransactionIds.has(transaction.id) && !isSelectedOnThisItem;
-        if (showOnlyUnassignedTransactions && isUsedElsewhere) return false;
-
-        if (!normalizedTransactionSearch) {
-          return isSelectedOnThisItem || !isUsedElsewhere;
-        }
-
-        const haystack = [
-          transaction.counterpart,
-          transaction.description,
-          transaction.category,
-          transaction.date,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLocaleLowerCase("de-DE");
-
-        return haystack.includes(normalizedTransactionSearch);
-      });
+      const visibleTransactions = getAvailableTransactionsForItem(Array.from(selectedIds));
 
       for (const transaction of visibleTransactions) {
         selectedIds.add(transaction.id);
@@ -956,13 +988,31 @@ export default function TaxYearPage() {
                 </button>
               </div>
               <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-3 dark:border-slate-800 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="text"
-                    value={transactionSearch}
-                    onChange={(e) => setTransactionSearch(e.target.value)}
-                    placeholder="Buchungen durchsuchen"
+                    value={transactionNameFilter}
+                    onChange={(e) => setTransactionNameFilter(e.target.value)}
+                    placeholder="Nach Name oder Beschreibung filtern"
                     className="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  />
+                  <select
+                    value={transactionCategoryFilter}
+                    onChange={(e) => setTransactionCategoryFilter(e.target.value)}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  >
+                    <option value="">Alle Kategorien</option>
+                    {availableTransactionCategories.map((category) => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={transactionAmountFilter}
+                    onChange={(e) => setTransactionAmountFilter(e.target.value)}
+                    placeholder="Nach Betrag filtern"
+                    className="w-48 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
                   <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                     <input
@@ -1006,27 +1056,7 @@ export default function TaxYearPage() {
                         const selectedTransactions = selectedTransactionIds
                           .map((transactionId) => transactionMap.get(transactionId))
                           .filter((value): value is CandidateTransaction => Boolean(value));
-                        const availableForItem = candidateTransactions.filter((transaction) => {
-                          const isSelectedOnThisItem = selectedTransactionIds.includes(transaction.id);
-                          const isUsedElsewhere = usedTransactionIds.has(transaction.id) && !isSelectedOnThisItem;
-                          if (showOnlyUnassignedTransactions && isUsedElsewhere) return false;
-
-                          if (!normalizedTransactionSearch) {
-                            return isSelectedOnThisItem || !isUsedElsewhere;
-                          }
-
-                          const haystack = [
-                            transaction.counterpart,
-                            transaction.description,
-                            transaction.category,
-                            transaction.date,
-                          ]
-                            .filter(Boolean)
-                            .join(" ")
-                            .toLocaleLowerCase("de-DE");
-
-                          return haystack.includes(normalizedTransactionSearch);
-                        });
+                        const availableForItem = getAvailableTransactionsForItem(selectedTransactionIds);
                         return (
                           <tr key={item.id}>
                             <td className="px-4 py-3">

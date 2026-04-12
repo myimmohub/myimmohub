@@ -44,7 +44,8 @@ export function isDistributionActiveForYear(
   taxYear: number,
 ): boolean {
   if (item.status !== "active") return false;
-  const lastYear = item.source_year + Math.max(1, item.distribution_years) - 1;
+  const normalizedYears = getNormalizedDistributionYears(item, taxYear);
+  const lastYear = item.source_year + Math.max(1, normalizedYears) - 1;
   return taxYear >= item.source_year && taxYear <= lastYear;
 }
 
@@ -141,9 +142,10 @@ export function computeStructuredTaxData(args: {
         ? "depreciation_fixtures"
         : "depreciation_building";
 
+    const normalizedDistributionYears = getNormalizedDistributionYears(item, taxYear);
     const effectiveDistributionYears = effectiveClassification === "maintenance_expense"
       ? item.deduction_mode === "distributed"
-        ? clampDistributionYears(item.distribution_years)
+        ? clampDistributionYears(normalizedDistributionYears)
         : 1
       : Math.max(1, Math.round(1 / Math.max(0.0001, buildingAfaRate)));
 
@@ -203,13 +205,25 @@ export function computeStructuredTaxData(args: {
     });
   }
   if (depreciationLineTotals.depreciation_building != null) {
-    nextTaxData.depreciation_building = depreciationLineTotals.depreciation_building;
+    nextTaxData.depreciation_building = preferImportedElsterLineValue({
+      importSource: taxData.import_source,
+      originalValue: taxData.depreciation_building,
+      computedValue: depreciationLineTotals.depreciation_building,
+    });
   }
   if (depreciationLineTotals.depreciation_outdoor != null) {
-    nextTaxData.depreciation_outdoor = depreciationLineTotals.depreciation_outdoor;
+    nextTaxData.depreciation_outdoor = preferImportedElsterLineValue({
+      importSource: taxData.import_source,
+      originalValue: taxData.depreciation_outdoor,
+      computedValue: depreciationLineTotals.depreciation_outdoor,
+    });
   }
   if (depreciationLineTotals.depreciation_fixtures != null) {
-    nextTaxData.depreciation_fixtures = depreciationLineTotals.depreciation_fixtures;
+    nextTaxData.depreciation_fixtures = preferImportedElsterLineValue({
+      importSource: taxData.import_source,
+      originalValue: taxData.depreciation_fixtures,
+      computedValue: depreciationLineTotals.depreciation_fixtures,
+    });
   }
   if (depreciationLineTotals.maintenance_costs != null) {
     nextTaxData.maintenance_costs = depreciationLineTotals.maintenance_costs;
@@ -234,10 +248,29 @@ function clampDistributionYears(value: number) {
   return Math.min(5, Math.max(2, Math.round(value || 2)));
 }
 
+function getNormalizedDistributionYears(item: TaxMaintenanceDistributionItem, taxYear: number) {
+  const minimumYearsForCarryForward = Math.max(1, taxYear - item.source_year + 1);
+  if (item.deduction_mode === "distributed") {
+    return Math.max(item.distribution_years || 0, minimumYearsForCarryForward);
+  }
+  return Math.max(1, item.distribution_years || 1);
+}
+
 function deriveBuildingAfaRate(taxData: TaxData) {
   if (taxData.build_year != null) {
     if (taxData.build_year < 1925) return 0.025;
     if (taxData.build_year >= 2023) return 0.03;
   }
   return 0.02;
+}
+
+function preferImportedElsterLineValue(args: {
+  importSource?: TaxData["import_source"];
+  originalValue: number | null | undefined;
+  computedValue: number | null | undefined;
+}) {
+  const { importSource, originalValue, computedValue } = args;
+  if (importSource !== "pdf_import") return computedValue;
+  if (originalValue == null || computedValue == null) return computedValue;
+  return Math.abs(Number(originalValue) - Number(computedValue)) <= 2 ? Number(originalValue) : computedValue;
 }

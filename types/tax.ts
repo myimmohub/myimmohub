@@ -4,6 +4,15 @@
 
 export type TaxConfidence = "high" | "medium" | "low";
 
+export interface ImportedExpenseBlockMetadata {
+  key: string;
+  label: string;
+  amount: number | null;
+  detail?: string | null;
+}
+
+export type TaxImportConfidenceMap = Record<string, TaxConfidence | ImportedExpenseBlockMetadata[] | unknown>;
+
 export interface TaxData {
   id: string;
   property_id: string;
@@ -49,7 +58,7 @@ export interface TaxData {
 
   // Import-Metadaten
   import_source?: "pdf_import" | "manual" | "calculated" | null;
-  import_confidence?: Record<string, TaxConfidence> | null;
+  import_confidence?: TaxImportConfidenceMap | null;
 }
 
 /** Numerische Felder die aus Transaktionen berechenbar sind */

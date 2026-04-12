@@ -97,7 +97,10 @@ export default function TaxExportPage() {
   const filledCount = displayTaxData
     ? TAX_FIELDS.filter((f) => (displayTaxData as unknown as Record<string, unknown>)[f.key] != null).length
     : 0;
-  const lineSummary = displayTaxData ? buildElsterLineSummary(displayTaxData) : null;
+  const lineSummary = displayTaxData ? buildElsterLineSummary(displayTaxData, {
+    maintenanceDistributions,
+    taxYear,
+  }) : null;
 
   if (loading) return <Skeleton />;
 

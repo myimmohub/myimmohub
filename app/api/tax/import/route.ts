@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { normalizePartnerName } from "@/lib/tax/partnerNormalization";
+import type { ImportedExpenseBlockMetadata, TaxImportConfidenceMap } from "@/types/tax";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -51,6 +52,14 @@ name, anteil_pct, email, special_expenses, note
 
 expense_blocks ist ein Array von Objekten mit:
 key, label, amount, detail
+
+Bei expense_blocks bitte moeglichst offizielle ELSTER-Kostenbloecke getrennt erfassen, z. B.:
+- allocated_costs / umgelegte_kosten
+- non_allocated_costs / nicht_umgelegte_kosten
+- other_expenses / sonstige_kosten
+- maintenance_current_year
+- maintenance_prior_year_2022
+- maintenance_prior_year_2023
 
 depreciation_items ist ein Array von Objekten mit:
 label, item_type, gross_annual_amount, apply_rental_ratio
@@ -244,6 +253,36 @@ function round2(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+function inferMaintenanceSourceYear(
+  item: ImportedMaintenanceDistribution,
+  taxYear: number,
+) {
+  if (item.source_year != null) return item.source_year;
+  const haystack = `${item.label} ${item.note ?? ""}`.toLowerCase();
+  const yearMatch = haystack.match(/\baus\s+(20\d{2})\b/);
+  if (yearMatch) return Number(yearMatch[1]);
+  return taxYear;
+}
+
+function normalizeImportedMaintenanceDistribution(
+  item: ImportedMaintenanceDistribution,
+  taxYear: number,
+): ImportedMaintenanceDistribution {
+  const sourceYear = inferMaintenanceSourceYear(item, taxYear);
+  const looksDistributed = item.deduction_mode === "distributed" || sourceYear < taxYear;
+  const minimumYearsForCarryForward = Math.max(1, taxYear - sourceYear + 1);
+  const distributionYears = looksDistributed
+    ? Math.min(5, Math.max(Math.max(2, minimumYearsForCarryForward), item.distribution_years ?? 3))
+    : 1;
+
+  return {
+    ...item,
+    source_year: sourceYear,
+    deduction_mode: looksDistributed ? "distributed" : "immediate",
+    distribution_years: distributionYears,
+  };
+}
+
 export async function POST(request: Request) {
   // Env check
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !ANTHROPIC_API_KEY) {
@@ -422,7 +461,7 @@ export async function POST(request: Request) {
     special_deduction_7b: asNullableNumber(extractedFields.special_deduction_7b),
     special_deduction_renovation: asNullableNumber(extractedFields.special_deduction_renovation),
     import_source: "pdf_import",
-    import_confidence: confidence,
+    import_confidence: confidence as TaxImportConfidenceMap,
   };
 
   const supplementalData: ImportedSupplementalData = {
@@ -500,6 +539,9 @@ export async function POST(request: Request) {
     }, []),
     import_notes: [],
   };
+  supplementalData.maintenance_distributions = supplementalData.maintenance_distributions.map((item) =>
+    normalizeImportedMaintenanceDistribution(item, tax_year),
+  );
   supplementalData.partners = Array.from(
     supplementalData.partners.reduce((acc, partner) => {
       const key = normalizePartnerName(partner.name);
@@ -565,6 +607,13 @@ export async function POST(request: Request) {
       apply_rental_ratio: true,
     });
     supplementalData.import_notes.push("AfA Inventar wurde aus dem PDF-Feld depreciation_fixtures als AfA-Komponente ergänzt.");
+  }
+
+  if (supplementalData.expense_blocks.length > 0) {
+    taxData.import_confidence = {
+      ...(taxData.import_confidence ?? {}),
+      __expense_blocks: supplementalData.expense_blocks as ImportedExpenseBlockMetadata[],
+    } as TaxImportConfidenceMap;
   }
 
   // Upsert (overwrite if confirmed)

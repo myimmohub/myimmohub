@@ -47,7 +47,13 @@ export default function GbrTaxPdfPage() {
   const anlageVExpenseRows = useMemo(() => {
     if (!report) return [];
     const taxData = report.tax_data;
-    const lineSummary = buildElsterLineSummary(taxData);
+    const lineSummary = buildElsterLineSummary(taxData, {
+      maintenanceDistributions: report.logic.maintenance_distributions,
+      taxYear,
+    });
+    const otherExpensesBucket = lineSummary.expense_buckets.find((bucket) => bucket.key === "other_expenses")
+      ?? lineSummary.expense_buckets.find((bucket) => bucket.key.includes("other"));
+
     return [
       ["33", "AfA Gebäude", fmtEur(taxData.depreciation_building ?? null)],
       ["34", "AfA Außenanlagen", fmtEur(taxData.depreciation_outdoor ?? null)],
@@ -57,11 +63,11 @@ export default function GbrTaxPdfPage() {
       ["47", "Schuldzinsen", fmtEur(taxData.loan_interest ?? null)],
       ["48", "Versicherungen", fmtEur(taxData.insurance ?? null)],
       ["49", "Hausverwaltung / Hausgeld", fmtEur(taxData.property_management ?? null)],
-      ["50", "Sonstige Werbungskosten", fmtEur(lineSummary.expense_buckets.find((bucket) => bucket.key === "other_expenses")?.amount ?? 0)],
+      ["50", "Sonstige Werbungskosten", fmtEur(otherExpensesBucket?.amount ?? 0)],
       ["60", "Sonderabschreibung § 7b", fmtEur(taxData.special_deduction_7b ?? null)],
       ["61", "Weitere Sonderabzüge", fmtEur(taxData.special_deduction_renovation ?? null)],
     ] as const;
-  }, [report]);
+  }, [report, taxYear]);
 
   if (!report) {
     return (
@@ -165,7 +171,10 @@ export default function GbrTaxPdfPage() {
 
           <ElsterSection title="3b. Verdichtete Kostenblöcke">
             <FormGrid
-              rows={buildElsterLineSummary(report.tax_data).expense_buckets.map((bucket, index) => [
+              rows={buildElsterLineSummary(report.tax_data, {
+                maintenanceDistributions: report.logic.maintenance_distributions,
+                taxYear,
+              }).expense_buckets.map((bucket, index) => [
                 `WK-${index + 1}`,
                 bucket.detail ? `${bucket.label} (${bucket.detail})` : bucket.label,
                 fmtEur(bucket.amount),

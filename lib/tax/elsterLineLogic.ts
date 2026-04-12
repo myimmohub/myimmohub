@@ -1,4 +1,9 @@
-import type { TaxData } from "@/types/tax";
+import type {
+  ComputedTaxMaintenanceDistributionItem,
+  ImportedExpenseBlockMetadata,
+  TaxData,
+  TaxMaintenanceDistributionItem,
+} from "@/types/tax";
 
 export type ElsterLineBucket = {
   key: string;
@@ -23,10 +28,115 @@ export type ElsterAllocatedBucket = ElsterLineBucket & {
   allocated_amount: number;
 };
 
+type BuildElsterLineSummaryOptions = {
+  maintenanceDistributions?: Array<ComputedTaxMaintenanceDistributionItem | TaxMaintenanceDistributionItem>;
+  taxYear?: number;
+};
+
 const round2 = (value: number) => Math.round(value * 100) / 100;
 const num = (value: number | null | undefined) => Number(value ?? 0);
 
-export function buildElsterLineSummary(taxData: TaxData): ElsterLineSummary {
+function readImportedExpenseBlocks(taxData: TaxData) {
+  const metadata = taxData.import_confidence?.__expense_blocks;
+  if (!Array.isArray(metadata)) return [] as ImportedExpenseBlockMetadata[];
+
+  return metadata.reduce<ImportedExpenseBlockMetadata[]>((acc, item) => {
+    if (!item || typeof item !== "object") return acc;
+    const row = item as Record<string, unknown>;
+    const key = typeof row.key === "string" ? row.key : null;
+    const label = typeof row.label === "string" ? row.label : null;
+    const amount = typeof row.amount === "number" ? row.amount : Number(row.amount ?? NaN);
+    if (!key || !label || !Number.isFinite(amount)) return acc;
+    acc.push({
+      key,
+      label,
+      amount,
+      detail: typeof row.detail === "string" ? row.detail : null,
+    });
+    return acc;
+  }, []);
+}
+
+function normalizeImportedExpenseKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function buildExpenseBucketsFromImport(taxData: TaxData) {
+  return readImportedExpenseBlocks(taxData)
+    .map((bucket) => ({
+      key: normalizeImportedExpenseKey(bucket.key),
+      label: bucket.label,
+      amount: round2(num(bucket.amount)),
+      detail: bucket.detail ?? undefined,
+    }))
+    .filter((bucket) => bucket.amount !== 0);
+}
+
+function isComputedDistribution(
+  item: ComputedTaxMaintenanceDistributionItem | TaxMaintenanceDistributionItem,
+): item is ComputedTaxMaintenanceDistributionItem {
+  return "deductible_amount_elster" in item;
+}
+
+function buildMaintenanceBuckets(
+  maintenanceDistributions: Array<ComputedTaxMaintenanceDistributionItem | TaxMaintenanceDistributionItem>,
+  taxYear: number,
+) {
+  const grouped = new Map<number, number>();
+  let residualImmediateMaintenance = 0;
+
+  for (const item of maintenanceDistributions) {
+    const classification = "effective_classification" in item ? item.effective_classification : item.classification;
+    if (classification !== "maintenance_expense") continue;
+
+    const amount = isComputedDistribution(item)
+      ? num(item.deductible_amount_elster)
+      : item.current_year_share_override != null
+        ? num(item.current_year_share_override)
+        : item.distribution_years > 0
+          ? round2(num(item.total_amount) / item.distribution_years)
+          : num(item.total_amount);
+
+    if (amount === 0) continue;
+    if ((item.source_year ?? taxYear) === taxYear && (item.deduction_mode === "immediate" || item.distribution_years <= 1)) {
+      residualImmediateMaintenance += amount;
+      continue;
+    }
+    grouped.set(item.source_year ?? taxYear, round2((grouped.get(item.source_year ?? taxYear) ?? 0) + amount));
+  }
+
+  const buckets: ElsterLineBucket[] = Array.from(grouped.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([sourceYear, amount]) => ({
+      key: sourceYear === taxYear ? `maintenance_${sourceYear}` : `maintenance_prior_${sourceYear}`,
+      label: sourceYear === taxYear
+        ? `Verteilter Erhaltungsaufwand ${sourceYear}`
+        : `Verteilter Erhaltungsaufwand aus ${sourceYear}`,
+      amount: round2(amount),
+    }));
+
+  if (residualImmediateMaintenance !== 0) {
+    buckets.unshift({
+      key: "maintenance_immediate",
+      label: "Sofort abziehbarer Erhaltungsaufwand",
+      amount: round2(residualImmediateMaintenance),
+    });
+  }
+
+  return buckets;
+}
+
+export function buildElsterLineSummary(
+  taxData: TaxData,
+  options: BuildElsterLineSummaryOptions = {},
+): ElsterLineSummary {
+  const taxYear = options.taxYear ?? taxData.tax_year;
   const incomeBuckets: ElsterLineBucket[] = [
     { key: "rent_income", label: "Mieteinnahmen", amount: round2(num(taxData.rent_income)) },
     { key: "operating_costs_income", label: "Nebenkosten / Umlagen", amount: round2(num(taxData.operating_costs_income)) },
@@ -35,7 +145,11 @@ export function buildElsterLineSummary(taxData: TaxData): ElsterLineSummary {
     { key: "other_income", label: "Sonstige Einnahmen", amount: round2(num(taxData.other_income)) },
   ].filter((bucket) => bucket.amount !== 0);
 
-  const expenseBuckets: ElsterLineBucket[] = [
+  const importedExpenseBuckets = buildExpenseBucketsFromImport(taxData);
+  const maintenanceBuckets = buildMaintenanceBuckets(options.maintenanceDistributions ?? [], taxYear);
+  const hasImportedMaintenanceBlock = importedExpenseBuckets.some((bucket) => bucket.key.includes("maintenance"));
+
+  const fallbackExpenseBuckets: ElsterLineBucket[] = [
     {
       key: "allocated_costs",
       label: "Umlagefähige laufende Kosten",
@@ -54,17 +168,20 @@ export function buildElsterLineSummary(taxData: TaxData): ElsterLineSummary {
       amount: round2(num(taxData.loan_interest) + num(taxData.property_management) + num(taxData.bank_fees)),
       detail: "Schuldzinsen, Verwaltung, Kontoführung",
     },
-    {
-      key: "maintenance_costs",
-      label: "Erhaltungsaufwand",
-      amount: round2(num(taxData.maintenance_costs)),
-    },
+    ...maintenanceBuckets,
     {
       key: "other_expenses",
       label: "Sonstige Werbungskosten",
       amount: round2(num(taxData.other_expenses)),
     },
   ].filter((bucket) => bucket.amount !== 0);
+
+  const expenseBuckets = importedExpenseBuckets.length > 0
+    ? [
+        ...importedExpenseBuckets,
+        ...(!hasImportedMaintenanceBlock ? maintenanceBuckets : []),
+      ].filter((bucket) => bucket.amount !== 0)
+    : fallbackExpenseBuckets;
 
   const depreciationBuckets: ElsterLineBucket[] = [
     { key: "depreciation_building", label: "AfA Gebäude", amount: round2(num(taxData.depreciation_building)) },

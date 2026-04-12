@@ -145,7 +145,10 @@ export default function GbrTaxYearPage() {
     gesamt_tage: report.gbr.gesamt_tage,
     rental_share_override_pct: report.gbr.rental_share_source === "override" ? report.gbr.rental_share_pct : null,
   });
-  const lineSummary = buildElsterLineSummary(report.tax_data);
+  const lineSummary = buildElsterLineSummary(report.tax_data, {
+    maintenanceDistributions: report.logic.maintenance_distributions,
+    taxYear,
+  });
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10 dark:bg-slate-950">
