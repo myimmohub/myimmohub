@@ -225,10 +225,20 @@ export function calculateProfitability(
     const amount = Number(tx.amount);
     const cat    = tx.category ?? "";
 
-    if (isEinnahme(cat, dbCatMap)) {
-      einnahmen += amount; // positiv
+    // Einnahme/Ausgabe-Klassifizierung:
+    // 1. DB-Kategorie gefunden → DB-Typ ist maßgeblich
+    // 2. Alter Slug → OLD_EINNAHMEN_SLUGS
+    // 3. Fallback: Vorzeichen des Betrags (verhindert Fehlklassifizierung
+    //    bei nicht erkannten Labels, z.B. alte "(Anlage V Z. X)"-Formate)
+    const dbCat = dbCatMap?.get(cat);
+    const istEinnahme = dbCat
+      ? dbCat.typ === "einnahme"
+      : OLD_EINNAHMEN_SLUGS.has(cat) || amount > 0;
+
+    if (istEinnahme) {
+      einnahmen += amount;
     } else {
-      ausgaben += Math.abs(amount); // als positiven Wert speichern
+      ausgaben += Math.abs(amount);
       if (isZinsen(cat, dbCatMap)) {
         zinsen += Math.abs(amount);
       }

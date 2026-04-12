@@ -30,6 +30,32 @@ type CategorizeResponse = {
   firstError: string | null;
 };
 
+/** GET /api/banking/categorize — Anzahl unkategorisierter Transaktionen */
+export async function GET(request: Request) {
+  const { data: { user } } = await getUser();
+  if (!user) return NextResponse.json({ error: "Nicht authentifiziert." }, { status: 401 });
+
+  const { searchParams } = new URL(request.url);
+  const mode = searchParams.get("mode") ?? "new";
+  const db = serviceRoleClient();
+
+  let query = db
+    .from("transactions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+
+  if (mode === "fixold") {
+    query = query.like("category", "%(Anlage V%");
+  } else if (mode === "force") {
+    query = query.not("category", "is", null);
+  } else {
+    query = query.or("category.is.null,category.neq.aufgeteilt");
+  }
+
+  const { count } = await query;
+  return NextResponse.json({ count: count ?? 0 });
+}
+
 export async function POST(request: Request) {
   // ── Authentifizierung ──────────────────────────────────────────────────────
   const { data: { user } } = await getUser();

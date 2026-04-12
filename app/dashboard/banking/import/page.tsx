@@ -78,6 +78,9 @@ export default function BankingImportPage() {
   const [aiCategorizing, setAiCategorizing] = useState(false);
   const [aiCategorized, setAiCategorized] = useState<number | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [aiTotal, setAiTotal] = useState<number | null>(null);
+  const [aiProgress, setAiProgress] = useState(0);
+  const aiProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Properties laden für optionale Zuordnung
   useEffect(() => {
@@ -523,36 +526,66 @@ export default function BankingImportPage() {
                   </div>
                 )}
                 {aiCategorized === null && (
-                  <button
-                    type="button"
-                    disabled={aiCategorizing}
-                    onClick={async () => {
-                      setAiCategorizing(true);
-                      setAiError(null);
-                      const res = await fetch("/api/banking/categorize", { method: "POST" });
-                      setAiCategorizing(false);
-                      const body = (await res.json()) as { categorized: number; errors: number; firstError: string | null };
-                      setAiCategorized(body.categorized);
-                      if (body.errors > 0 && body.firstError) {
-                        setAiError(`${body.errors} Fehler · ${body.firstError}`);
-                      }
-                    }}
-                    className="mt-3 inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-purple-700 disabled:opacity-60"
-                  >
-                    {aiCategorizing ? (
-                      <>
-                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                        Kategorisiere…
-                      </>
-                    ) : (
-                      <>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-                        </svg>
-                        Jetzt KI-kategorisieren
-                      </>
+                  <div className="mt-3 space-y-2">
+                    {aiCategorizing && aiTotal !== null && (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs text-purple-600 dark:text-purple-400">
+                          <span>Kategorisiere {aiTotal} Transaktion{aiTotal !== 1 ? "en" : ""}…</span>
+                          <span>{Math.round(aiProgress)}%</span>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-purple-100 dark:bg-purple-900/40">
+                          <div
+                            className="h-full rounded-full bg-purple-500 transition-all duration-500 ease-out"
+                            style={{ width: `${aiProgress}%` }}
+                          />
+                        </div>
+                      </div>
                     )}
-                  </button>
+                    <button
+                      type="button"
+                      disabled={aiCategorizing}
+                      onClick={async () => {
+                        setAiError(null);
+                        setAiProgress(0);
+                        // Anzahl unkategorisierter Transaktionen abrufen
+                        const countRes = await fetch("/api/banking/categorize");
+                        const { count } = (await countRes.json()) as { count: number };
+                        setAiTotal(count);
+                        setAiCategorizing(true);
+                        // Fortschritt simulieren: 5 TX/Batch × ~3 s/Batch
+                        const estimatedMs = Math.max(5000, (count / 5) * 3000);
+                        const intervalMs = 300;
+                        const step = (90 / estimatedMs) * intervalMs;
+                        aiProgressRef.current = setInterval(() => {
+                          setAiProgress((p) => Math.min(p + step, 90));
+                        }, intervalMs);
+                        const res = await fetch("/api/banking/categorize", { method: "POST" });
+                        if (aiProgressRef.current) clearInterval(aiProgressRef.current);
+                        setAiProgress(100);
+                        setAiCategorizing(false);
+                        const body = (await res.json()) as { categorized: number; errors: number; firstError: string | null };
+                        setAiCategorized(body.categorized);
+                        if (body.errors > 0 && body.firstError) {
+                          setAiError(`${body.errors} Fehler · ${body.firstError}`);
+                        }
+                      }}
+                      className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-purple-700 disabled:opacity-60"
+                    >
+                      {aiCategorizing ? (
+                        <>
+                          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                          Kategorisiere…
+                        </>
+                      ) : (
+                        <>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                          </svg>
+                          Jetzt KI-kategorisieren
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
               </div>
             )}

@@ -227,6 +227,9 @@ export default function BankingReviewPage() {
   // KI-Kategorisierung
   const [aiCategorizing, setAiCategorizing] = useState(false);
   const [aiResult, setAiResult]             = useState<{ categorized: number; errors: number; firstError: string | null } | null>(null);
+  const [aiTotal, setAiTotal]               = useState<number | null>(null);
+  const [aiProgress, setAiProgress]         = useState(0);
+  const aiProgressRef                       = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Detail-Expansion (Verwendungszweck)
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -525,13 +528,26 @@ export default function BankingReviewPage() {
   );
 
   const handleAiCategorize = async (mode: "new" | "force" | "fixold" = "new") => {
-    setAiCategorizing(true);
     setAiResult(null);
     setSaveError(null);
+    setAiProgress(0);
     const params = mode === "force" ? "?force=true" : mode === "fixold" ? "?fixold=true" : "";
-    const res = await fetch(`/api/banking/categorize${params}`, {
-      method: "POST",
-    });
+    const modeParam = mode === "fixold" ? "?mode=fixold" : mode === "force" ? "?mode=force" : "";
+    // Anzahl unkategorisierter Transaktionen abrufen
+    const countRes = await fetch(`/api/banking/categorize${modeParam}`);
+    const { count } = (await countRes.json()) as { count: number };
+    setAiTotal(count);
+    setAiCategorizing(true);
+    // Fortschritt simulieren
+    const estimatedMs = Math.max(5000, (count / 5) * 3000);
+    const intervalMs = 300;
+    const step = (90 / estimatedMs) * intervalMs;
+    aiProgressRef.current = setInterval(() => {
+      setAiProgress((p) => Math.min(p + step, 90));
+    }, intervalMs);
+    const res = await fetch(`/api/banking/categorize${params}`, { method: "POST" });
+    if (aiProgressRef.current) clearInterval(aiProgressRef.current);
+    setAiProgress(100);
     setAiCategorizing(false);
     if (!res.ok) {
       const body = (await res.json()) as { error?: string };
@@ -1338,6 +1354,22 @@ export default function BankingReviewPage() {
                 Filter aufheben
               </button>
             )}
+          </div>
+        )}
+
+        {/* KI-Fortschrittsbalken */}
+        {aiCategorizing && aiTotal !== null && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs text-purple-600 dark:text-purple-400">
+              <span>Kategorisiere {aiTotal} Transaktion{aiTotal !== 1 ? "en" : ""}…</span>
+              <span>{Math.round(aiProgress)}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-purple-100 dark:bg-purple-900/40">
+              <div
+                className="h-full rounded-full bg-purple-500 transition-all duration-500 ease-out"
+                style={{ width: `${aiProgress}%` }}
+              />
+            </div>
           </div>
         )}
 
