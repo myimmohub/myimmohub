@@ -142,11 +142,13 @@ const ZEILE_TO_FIELD: Record<number, keyof TaxData> = {
 // ── Alte Slug-Kategorien (Abwärtskompatibilität) ────────────────────────────
 
 const OLD_SLUG_TO_FIELD: Record<string, keyof TaxData> = {
+  // Einnahmen
   "miete_einnahmen_wohnen":    "rent_income",
   "miete_einnahmen_gewerbe":   "rent_income",
   "nebenkosten_einnahmen":     "operating_costs_income",
   "mietsicherheit_einnahme":   "deposits_received",
   "sonstige_einnahmen":        "other_income",
+  // Werbungskosten (steuerlich absetzbar)
   "schuldzinsen":              "loan_interest",
   "grundsteuer":               "property_tax",
   "versicherungen":            "insurance",
@@ -159,9 +161,10 @@ const OLD_SLUG_TO_FIELD: Record<string, keyof TaxData> = {
   "fahrtkosten":               "other_expenses",
   "rechtskosten":              "other_expenses",
   "sonstiges_werbungskosten":  "other_expenses",
-  "tilgung_kredit":            "other_expenses",
-  "mietsicherheit_ausgabe":    "other_expenses",
-  "sonstiges_nicht_absetzbar": "other_expenses",
+  // Nicht absetzbar → kein Mapping (werden in resolveField übersprungen)
+  // "tilgung_kredit":         → null
+  // "mietsicherheit_ausgabe": → null
+  // "sonstiges_nicht_absetzbar": → null
 };
 
 function inferFieldFromText(
@@ -230,11 +233,23 @@ export function calculateDepreciation(property: PropertyForTax): number {
  * Bestimmt das tax_data-Feld für eine Transaktion.
  * Priorität: Label → Alte Slugs → anlage_v-Zeile aus DB → Gruppe → anlage_v_zeile auf TX
  */
+// Explizit nicht-absetzbare Slugs (Altformat) — dürfen nie in die Steuererklärung
+const NON_DEDUCTIBLE_SLUGS = new Set([
+  "tilgung_kredit",
+  "mietsicherheit_ausgabe",
+  "mietsicherheit_einnahme",
+  "sonstiges_nicht_absetzbar",
+  "aufgeteilt",
+]);
+
 function resolveField(
   cat: string,
   anlageVZeile: number | null,
   dbCatMap: Map<string, DbCategory>,
 ): keyof TaxData | null {
+  // 0. Explizit nicht-absetzbare Slugs ausschließen
+  if (NON_DEDUCTIBLE_SLUGS.has(cat)) return null;
+
   // 1. Direkt über Label (hardcoded Mapping)
   if (CATEGORY_TO_FIELD[cat]) return CATEGORY_TO_FIELD[cat];
 
