@@ -9,12 +9,14 @@
 
 import type { TaxData } from "@/types/tax";
 
-type Transaction = {
+export type TaxCalculationTransaction = {
   id?: string;
   date: string;
   amount: number;
   category: string | null;
   anlage_v_zeile: number | null;
+  description?: string | null;
+  counterpart?: string | null;
 };
 
 type PropertyForTax = {
@@ -36,6 +38,16 @@ type DbCategory = {
   anlage_v: string | null;
   gruppe: string;
 };
+
+export type TaxTargetBlock =
+  | "income"
+  | "allocated_costs"
+  | "non_allocated_costs"
+  | "financing_costs"
+  | "maintenance"
+  | "other_expenses"
+  | "depreciation"
+  | "unmapped";
 
 function normalizeForMatching(value: string | null | undefined) {
   return (value ?? "")
@@ -63,6 +75,10 @@ const CATEGORY_TO_FIELD: Record<string, keyof TaxData> = {
   "Grundsteuer":                      "property_tax",
   "Versicherungen":                   "insurance",
   "Hausverwaltung / WEG-Kosten":      "hoa_fees",
+  "Hauswart / Hausmeister":           "hoa_fees",
+  "Heizung / Wärme":                  "hoa_fees",
+  "Allgemeinstrom / Hausbeleuchtung": "hoa_fees",
+  "Schornsteinreinigung":             "hoa_fees",
 
   // Instandhaltung
   "Handwerkerleistungen":             "maintenance_costs",
@@ -81,6 +97,8 @@ const CATEGORY_TO_FIELD: Record<string, keyof TaxData> = {
 
   // Verwaltung
   "Steuerberatung / Rechtskosten":    "other_expenses",
+  "Verwaltungspauschale":             "property_management",
+  "Porto":                            "property_management",
   "Inserate & Vermarktung":           "other_expenses",
   "Fahrtkosten":                      "other_expenses",
   "Bürokosten / Verwaltungsaufwand":  "other_expenses",
@@ -110,7 +128,7 @@ const GRUPPE_TO_FIELD: Record<string, keyof TaxData> = {
   "Einrichtung":     "other_expenses",
   "Finanzierung":    "loan_interest",
   "Ferienimmobilie": "other_expenses",
-  "Verwaltung":      "other_expenses",
+  "Verwaltung":      "property_management",
   "Sonstiges":       "other_expenses",
 };
 
@@ -180,7 +198,9 @@ function inferFieldFromText(
   if (containsAny(haystack, ["kontofuhrung", "bankgebuhr", "kontogebuhr"])) return "bank_fees";
   if (containsAny(haystack, ["wasser", "abwasser", "sewage"])) return "water_sewage";
   if (containsAny(haystack, ["mull", "abfall", "entsorgung"])) return "waste_disposal";
+  if (containsAny(haystack, ["hauswart", "hausmeister", "heizung", "warmwasser", "hausbeleuchtung", "allgemeinstrom", "schornstein", "treppenhausreinigung", "strassenreinigung", "strassen reinigung"])) return "hoa_fees";
   if (containsAny(haystack, ["weg kosten", "weg umlage", "hausgeld", "eigentu mergemeinschaft", "eigentumergemeinschaft", "weg"])) return "hoa_fees";
+  if (containsAny(haystack, ["porto", "verwaltungspauschale", "verwaltungskosten", "pauschale verwaltung"])) return "property_management";
   if (containsAny(haystack, ["hausverwaltung", "immobilienverwaltung", "objektverwaltung", "ferienhausverwaltung"])) return "property_management";
   if (containsAny(haystack, ["handwerker", "material", "instandhaltung", "instandsetzung", "reparatur", "wartung", "sanierung", "renovierung"])) return "maintenance_costs";
   if (containsAny(haystack, ["nebenkostenerstattung", "umlage"])) return "operating_costs_income";
@@ -242,7 +262,7 @@ const NON_DEDUCTIBLE_SLUGS = new Set([
   "aufgeteilt",
 ]);
 
-function resolveField(
+export function resolveField(
   cat: string,
   anlageVZeile: number | null,
   dbCatMap: Map<string, DbCategory>,
@@ -287,11 +307,30 @@ function resolveField(
   return null;
 }
 
+export function mapTaxFieldToTargetBlock(fieldKey: keyof TaxData | null): TaxTargetBlock {
+  if (!fieldKey) return "unmapped";
+  if (["rent_income", "deposits_received", "rent_prior_year", "operating_costs_income", "other_income"].includes(fieldKey)) {
+    return "income";
+  }
+  if (["property_tax", "insurance", "hoa_fees", "water_sewage", "waste_disposal"].includes(fieldKey)) {
+    return "allocated_costs";
+  }
+  if (["property_management", "bank_fees"].includes(fieldKey)) {
+    return "non_allocated_costs";
+  }
+  if (fieldKey === "loan_interest") return "financing_costs";
+  if (fieldKey === "maintenance_costs") return "maintenance";
+  if (fieldKey === "depreciation_building" || fieldKey === "depreciation_outdoor" || fieldKey === "depreciation_fixtures") {
+    return "depreciation";
+  }
+  return "other_expenses";
+}
+
 /**
  * Berechnet alle tax_data-Felder aus Transaktionen einer Immobilie.
  */
 export function calculateTaxFromTransactions(
-  transactions: Transaction[],
+  transactions: TaxCalculationTransaction[],
   property: PropertyForTax,
   taxYear: number,
   dbCategories?: DbCategory[],

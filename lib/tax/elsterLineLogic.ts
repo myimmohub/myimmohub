@@ -178,20 +178,26 @@ export function buildElsterLineSummary(
     {
       key: "allocated_costs",
       label: "Umlagefähige laufende Kosten",
-      amount: round2(num(taxData.hoa_fees) + num(taxData.water_sewage) + num(taxData.waste_disposal)),
-      detail: "WEG/Hausgeld, Wasser/Abwasser, Müll",
+      amount: round2(
+        num(taxData.property_tax) +
+        num(taxData.insurance) +
+        num(taxData.hoa_fees) +
+        num(taxData.water_sewage) +
+        num(taxData.waste_disposal),
+      ),
+      detail: "Grundsteuer, Versicherungen, WEG/Hausgeld, Wasser/Abwasser, Müll",
     },
     {
       key: "non_allocated_costs",
       label: "Nicht umlegbare Objektkosten",
-      amount: round2(num(taxData.property_tax) + num(taxData.insurance)),
-      detail: "Grundsteuer und Versicherungen",
+      amount: round2(num(taxData.property_management) + num(taxData.bank_fees)),
+      detail: "Verwaltung und Kontoführung",
     },
     {
       key: "financing_admin",
-      label: "Finanzierungs- und Verwaltungskosten",
-      amount: round2(num(taxData.loan_interest) + num(taxData.property_management) + num(taxData.bank_fees)),
-      detail: "Schuldzinsen, Verwaltung, Kontoführung",
+      label: "Finanzierungskosten",
+      amount: round2(num(taxData.loan_interest)),
+      detail: "Schuldzinsen",
     },
     ...maintenanceBuckets,
     {

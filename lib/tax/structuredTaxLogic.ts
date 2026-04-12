@@ -152,6 +152,11 @@ export function computeStructuredTaxData(args: {
     const currentYearShareCents = item.current_year_share_override != null
       ? toCents(item.current_year_share_override)
       : calcAnnualShareDisplayCents(item.total_amount, effectiveDistributionYears);
+    const looksLikeCarryForwardYearShare =
+      item.source_year < taxYear &&
+      item.current_year_share_override == null &&
+      (item.source_transaction_ids?.length ?? 0) === 0 &&
+      item.deduction_mode === "distributed";
 
     return {
       ...item,
@@ -167,6 +172,12 @@ export function computeStructuredTaxData(args: {
               applyRentalRatio: item.apply_rental_ratio,
               rentalShareBasisPoints,
             })
+          : looksLikeCarryForwardYearShare
+            ? calcElsterEuroFromCents({
+                amountCents: toCents(item.total_amount),
+                applyRentalRatio: item.apply_rental_ratio,
+                rentalShareBasisPoints,
+              })
           : calcElsterEuroFromCents({
               amountCents: toCents(item.total_amount),
               applyRentalRatio: item.apply_rental_ratio,

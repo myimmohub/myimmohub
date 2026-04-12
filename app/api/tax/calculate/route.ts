@@ -8,7 +8,12 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { calculateTaxFromTransactions } from "@/lib/tax/calculateTaxFromTransactions";
+import {
+  calculateTaxFromTransactions,
+  mapTaxFieldToTargetBlock,
+  resolveField,
+  type TaxCalculationTransaction,
+} from "@/lib/tax/calculateTaxFromTransactions";
 import { computeStructuredTaxData, isDistributionActiveForYear } from "@/lib/tax/structuredTaxLogic";
 import { runRentalTaxEngineFromExistingData } from "@/lib/tax/rentalTaxEngineBridge";
 import { buildElsterLineSummary } from "@/lib/tax/elsterLineLogic";
@@ -44,7 +49,7 @@ export async function POST(request: Request) {
   // Load transactions
   const { data: txData } = await supabase
     .from("transactions")
-    .select("id, date, amount, category, anlage_v_zeile")
+    .select("id, date, amount, category, anlage_v_zeile, description, counterpart")
     .eq("property_id", property_id)
     .eq("user_id", user.id);
 
@@ -76,7 +81,7 @@ export async function POST(request: Request) {
   ));
 
   const calculated = calculateTaxFromTransactions(
-    (txData ?? []) as { id: string; date: string; amount: number; category: string | null; anlage_v_zeile: number | null }[],
+    (txData ?? []) as TaxCalculationTransaction[],
     prop as { kaufpreis: number | null; gebaeudewert: number | null; grundwert: number | null; inventarwert: number | null; baujahr: number | null; afa_satz: number | null; kaufdatum: string | null; address: string | null; type: string | null },
     tax_year,
     (categories ?? []) as { label: string; typ: string; anlage_v: string | null; gruppe: string }[],
@@ -150,39 +155,35 @@ export async function POST(request: Request) {
       if (type === "depreciation_item") return "depreciation";
       if (type === "maintenance_distribution") return sourceYear != null && sourceYear < tax_year ? `maintenance_${sourceYear}` : `maintenance_${tax_year}`;
       const normalized = label.toLowerCase();
-      if (normalized.includes("grundsteuer") || normalized.includes("versicherung")) return "non_allocated_costs";
-      if (normalized.includes("hausgeld") || normalized.includes("weg") || normalized.includes("wasser") || normalized.includes("müll")) return "allocated_costs";
-      if (normalized.includes("schuldzinsen") || normalized.includes("hausverwaltung") || normalized.includes("kontoführung")) return "financing_admin";
+      if (normalized.includes("grundsteuer") || normalized.includes("versicherung") || normalized.includes("hausgeld") || normalized.includes("weg") || normalized.includes("wasser") || normalized.includes("müll")) return "allocated_costs";
+      if (normalized.includes("kontoführung") || normalized.includes("verwaltung")) return "non_allocated_costs";
+      if (normalized.includes("schuldzinsen")) return "financing_costs";
       return "other_expenses";
     };
 
     const allDists = (maintenanceItems ?? []) as TaxMaintenanceDistributionItem[];
-    const items = [
-      // Transaktionsbasierte Einnahmen & Ausgaben
-      ...Object.entries({
-        rent_income:           "Mieteinnahmen",
-        operating_costs_income:"Nebenkostenerstattungen",
-        other_income:          "Sonstige Einnahmen",
-        loan_interest:         "Schuldzinsen (Transaktion)",
-        property_tax:          "Grundsteuer (Transaktion)",
-        insurance:             "Versicherung (Transaktion)",
-        hoa_fees:              "Hausgeld/WEG (Transaktion)",
-        water_sewage:          "Wasser/Abwasser (Transaktion)",
-        waste_disposal:        "Müllentsorgung (Transaktion)",
-        property_management:   "Hausverwaltung (Transaktion)",
-        bank_fees:             "Kontoführung (Transaktion)",
-        other_expenses:        "Sonstige Werbungskosten (Transaktion)",
-      }).filter(([k]) => finalData[k as keyof TaxData] != null && finalData[k as keyof TaxData] !== 0)
-        .map(([k, label]) => ({
+    const dbCategoryMap = new Map((categories ?? []).map((category) => [category.label, category]));
+    const transactionItems = ((txData ?? []) as TaxCalculationTransaction[])
+      .filter((tx) => tx.date >= `${tax_year}-01-01` && tx.date <= `${tax_year}-12-31`)
+      .filter((tx) => tx.category != null && tx.category !== "aufgeteilt")
+      .filter((tx) => !(tx.id && excludedTransactionIds.includes(tx.id)))
+      .map((tx) => {
+        const fieldKey = resolveField(tx.category ?? "", tx.anlage_v_zeile, dbCategoryMap);
+        const block = mapTaxFieldToTargetBlock(fieldKey);
+        const absoluteAmount = Math.abs(Number(tx.amount ?? 0));
+        return {
           type: "transaction" as const,
-          label,
-          target_block: inferTargetBlock(label, "transaction", null),
+          label: tx.counterpart || tx.description || tx.category || "Transaktion",
+          target_block: block,
           source_year: null as number | null,
-          gross_amount: Number(finalData[k as keyof TaxData]),
-          deductible_amount: Number(finalData[k as keyof TaxData]),
-          included: true,
-          exclusion_reason: null as string | null,
-        })),
+          gross_amount: absoluteAmount,
+          deductible_amount: absoluteAmount,
+          included: fieldKey != null,
+          exclusion_reason: fieldKey == null ? "Keine steuerliche Zuordnung" : null,
+        };
+      });
+    const items = [
+      ...transactionItems,
       // Instandhaltungsverteilungen
       ...allDists.map((item) => {
         const active = isDistributionActiveForYear(item, tax_year);
