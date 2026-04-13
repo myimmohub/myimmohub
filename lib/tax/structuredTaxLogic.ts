@@ -237,7 +237,11 @@ export function computeStructuredTaxData(args: {
     });
   }
   if (depreciationLineTotals.maintenance_costs != null) {
-    nextTaxData.maintenance_costs = depreciationLineTotals.maintenance_costs;
+    // §82b-Verteilungsbeträge werden zum sofort abzugsfähigen Erhaltungsaufwand addiert.
+    // taxData.maintenance_costs enthält den Sofort-Anteil aus Transaktionen oder PDF-Import (z. B. 154 €).
+    // depreciationLineTotals.maintenance_costs enthält die Summe der aktiven Jahresraten.
+    const baseImmediate = Number(taxData.maintenance_costs ?? 0);
+    nextTaxData.maintenance_costs = round2(baseImmediate + depreciationLineTotals.maintenance_costs);
   }
 
   return {
