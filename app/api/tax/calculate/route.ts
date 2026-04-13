@@ -116,10 +116,8 @@ export async function POST(request: Request) {
 
     // Nur Felder aus dem strukturierten Ergebnis schreiben, die tatsächlich berechnet wurden
     const structuredPatch: Record<string, unknown> = {};
-    if (structured.lineTotals.maintenance_costs != null) {
-      // structured.taxData.maintenance_costs kombiniert bereits Sofort-Abzug + §82b-Verteilungsraten
-      structuredPatch.maintenance_costs = structured.taxData.maintenance_costs;
-    }
+    // maintenance_costs is NOT patched here: it must stay as the immediate-only transaction amount.
+    // §82b distribution annual shares are computed on-the-fly by buildElsterLineSummary.
     if (structured.lineTotals.depreciation_building != null) {
       structuredPatch.depreciation_building = structured.taxData.depreciation_building;
     }

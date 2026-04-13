@@ -152,11 +152,16 @@ export function computeStructuredTaxData(args: {
     const currentYearShareCents = item.current_year_share_override != null
       ? toCents(item.current_year_share_override)
       : calcAnnualShareDisplayCents(item.total_amount, effectiveDistributionYears);
+    // A "carry-forward year share" is a manually-created DB entry for a prior year whose
+    // total_amount already represents the annual share (not the full multi-year total).
+    // This must NOT apply when distribution_years > 1, because those entries store the full
+    // multi-year total and must be divided by effectiveDistributionYears.
     const looksLikeCarryForwardYearShare =
       item.source_year < taxYear &&
       item.current_year_share_override == null &&
       (item.source_transaction_ids?.length ?? 0) === 0 &&
-      item.deduction_mode === "distributed";
+      item.deduction_mode === "distributed" &&
+      normalizedDistributionYears <= 1;
 
     return {
       ...item,
@@ -236,13 +241,12 @@ export function computeStructuredTaxData(args: {
       computedValue: depreciationLineTotals.depreciation_fixtures,
     });
   }
-  if (depreciationLineTotals.maintenance_costs != null) {
-    // §82b-Verteilungsbeträge werden zum sofort abzugsfähigen Erhaltungsaufwand addiert.
-    // taxData.maintenance_costs enthält den Sofort-Anteil aus Transaktionen oder PDF-Import (z. B. 154 €).
-    // depreciationLineTotals.maintenance_costs enthält die Summe der aktiven Jahresraten.
-    const baseImmediate = Number(taxData.maintenance_costs ?? 0);
-    nextTaxData.maintenance_costs = round2(baseImmediate + depreciationLineTotals.maintenance_costs);
-  }
+  // NOTE: nextTaxData.maintenance_costs is intentionally NOT modified here.
+  // taxData.maintenance_costs must always represent only the immediate (sofort abziehbarer)
+  // Erhaltungsaufwand from transactions. The §82b distribution annual shares are tracked
+  // separately in depreciationLineTotals.maintenance_costs and displayed as individual
+  // year buckets by buildElsterLineSummary. Merging them here would cause double-counting
+  // on every subsequent call to computeStructuredTaxData (e.g. in buildGbrTaxReport).
 
   return {
     taxData: nextTaxData,

@@ -12,10 +12,8 @@ import { mergeDuplicatePartners, mergePartnerTaxValuesByNormalizedName, normaliz
 import { computeRentalShare } from "@/lib/tax/rentalShare";
 import { buildElsterLineSummary } from "@/lib/tax/elsterLineLogic";
 import {
-  findOwnerAllocation,
   runRentalTaxEngineFromExistingData,
   summarizeEngineWarnings,
-  summarizeOwnerSpecialExpense,
 } from "@/lib/tax/rentalTaxEngineBridge";
 
 export type GbrPartner = {
@@ -277,15 +275,23 @@ export function buildGbrTaxReport(args: {
 
   const fb = partners.map((partner) => {
     const factor = num(partner.anteil) / 100;
-    const partnerSpecialExpenses = round2(partnerTaxMap.get(normalizePartnerName(partner.name)) ?? 0);
-    const engineAllocation = findOwnerAllocation(engineOutput, partner.id);
-    const resultBeforePartnerAdjustments = engineAllocation
-      ? round2(engineAllocation.resultCents / 100 - engineAllocation.specialItemsCents / 100)
-      : round2(totals.result * factor);
-    const partnerIncome = engineAllocation ? round2(engineAllocation.revenueCents / 100) : round2(totals.totalIncome * factor);
-    const partnerExpenses = engineAllocation ? round2(engineAllocation.expenseCents / 100) : round2(totals.totalExpenses * factor);
-    const partnerDepreciation = engineAllocation ? round2(engineAllocation.depreciationCents / 100) : round2(totals.depreciationTotal * factor);
-    const engineSpecialExpenses = summarizeOwnerSpecialExpense(engineOutput, partner.id);
+    // Special expenses are stored as a positive amount (a further deduction from the partner's share).
+    // Take Math.abs to guard against sign inconsistencies in the stored value.
+    const partnerSpecialExpenses = Math.abs(round2(partnerTaxMap.get(normalizePartnerName(partner.name)) ?? 0));
+
+    // FE lineSummary totals are the single source of truth for all FB partner allocations.
+    // Using engine allocations here would cause FE/FB mismatch because the engine computes
+    // expenses from raw taxData fields (property_tax + insurance + ...) which differ from
+    // lineSummary when imported expense blocks are present.
+    const partnerIncome = round2(totals.totalIncome * factor);
+    const partnerExpenses = round2(totals.totalExpenses * factor);
+    const partnerDepreciation = round2(totals.depreciationTotal * factor);
+    const resultBeforePartnerAdjustments = round2(totals.result * factor);
+
+    // Partner result = share of collective result − partner-specific Sonderwerbungskosten.
+    // Sonderwerbungskosten are an additional deduction, so they deepen the loss.
+    const result = round2(resultBeforePartnerAdjustments - partnerSpecialExpenses);
+
     const allocation = {
       partner_id: partner.id,
       partner_name: partner.name,
@@ -310,11 +316,9 @@ export function buildGbrTaxReport(args: {
       total_expenses: partnerExpenses,
       depreciation_total: partnerDepreciation,
       special_deductions_total: round2(totals.specialDeductionsTotal * factor),
-      partner_special_expenses: engineSpecialExpenses || partnerSpecialExpenses,
+      partner_special_expenses: partnerSpecialExpenses,
       result_before_partner_adjustments: resultBeforePartnerAdjustments,
-      result: engineAllocation
-        ? round2(engineAllocation.resultCents / 100)
-        : round2(resultBeforePartnerAdjustments - partnerSpecialExpenses),
+      result,
     };
 
     return allocation;

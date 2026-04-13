@@ -173,11 +173,10 @@ export function buildElsterLineSummary(
   const importedMaintenanceBuckets = buildImportedMaintenanceBuckets(taxData, taxYear);
   const maintenanceBuckets = buildMaintenanceBuckets(options.maintenanceDistributions ?? [], taxYear, importedMaintenanceBuckets);
 
-  // Add immediate (non-distributed) maintenance portion that is not covered by §82b distributions.
-  // taxData.maintenance_costs (after computeStructuredTaxData) = immediate portion + §82b distribution rates.
-  // Subtracting the already-included distribution amounts yields the remaining immediate portion.
-  const distributionsTotalInBuckets = maintenanceBuckets.reduce((sum, b) => sum + b.amount, 0);
-  const immediateMaintenanceAmount = round2(num(taxData.maintenance_costs) - distributionsTotalInBuckets);
+  // taxData.maintenance_costs stores ONLY the immediate (sofort abziehbarer) portion from
+  // transactions. §82b distributions are tracked separately in maintenanceBuckets.
+  // Add the immediate portion as its own bucket if non-zero.
+  const immediateMaintenanceAmount = round2(num(taxData.maintenance_costs));
   if (immediateMaintenanceAmount > 0) {
     maintenanceBuckets.unshift({
       key: "maintenance_immediate",
