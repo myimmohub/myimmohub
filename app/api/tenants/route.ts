@@ -5,11 +5,11 @@ import { createServerClient } from "@supabase/ssr";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-function createClient() {
-  const cookieStore = cookies();
+async function createClient() {
+  const cookieStore = await cookies();
   return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: {
-      getAll: () => (cookieStore as unknown as { getAll: () => { name: string; value: string }[] }).getAll(),
+      getAll: () => cookieStore.getAll(),
     },
   });
 }
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Query-Parameter 'property_id' fehlt." }, { status: 400 });
     }
 
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -110,7 +110,7 @@ type CreateTenantBody = {
 
 export async function POST(request: Request) {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

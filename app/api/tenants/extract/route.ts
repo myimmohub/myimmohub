@@ -6,11 +6,11 @@ import Anthropic from "@anthropic-ai/sdk";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-function createClient() {
-  const cookieStore = cookies();
+async function createClient() {
+  const cookieStore = await cookies();
   return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: {
-      getAll: () => (cookieStore as unknown as { getAll: () => { name: string; value: string }[] }).getAll(),
+      getAll: () => cookieStore.getAll(),
     },
   });
 }
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Fehlende Umgebungsvariable: ANTHROPIC_API_KEY." }, { status: 500 });
     }
 
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

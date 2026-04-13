@@ -5,18 +5,18 @@ import { createServerClient } from "@supabase/ssr";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-function createClient() {
-  const cookieStore = cookies();
+async function createClient() {
+  const cookieStore = await cookies();
   return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: {
-      getAll: () => (cookieStore as unknown as { getAll: () => { name: string; value: string }[] }).getAll(),
+      getAll: () => cookieStore.getAll(),
     },
   });
 }
 
 type RouteParams = { params: Promise<{ id: string }> };
 
-async function verifyTenantOwnership(supabase: ReturnType<typeof createClient>, tenantId: string, userId: string) {
+async function verifyTenantOwnership(supabase: Awaited<ReturnType<typeof createClient>>, tenantId: string, userId: string) {
   const { data } = await supabase
     .from("tenants")
     .select(
@@ -48,7 +48,7 @@ async function verifyTenantOwnership(supabase: ReturnType<typeof createClient>, 
 export async function GET(request: Request, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -86,7 +86,7 @@ export async function GET(request: Request, { params }: RouteParams) {
 export async function PATCH(request: Request, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
