@@ -172,7 +172,28 @@ export function buildElsterLineSummary(
   const importedExpenseBuckets = buildExpenseBucketsFromImport(taxData);
   const importedMaintenanceBuckets = buildImportedMaintenanceBuckets(taxData, taxYear);
   const maintenanceBuckets = buildMaintenanceBuckets(options.maintenanceDistributions ?? [], taxYear, importedMaintenanceBuckets);
-  const importedNonMaintenanceBuckets = importedExpenseBuckets.filter((bucket) => !bucket.key.includes("maintenance") && !bucket.key.includes("erhaltungsaufwand"));
+
+  // Add immediate (non-distributed) maintenance portion that is not covered by §82b distributions.
+  // taxData.maintenance_costs (after computeStructuredTaxData) = immediate portion + §82b distribution rates.
+  // Subtracting the already-included distribution amounts yields the remaining immediate portion.
+  const distributionsTotalInBuckets = maintenanceBuckets.reduce((sum, b) => sum + b.amount, 0);
+  const immediateMaintenanceAmount = round2(num(taxData.maintenance_costs) - distributionsTotalInBuckets);
+  if (immediateMaintenanceAmount > 0) {
+    maintenanceBuckets.unshift({
+      key: "maintenance_immediate",
+      label: "Sofort abziehbarer Erhaltungsaufwand",
+      amount: immediateMaintenanceAmount,
+    });
+  }
+
+  // Depreciation keys must be excluded from expense buckets (they belong in depreciationBuckets only).
+  const DEPRECIATION_KEYS = new Set(["depreciation_building", "depreciation_outdoor", "depreciation_fixtures"]);
+  const importedNonMaintenanceBuckets = importedExpenseBuckets.filter(
+    (bucket) =>
+      !bucket.key.includes("maintenance") &&
+      !bucket.key.includes("erhaltungsaufwand") &&
+      !DEPRECIATION_KEYS.has(bucket.key),
+  );
 
   const fallbackExpenseBuckets: ElsterLineBucket[] = [
     {
@@ -207,10 +228,19 @@ export function buildElsterLineSummary(
     },
   ].filter((bucket) => bucket.amount !== 0);
 
+  // For the imported path: always append other_expenses from taxData if it's not already
+  // present in the imported blocks (PDF import may not export this line separately).
+  const importedHasOtherExpenses = importedNonMaintenanceBuckets.some((b) => b.key === "other_expenses");
+  const otherExpensesFallback: ElsterLineBucket[] =
+    !importedHasOtherExpenses && num(taxData.other_expenses) !== 0
+      ? [{ key: "other_expenses", label: "Sonstige Werbungskosten", amount: round2(num(taxData.other_expenses)) }]
+      : [];
+
   const expenseBuckets = importedExpenseBuckets.length > 0
     ? [
         ...importedNonMaintenanceBuckets,
         ...maintenanceBuckets,
+        ...otherExpensesFallback,
       ].filter((bucket) => bucket.amount !== 0)
     : fallbackExpenseBuckets;
 
