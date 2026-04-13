@@ -5,6 +5,15 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
+type RentArrearsEntry = {
+  property_id: string;
+  property_name: string;
+  total_tenants: number;
+  paid_count: number;
+  arrears_count: number;
+  total_arrears_cents: number;
+};
+
 type PropertyRecord = {
   id: string;
   name: string;
@@ -31,6 +40,7 @@ export default function DashboardPage() {
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [profitMode, setProfitMode] = useState<"month" | "year">("month");
+  const [arrears, setArrears] = useState<RentArrearsEntry[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -66,6 +76,17 @@ export default function DashboardPage() {
 
       setProperties((propertyData ?? []) as PropertyRecord[]);
       setTransactions((txData ?? []) as TransactionRecord[]);
+
+      // Load rent arrears for mehrfamilienhaus properties
+      try {
+        const arrearsRes = await fetch("/api/rent-arrears");
+        if (arrearsRes.ok) {
+          const arrearsData = await arrearsRes.json();
+          setArrears(arrearsData as RentArrearsEntry[]);
+        }
+      } catch {
+        // Silently ignore arrears load failure — non-critical
+      }
       setIsLoading(false);
     };
 
@@ -225,6 +246,63 @@ export default function DashboardPage() {
             </div>
           )}
         </section>
+
+        {/* Mietrückstände widget — only if there are mehrfamilienhaus properties */}
+        {arrears.length > 0 && (
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">Mietrückstände</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Zahlungsstatus für den aktuellen Monat.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {arrears.map((entry) => {
+                const allPaid = entry.arrears_count === 0;
+                return (
+                  <Link
+                    key={entry.property_id}
+                    href={`/dashboard/properties/${entry.property_id}/payments`}
+                    className={`group rounded-xl border bg-white px-5 py-4 transition hover:shadow-sm dark:bg-slate-900 ${
+                      allPaid
+                        ? "border-emerald-200 dark:border-emerald-800"
+                        : "border-red-200 dark:border-red-800"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-900 dark:text-slate-100">
+                          {entry.property_name}
+                        </p>
+                        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                          {entry.paid_count}/{entry.total_tenants} Einheiten bezahlt
+                        </p>
+                      </div>
+                      <span
+                        className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                          allPaid
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                            : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                        }`}
+                      >
+                        {allPaid ? "Alles bezahlt" : `${entry.arrears_count} offen`}
+                      </span>
+                    </div>
+                    {!allPaid && (
+                      <p className="mt-2 text-sm font-semibold text-red-600 dark:text-red-400">
+                        Rückstand:{" "}
+                        {(entry.total_arrears_cents / 100).toLocaleString("de-DE", {
+                          style: "currency",
+                          currency: "EUR",
+                        })}
+                      </p>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between gap-4">
