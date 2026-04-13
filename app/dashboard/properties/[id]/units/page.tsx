@@ -100,7 +100,10 @@ export default function UnitsPage() {
           vat_liable: formData.vat_liable,
         }),
       });
-      if (!res.ok) throw new Error("Fehler beim Erstellen der Einheit");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+      }
       setShowForm(false);
       setFormData(initialFormData);
       await loadUnits();
