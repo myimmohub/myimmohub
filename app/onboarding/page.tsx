@@ -23,11 +23,21 @@ export default function OnboardingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [createdPropertyId, setCreatedPropertyId] = useState<string | null>(null);
+  // null = URL not yet read (SSR phase), then set on first client render
+  const [isAddPropertyMode, setIsAddPropertyMode] = useState<boolean | null>(null);
 
-  const isAddPropertyMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mode") === "add-property";
   const effectiveStep: 1 | 2 | 3 = isAddPropertyMode && step === 1 ? 2 : step;
 
+  // Step 1: read URL param on the client (avoids SSR/hydration mismatch)
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setIsAddPropertyMode(params.get("mode") === "add-property");
+  }, []);
+
+  // Step 2: check for existing properties only after we know the mode
+  useEffect(() => {
+    if (isAddPropertyMode === null) return; // wait for URL read
+
     const checkExistingProperties = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
