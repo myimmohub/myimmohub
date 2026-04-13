@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-type PropertyType = "wohnung" | "haus" | "gewerbe" | "sonstiges";
+type PropertyType = "wohnung" | "haus" | "mehrfamilienhaus" | "gewerbe" | "sonstiges";
 
 const STEPS = [
   { id: 1, label: "Willkommen" },
@@ -166,8 +166,9 @@ export default function OnboardingPage() {
               </Field>
               <Field label="Typ">
                 <select className={inputClass} value={type} onChange={(event) => setType(event.target.value as PropertyType)}>
-                  <option value="wohnung">Wohnung</option>
-                  <option value="haus">Haus</option>
+                  <option value="wohnung">Wohnung / Eigentumswohnung</option>
+                  <option value="haus">Einfamilienhaus / Ferienwohnung</option>
+                  <option value="mehrfamilienhaus">Haus mit mehreren Einheiten</option>
                   <option value="gewerbe">Gewerbe</option>
                   <option value="sonstiges">Sonstiges</option>
                 </select>

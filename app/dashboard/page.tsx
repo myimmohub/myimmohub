@@ -162,7 +162,7 @@ export default function DashboardPage() {
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Direkter Einstieg in Steckbrief, Dokumente und Steuerdaten.</p>
             </div>
             <Link
-              href="/onboarding"
+              href="/onboarding?mode=add-property"
               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
             >
               <PlusIcon className="h-4 w-4" />
