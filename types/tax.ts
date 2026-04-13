@@ -80,7 +80,7 @@ export interface TaxFieldMeta {
   label: string;
   zeile: string;
   category: "obj" | "ein" | "wk" | "afa" | "sonder";
-  type: "text" | "numeric" | "integer" | "date";
+  type: "text" | "numeric" | "integer" | "date" | "percent";
 }
 
 export interface GbrPartnerTaxBreakdown {

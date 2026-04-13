@@ -60,6 +60,7 @@ const CONFIDENCE_DOT: Record<TaxConfidence | "null", string> = {
 const fmtVal = (val: unknown, type: string) => {
   if (val == null || val === "") return "—";
   if (type === "numeric") return Number(val).toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 });
+  if (type === "percent") return `${Number(val).toLocaleString("de-DE", { maximumFractionDigits: 2 })} %`;
   if (type === "date") return formatDateForDisplay(val as string);
   if (type === "integer") return String(val);
   return String(val);
@@ -292,7 +293,7 @@ export default function TaxYearPage() {
       const raw = editValues[field.key]?.trim();
       if (raw === "") {
         updates[field.key] = null;
-      } else if (field.type === "numeric") {
+      } else if (field.type === "numeric" || field.type === "percent") {
         updates[field.key] = parseFloat(raw.replace(",", "."));
       } else if (field.type === "integer") {
         updates[field.key] = parseInt(raw, 10);
@@ -864,7 +865,7 @@ export default function TaxYearPage() {
                               onChange={(e) => setEditValues((v) => ({ ...v, [field.key]: e.target.value }))}
                               disabled={isStructuredField}
                               className="w-40 shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-right text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                              placeholder={field.type === "numeric" ? "0,00" : ""}
+                              placeholder={field.type === "numeric" ? "0,00" : field.type === "percent" ? "0,00" : ""}
                             />
                           ) : (
                             <span className={`shrink-0 text-sm tabular-nums ${val != null ? "font-medium text-slate-900 dark:text-slate-100" : "text-slate-300 dark:text-slate-600"}`}>

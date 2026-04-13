@@ -16,7 +16,7 @@ export const TAX_FIELDS: TaxFieldMeta[] = [
   // ── Objekt-Stammdaten (Z. 1-8) ──────────────────────────────────────────────
   { key: "tax_ref",                    label: "Steuernummer Objekt",           zeile: "Z. 1",  category: "obj",    type: "text"    },
   // Z. 2 + Z. 3 kommen aus properties.address (nicht in tax_data gespeichert)
-  { key: "ownership_share_pct",        label: "Eigentumsanteil (%)",           zeile: "Z. 4",  category: "obj",    type: "numeric" },
+  { key: "ownership_share_pct",        label: "Eigentumsanteil (%)",           zeile: "Z. 4",  category: "obj",    type: "percent" },
   { key: "property_type",              label: "Art des Objekts",               zeile: "Z. 5",  category: "obj",    type: "text"    },
   { key: "build_year",                 label: "Baujahr",                       zeile: "Z. 6",  category: "obj",    type: "integer" },
   { key: "acquisition_date",           label: "Anschaffungsdatum",             zeile: "Z. 7",  category: "obj",    type: "date"    },
