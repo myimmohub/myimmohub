@@ -64,7 +64,7 @@ export async function GET(request: Request) {
       .select(
         `
         *,
-        units!tenants_unit_id_fkey (
+        unit:units!tenants_unit_id_fkey (
           id,
           label,
           unit_type,
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
         )
       `,
       )
-      .eq("units.property_id", property_id);
+      .eq("unit.property_id", property_id);
 
     if (status) {
       query = query.eq("status", status);
@@ -84,8 +84,12 @@ export async function GET(request: Request) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // Filter out tenants whose unit doesn't belong to the property (PostgREST filtering quirk)
-    const filtered = (data ?? []).filter((t) => t.units !== null);
+    // Filter out tenants whose unit doesn't belong to the property.
+    // PostgREST may not honour the .eq("unit.property_id", …) filter on aliased joins,
+    // so we enforce the ownership check here in JS as well.
+    const filtered = (data ?? []).filter(
+      (t) => t.unit !== null && (t.unit as { property_id: string }).property_id === property_id,
+    );
     return NextResponse.json(filtered);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unbekannter Fehler.";

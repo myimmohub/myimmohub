@@ -70,6 +70,11 @@ const OLD_EINNAHMEN = new Set([
   "nebenkosten_einnahmen", "mietsicherheit_einnahme", "sonstige_einnahmen",
 ]);
 
+// Old slugs that are nicht-absetzbar (e.g. Tilgung, Kaution)
+const OLD_NICHT_ABSETZBAR_SET = new Set([
+  "tilgung_kredit", "mietsicherheit_ausgabe", "sonstiges_nicht_absetzbar",
+]);
+
 function isEinnahmeCat(cat: string, catLookup?: CategoryLookup | null): boolean {
   if (catLookup) {
     const db = catLookup.byLabel.get(cat);
@@ -190,12 +195,21 @@ export default function ProfitabilityPage() {
       }
       gruppenMap.get(key)!.labels.push(cat.label);
     }
-    return Array.from(gruppenMap.values()).map((g) => ({
-      key: g.gruppe,
-      label: g.gruppe,
-      hint: g.hint,
-      categories: g.labels,
-    }));
+    return Array.from(gruppenMap.values()).map((g) => {
+      // A column is nicht-absetzbar if ALL its categories are nicht-absetzbar
+      const isNichtAbsetzbar = g.labels.every((label) => {
+        const dbCat = catLookup.byLabel.get(label);
+        if (dbCat) return dbCat.anlage_v === "nicht absetzbar";
+        return OLD_NICHT_ABSETZBAR_SET.has(label);
+      });
+      return {
+        key: g.gruppe,
+        label: g.gruppe,
+        hint: g.hint,
+        categories: g.labels,
+        isNichtAbsetzbar,
+      };
+    });
   }, [catLookup]);
 
   // ── Monatsdaten berechnen ────────────────────────────────────────────────────
@@ -235,7 +249,15 @@ export default function ProfitabilityPage() {
       const ausgabenTotal = rawTotal;
       const cashflow = einnahmen - ausgabenTotal;
 
-      return { m, label: MONTH_NAMES_FULL[i], einnahmen, colValues, ausgabenTotal, cashflow, hasTx: txs.length > 0, catAmounts };
+      // Filtered: exclude nicht-absetzbar categories
+      const ausgabenFiltered = Object.entries(catAmounts).reduce((s, [cat, v]) => {
+        const dbCat = catLookup?.byLabel.get(cat);
+        const isNA = dbCat ? dbCat.anlage_v === "nicht absetzbar" : OLD_NICHT_ABSETZBAR_SET.has(cat);
+        return isNA ? s : s + v;
+      }, 0);
+      const cashflowFiltered = einnahmen - ausgabenFiltered;
+
+      return { m, label: MONTH_NAMES_FULL[i], einnahmen, colValues, ausgabenTotal, cashflow, ausgabenFiltered, cashflowFiltered, hasTx: txs.length > 0, catAmounts };
     });
   }, [transactions, year, catLookup, ausgabenCols]);
 
@@ -245,21 +267,26 @@ export default function ProfitabilityPage() {
     // Check if there are uncategorized ausgaben
     const hasSonstiges = months.some((m) => (m.colValues["_sonstiges"] ?? 0) > 0.01);
     if (hasSonstiges) {
-      cols.push({ key: "_sonstiges", label: "Sonstige (alt)", hint: null, categories: [] });
+      cols.push({ key: "_sonstiges", label: "Sonstige (alt)", hint: null, categories: [], isNichtAbsetzbar: false });
     }
     return cols;
   }, [ausgabenCols, months]);
 
   const visibleCols = useMemo(
-    () => allCols.filter(({ key }) => months.some((m) => (m.colValues[key] ?? 0) > 0)),
-    [allCols, months],
+    () => allCols.filter(({ key, isNichtAbsetzbar }) =>
+      months.some((m) => (m.colValues[key] ?? 0) > 0) &&
+      (!hideNichtAbsetzbar || !isNichtAbsetzbar)
+    ),
+    [allCols, months, hideNichtAbsetzbar],
   );
 
   // ── Jahressummen ─────────────────────────────────────────────────────────────
   const yearTotals = useMemo(() => {
-    const einnahmen    = months.reduce((s, m) => s + m.einnahmen, 0);
-    const ausgaben     = months.reduce((s, m) => s + m.ausgabenTotal, 0);
-    const cashflow     = einnahmen - ausgaben;
+    const einnahmen         = months.reduce((s, m) => s + m.einnahmen, 0);
+    const ausgaben          = months.reduce((s, m) => s + m.ausgabenTotal, 0);
+    const ausgabenFiltered  = months.reduce((s, m) => s + m.ausgabenFiltered, 0);
+    const cashflow          = einnahmen - ausgaben;
+    const cashflowFiltered  = einnahmen - ausgabenFiltered;
     const colTotals: Record<string, number> = {};
     for (const col of allCols) {
       colTotals[col.key] = months.reduce((s, m) => s + (m.colValues[col.key] ?? 0), 0);
@@ -271,15 +298,10 @@ export default function ProfitabilityPage() {
       dbCategories,
     );
 
-    return { einnahmen, ausgaben, cashflow, colTotals, steuerlicher_gewinn_verlust: calcResult.steuerlicher_gewinn_verlust, zinsen: calcResult.zinsen };
+    return { einnahmen, ausgaben, ausgabenFiltered, cashflow, cashflowFiltered, colTotals, steuerlicher_gewinn_verlust: calcResult.steuerlicher_gewinn_verlust, zinsen: calcResult.zinsen };
   }, [months, transactions, propertyInput, year, dbCategories, allCols]);
 
   // ── Pie chart data (Ausgaben by category) ────────────────────────────────────
-  // Old slugs that are nicht absetzbar (for backward compat)
-  const OLD_NICHT_ABSETZBAR = useMemo(() => new Set([
-    "tilgung_kredit", "mietsicherheit_ausgabe", "sonstiges_nicht_absetzbar",
-  ]), []);
-
   const pieDataAll = useMemo(() => {
     const catTotals = new Map<string, number>();
     for (const m of months) {
@@ -296,10 +318,10 @@ export default function ProfitabilityPage() {
         // Absetzbar: DB-Kategorie typ=ausgabe, oder alte Slugs die nicht in der nicht-absetzbar-Liste sind
         const isDeductible = dbCat
           ? dbCat.typ === "ausgabe" && dbCat.anlage_v !== "nicht absetzbar"
-          : !OLD_NICHT_ABSETZBAR.has(cat);
+          : !OLD_NICHT_ABSETZBAR_SET.has(cat);
         return { name, value, isDeductible };
       });
-  }, [months, catLookup, OLD_NICHT_ABSETZBAR]);
+  }, [months, catLookup]);
 
   const pieData = useMemo(() => {
     if (!hideNichtAbsetzbar) return pieDataAll;
@@ -313,10 +335,10 @@ export default function ProfitabilityPage() {
     return months.map((m) => ({
       name: MONTH_NAMES[m.m - 1],
       Einnahmen: Math.round(m.einnahmen),
-      Ausgaben: Math.round(-m.ausgabenTotal),
-      Cashflow: Math.round(m.cashflow),
+      Ausgaben: Math.round(hideNichtAbsetzbar ? -m.ausgabenFiltered : -m.ausgabenTotal),
+      Cashflow: Math.round(hideNichtAbsetzbar ? m.cashflowFiltered : m.cashflow),
     }));
-  }, [months]);
+  }, [months, hideNichtAbsetzbar]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
   if (loading) return <PageSkeleton />;
@@ -341,6 +363,18 @@ export default function ProfitabilityPage() {
                 {property.name}{property.address ? ` · ${property.address}` : ""}
               </p>
             </div>
+            <div className="flex flex-wrap items-center gap-3">
+              {hasNichtAbsetzbar && (
+                <label className="flex cursor-pointer items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
+                  <input
+                    type="checkbox"
+                    checked={hideNichtAbsetzbar}
+                    onChange={(e) => setHideNichtAbsetzbar(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800"
+                  />
+                  Nicht absetzbare ausblenden
+                </label>
+              )}
             <select
               value={year}
               onChange={(e) => setYear(Number(e.target.value))}
@@ -350,17 +384,22 @@ export default function ProfitabilityPage() {
                 <option key={y} value={y}>{y}</option>
               ))}
             </select>
+            </div>
           </div>
         </div>
 
         {/* ── Kennzahlen ───────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <SummaryCard label="Einnahmen" value={fmtEur(yearTotals.einnahmen)} color="emerald" />
-          <SummaryCard label="Ausgaben" value={fmtEur(yearTotals.ausgaben)} color="red" />
+          <SummaryCard
+            label={hideNichtAbsetzbar ? "Ausgaben (absetzbar)" : "Ausgaben"}
+            value={fmtEur(hideNichtAbsetzbar ? yearTotals.ausgabenFiltered : yearTotals.ausgaben)}
+            color="red"
+          />
           <SummaryCard
             label="Cashflow"
-            value={fmtEur(yearTotals.cashflow, true)}
-            color={yearTotals.cashflow >= 0 ? "emerald" : "red"}
+            value={fmtEur(hideNichtAbsetzbar ? yearTotals.cashflowFiltered : yearTotals.cashflow, true)}
+            color={(hideNichtAbsetzbar ? yearTotals.cashflowFiltered : yearTotals.cashflow) >= 0 ? "emerald" : "red"}
           />
           <SummaryCard
             label="Steuerl. Ergebnis"
@@ -395,21 +434,10 @@ export default function ProfitabilityPage() {
           {/* Ausgaben Pie Chart */}
           {pieDataAll.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-4">
                 <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                   Ausgaben nach Kategorie {year}
                 </h2>
-                {hasNichtAbsetzbar && (
-                  <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                    <input
-                      type="checkbox"
-                      checked={hideNichtAbsetzbar}
-                      onChange={(e) => setHideNichtAbsetzbar(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800"
-                    />
-                    Nicht absetzbare ausblenden
-                  </label>
-                )}
               </div>
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -501,7 +529,10 @@ export default function ProfitabilityPage() {
               </thead>
 
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {months.map(({ m, label, einnahmen, colValues, ausgabenTotal, cashflow, hasTx }) => (
+                {months.map(({ m, label, einnahmen, colValues, ausgabenTotal, cashflow, ausgabenFiltered, cashflowFiltered, hasTx }) => {
+                  const dispAusgaben = hideNichtAbsetzbar ? ausgabenFiltered : ausgabenTotal;
+                  const dispCashflow = hideNichtAbsetzbar ? cashflowFiltered : cashflow;
+                  return (
                   <tr
                     key={m}
                     className={`transition ${
@@ -527,23 +558,23 @@ export default function ProfitabilityPage() {
                       );
                     })}
                     <td className="border-l border-slate-100 px-4 py-2.5 text-right text-sm tabular-nums dark:border-slate-800">
-                      <span className={ausgabenTotal > 0 ? "font-medium text-red-600 dark:text-red-400" : "text-slate-300 dark:text-slate-600"}>
-                        {ausgabenTotal > 0 ? fmtEur(ausgabenTotal) : "—"}
+                      <span className={dispAusgaben > 0 ? "font-medium text-red-600 dark:text-red-400" : "text-slate-300 dark:text-slate-600"}>
+                        {dispAusgaben > 0 ? fmtEur(dispAusgaben) : "—"}
                       </span>
                     </td>
                     <td className={`border-l border-slate-200 px-4 py-2.5 text-right text-sm font-semibold tabular-nums dark:border-slate-700 ${
-                      !hasTx        ? "text-slate-300 dark:text-slate-600"
-                      : cashflow > 0  ? "text-emerald-600 dark:text-emerald-400"
-                      : cashflow < 0  ? "text-red-600 dark:text-red-400"
-                      :                 "text-slate-400 dark:text-slate-500"
+                      !hasTx          ? "text-slate-300 dark:text-slate-600"
+                      : dispCashflow > 0  ? "text-emerald-600 dark:text-emerald-400"
+                      : dispCashflow < 0  ? "text-red-600 dark:text-red-400"
+                      :                     "text-slate-400 dark:text-slate-500"
                     }`}>
-                      {hasTx ? fmtEur(cashflow, true) : "—"}
+                      {hasTx ? fmtEur(dispCashflow, true) : "—"}
                     </td>
                     <td className="px-4 py-2.5 text-right text-sm tabular-nums text-slate-400 dark:text-slate-500">
                       {afaMonat > 0 ? fmtEur(afaMonat) : "—"}
                     </td>
                   </tr>
-                ))}
+                );})}
               </tbody>
 
               <tfoot>
@@ -560,12 +591,12 @@ export default function ProfitabilityPage() {
                     </td>
                   ))}
                   <td className="border-l border-slate-200 px-4 py-3 text-right text-sm font-bold tabular-nums text-red-600 dark:border-slate-700 dark:text-red-400">
-                    {fmtEur(yearTotals.ausgaben)}
+                    {fmtEur(hideNichtAbsetzbar ? yearTotals.ausgabenFiltered : yearTotals.ausgaben)}
                   </td>
                   <td className={`border-l border-slate-300 px-4 py-3 text-right text-sm font-bold tabular-nums dark:border-slate-600 ${
-                    yearTotals.cashflow >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                    (hideNichtAbsetzbar ? yearTotals.cashflowFiltered : yearTotals.cashflow) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
                   }`}>
-                    {fmtEur(yearTotals.cashflow, true)}
+                    {fmtEur(hideNichtAbsetzbar ? yearTotals.cashflowFiltered : yearTotals.cashflow, true)}
                   </td>
                   <td className="px-4 py-3 text-right text-sm tabular-nums text-slate-500 dark:text-slate-400">
                     {afaMonat > 0 ? fmtEur(afaMonat * 12) : "—"}

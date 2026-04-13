@@ -70,6 +70,7 @@ export default function TenantsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
   const [search, setSearch] = useState("");
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadTenants() {
@@ -89,14 +90,33 @@ export default function TenantsPage() {
     void loadTenants();
   }, [id]);
 
+  // Derive available years from tenant lease dates
+  const availableYears = useMemo(() => {
+    const years = new Set<number>();
+    years.add(new Date().getFullYear());
+    for (const t of tenants) {
+      if (t.lease_start) years.add(new Date(t.lease_start).getFullYear());
+      if (t.lease_end) years.add(new Date(t.lease_end).getFullYear());
+    }
+    return Array.from(years).sort((a, b) => b - a);
+  }, [tenants]);
+
   const filtered = useMemo(() => {
     return tenants.filter((t) => {
       const matchesFilter = filter === "all" || t.status === filter;
       const fullName = `${t.first_name} ${t.last_name}`.toLowerCase();
       const matchesSearch = search === "" || fullName.includes(search.toLowerCase());
-      return matchesFilter && matchesSearch;
+      let matchesYear = true;
+      if (selectedYear !== null) {
+        const yearStart = `${selectedYear}-01-01`;
+        const yearEnd = `${selectedYear}-12-31`;
+        const leaseStart = t.lease_start ?? "";
+        const leaseEnd = t.lease_end ?? null;
+        matchesYear = leaseStart <= yearEnd && (leaseEnd === null || leaseEnd >= yearStart);
+      }
+      return matchesFilter && matchesSearch && matchesYear;
     });
-  }, [tenants, filter, search]);
+  }, [tenants, filter, search, selectedYear]);
 
   const activeTenants = tenants.filter((t) => t.status === "active");
   const totalMonthlyIncome = activeTenants.reduce(
@@ -139,6 +159,16 @@ export default function TenantsPage() {
             </button>
           ))}
         </div>
+        <select
+          value={selectedYear ?? ""}
+          onChange={(e) => setSelectedYear(e.target.value === "" ? null : Number(e.target.value))}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+        >
+          <option value="">Alle Jahre</option>
+          {availableYears.map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
         <input
           type="text"
           placeholder="Name suchen…"

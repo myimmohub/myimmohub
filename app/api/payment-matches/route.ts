@@ -267,12 +267,21 @@ export async function POST(request: Request) {
       }
 
       if (upserts.length > 0) {
-        const { error: upsertError } = await supabase
+        // Remove any stale "suggested" matches for these transactions before inserting fresh ones.
+        // (No unique constraint on transaction_id yet — avoid duplicates manually.)
+        const txIdsToMatch = upserts.map((u) => u.transaction_id);
+        await supabase
           .from("payment_matches")
-          .upsert(upserts, { onConflict: "transaction_id" });
+          .delete()
+          .in("transaction_id", txIdsToMatch)
+          .eq("status", "suggested");
 
-        if (upsertError) {
-          return NextResponse.json({ error: upsertError.message }, { status: 500 });
+        const { error: insertError } = await supabase
+          .from("payment_matches")
+          .insert(upserts);
+
+        if (insertError) {
+          return NextResponse.json({ error: insertError.message }, { status: 500 });
         }
       }
 
@@ -300,24 +309,39 @@ export async function POST(request: Request) {
       // period_month arrives as YYYY-MM, store as YYYY-MM-01
       const periodDate = period_month.length === 7 ? `${period_month}-01` : period_month;
 
-      const { data, error } = await supabase
+      const payload = {
+        unit_id,
+        tenant_id,
+        property_id,
+        period_month: periodDate,
+        match_method: "manual",
+        match_confidence: 1.0,
+        status: "confirmed",
+        direction: "incoming",
+      };
+
+      // Check if a match already exists for this transaction (no unique constraint yet)
+      const { data: existing } = await supabase
         .from("payment_matches")
-        .upsert(
-          {
-            transaction_id,
-            unit_id,
-            tenant_id,
-            property_id,
-            period_month: periodDate,
-            match_method: "manual",
-            match_confidence: 1.0,
-            status: "confirmed",
-            direction: "incoming",
-          },
-          { onConflict: "transaction_id" },
-        )
-        .select()
-        .single();
+        .select("id")
+        .eq("transaction_id", transaction_id)
+        .maybeSingle();
+
+      let data, error;
+      if (existing?.id) {
+        ({ data, error } = await supabase
+          .from("payment_matches")
+          .update(payload)
+          .eq("id", existing.id)
+          .select()
+          .single());
+      } else {
+        ({ data, error } = await supabase
+          .from("payment_matches")
+          .insert({ transaction_id, ...payload })
+          .select()
+          .single());
+      }
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json(data, { status: 201 });
