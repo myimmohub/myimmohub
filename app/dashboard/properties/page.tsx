@@ -44,7 +44,7 @@ export default function PropertiesPage() {
             </p>
           </div>
           <Link
-            href="/onboarding"
+            href="/onboarding?mode=add-property"
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -72,7 +72,7 @@ export default function PropertiesPage() {
               <p className="mt-1 text-sm text-slate-500">Lege dein erstes Objekt an und starte mit Dokumenten, Banking und Steuerdaten.</p>
             </div>
             <Link
-              href="/onboarding"
+              href="/onboarding?mode=add-property"
               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">

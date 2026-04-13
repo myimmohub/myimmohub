@@ -7,7 +7,6 @@ import { supabase } from "@/lib/supabase";
 
 const TABS = [
   { label: "Steckbrief", href: (id: string) => `/dashboard/properties/${id}/overview`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/overview`) },
-  { label: "Dokumente", href: (id: string) => `/dashboard/properties/${id}`, match: (pathname: string, id: string) => pathname === `/dashboard/properties/${id}` },
   { label: "Profitabilität", href: (id: string) => `/dashboard/properties/${id}/profitability`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/profitability`) },
   { label: "Steuerdaten", href: (id: string) => `/dashboard/properties/${id}/tax`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/tax`) },
 ];

@@ -24,6 +24,9 @@ export default function OnboardingPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [createdPropertyId, setCreatedPropertyId] = useState<string | null>(null);
 
+  const isAddPropertyMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mode") === "add-property";
+  const effectiveStep: 1 | 2 | 3 = isAddPropertyMode && step === 1 ? 2 : step;
+
   useEffect(() => {
     const checkExistingProperties = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -38,7 +41,7 @@ export default function OnboardingPage() {
         .eq("user_id", user.id)
         .limit(1);
 
-      if (!error && data && data.length > 0) {
+      if (!isAddPropertyMode && !error && data && data.length > 0) {
         router.replace("/dashboard");
         return;
       }
@@ -47,7 +50,7 @@ export default function OnboardingPage() {
     };
 
     void checkExistingProperties();
-  }, [router]);
+  }, [isAddPropertyMode, router]);
 
   const handlePropertySubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -101,22 +104,24 @@ export default function OnboardingPage() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Onboarding</h1>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">In wenigen Minuten ist deine erste Immobilie startklar.</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                {isAddPropertyMode ? "Lege eine weitere Immobilie an. Alles Weitere kannst du später ergänzen." : "In wenigen Minuten ist deine erste Immobilie startklar."}
+              </p>
             </div>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Schritt {step} von 3</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Schritt {effectiveStep} von 3</p>
           </div>
 
-          <div className="mt-6 grid grid-cols-3 gap-4">
-            {STEPS.map((item) => (
+          <div className={`mt-6 grid gap-4 ${isAddPropertyMode ? "grid-cols-2" : "grid-cols-3"}`}>
+            {(isAddPropertyMode ? STEPS.filter((item) => item.id !== 1) : STEPS).map((item) => (
               <div key={item.id} className="text-center">
-                <div className={`mx-auto h-3 w-3 rounded-full ${step >= item.id ? "bg-blue-600 dark:bg-blue-400" : "bg-slate-300 dark:bg-slate-700"}`} />
+                <div className={`mx-auto h-3 w-3 rounded-full ${effectiveStep >= item.id ? "bg-blue-600 dark:bg-blue-400" : "bg-slate-300 dark:bg-slate-700"}`} />
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{item.label}</p>
               </div>
             ))}
           </div>
         </div>
 
-        {step === 1 && (
+        {!isAddPropertyMode && effectiveStep === 1 && (
           <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
             <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">Was MyImmoHub für dich übernimmt</h2>
             <div className="mt-5 grid gap-4 md:grid-cols-3">
@@ -147,9 +152,9 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {step === 2 && (
+        {effectiveStep === 2 && (
           <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">Erste Immobilie anlegen</h2>
+            <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">{isAddPropertyMode ? "Neue Immobilie anlegen" : "Erste Immobilie anlegen"}</h2>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Die Basisdaten reichen aus. Alles Weitere kannst du später ergänzen.</p>
 
             <form onSubmit={handlePropertySubmit} className="mt-6 space-y-4">
@@ -171,13 +176,22 @@ export default function OnboardingPage() {
               {submitError && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{submitError}</div>}
 
               <div className="flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                >
-                  Zurück
-                </button>
+                {isAddPropertyMode ? (
+                  <Link
+                    href="/dashboard/properties"
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    Abbrechen
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    Zurück
+                  </button>
+                )}
                 <button
                   type="submit"
                   disabled={isSubmitting}
@@ -190,7 +204,7 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {step === 3 && (
+        {effectiveStep === 3 && (
           <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
@@ -216,7 +230,7 @@ export default function OnboardingPage() {
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               {createdPropertyId && (
                 <Link
-                  href={`/dashboard/properties/${createdPropertyId}`}
+                  href="/dashboard/documents"
                   className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
                 >
                   Dokumente hochladen
