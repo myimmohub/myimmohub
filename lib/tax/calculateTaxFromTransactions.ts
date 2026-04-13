@@ -74,15 +74,18 @@ const CATEGORY_TO_FIELD: Record<string, keyof TaxData> = {
   // Gebäude
   "Grundsteuer":                      "property_tax",
   "Versicherungen":                   "insurance",
-  "Hausverwaltung / WEG-Kosten":      "hoa_fees",
-  "Hauswart / Hausmeister":           "hoa_fees",
-  "Heizung / Wärme":                  "hoa_fees",
-  "Allgemeinstrom / Hausbeleuchtung": "hoa_fees",
-  "Schornsteinreinigung":             "hoa_fees",
+  // Kosten der Hausverwaltung (Z. 35) — nicht Z. 20 (WEG-Hausgeld)
+  "Hausverwaltung / WEG-Kosten":      "property_management",
+  // Laufende Betriebskosten nach BetrKV — kein WEG-Hausgeld
+  "Hauswart / Hausmeister":           "other_expenses",
+  "Heizung / Wärme":                  "other_expenses",
+  "Allgemeinstrom / Hausbeleuchtung": "other_expenses",
+  "Schornsteinreinigung":             "other_expenses",
 
-  // Instandhaltung
+  // Instandhaltung / Erhaltungsaufwand (Z. 40)
+  // Nur Aufwendungen zur Erhaltung/Wiederherstellung des Gebäudes — keine laufenden Betriebsdienste
   "Handwerkerleistungen":             "maintenance_costs",
-  "Hausmeisterdienste":               "maintenance_costs",
+  "Hausmeisterdienste":               "other_expenses",  // Betriebskosten, KEIN Erhaltungsaufwand
   "Materialkosten":                   "maintenance_costs",
 
   // Betriebskosten
@@ -98,7 +101,7 @@ const CATEGORY_TO_FIELD: Record<string, keyof TaxData> = {
   // Verwaltung
   "Steuerberatung / Rechtskosten":    "other_expenses",
   "Verwaltungspauschale":             "property_management",
-  "Porto":                            "property_management",
+  "Porto":                            "other_expenses",   // Sonstige Werbungskosten, nicht Hausverwaltungskosten
   "Inserate & Vermarktung":           "other_expenses",
   "Fahrtkosten":                      "other_expenses",
   "Bürokosten / Verwaltungsaufwand":  "other_expenses",
@@ -198,10 +201,12 @@ function inferFieldFromText(
   if (containsAny(haystack, ["kontofuhrung", "bankgebuhr", "kontogebuhr"])) return "bank_fees";
   if (containsAny(haystack, ["wasser", "abwasser", "sewage"])) return "water_sewage";
   if (containsAny(haystack, ["mull", "abfall", "entsorgung"])) return "waste_disposal";
-  if (containsAny(haystack, ["hauswart", "hausmeister", "heizung", "warmwasser", "hausbeleuchtung", "allgemeinstrom", "schornstein", "treppenhausreinigung", "strassenreinigung", "strassen reinigung"])) return "hoa_fees";
-  if (containsAny(haystack, ["weg kosten", "weg umlage", "hausgeld", "eigentu mergemeinschaft", "eigentumergemeinschaft", "weg"])) return "hoa_fees";
-  if (containsAny(haystack, ["porto", "verwaltungspauschale", "verwaltungskosten", "pauschale verwaltung"])) return "property_management";
-  if (containsAny(haystack, ["hausverwaltung", "immobilienverwaltung", "objektverwaltung", "ferienhausverwaltung"])) return "property_management";
+  // WEG-Hausgeld (Z. 20): nur bei echtem Wohnungseigentum — WEG-Beiträge/Hausgeld
+  if (containsAny(haystack, ["weg kosten", "weg umlage", "hausgeld", "eigentu mergemeinschaft", "eigentumergemeinschaft", "wohnungseigentumer"])) return "hoa_fees";
+  // Kosten der Hausverwaltung (Z. 35): Verwaltungsgebühren an Hausverwaltungsgesellschaft
+  if (containsAny(haystack, ["hausverwaltung", "immobilienverwaltung", "objektverwaltung", "ferienhausverwaltung", "verwaltungspauschale", "verwaltungskosten", "pauschale verwaltung"])) return "property_management";
+  // Laufende Betriebskosten (Z. 48/sonstige) — KEIN WEG-Hausgeld und KEIN Erhaltungsaufwand
+  if (containsAny(haystack, ["hauswart", "hausmeister", "heizung", "warmwasser", "hausbeleuchtung", "allgemeinstrom", "schornstein", "treppenhausreinigung", "strassenreinigung", "strassen reinigung"])) return "other_expenses";
   if (containsAny(haystack, ["handwerker", "material", "instandhaltung", "instandsetzung", "reparatur", "wartung", "sanierung", "renovierung"])) return "maintenance_costs";
   if (containsAny(haystack, ["nebenkostenerstattung", "umlage"])) return "operating_costs_income";
   if (containsAny(haystack, ["mieteinnahmen", "miete", "ferienvermietung"])) return "rent_income";
