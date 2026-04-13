@@ -9,6 +9,9 @@ const TABS = [
   { label: "Steckbrief", href: (id: string) => `/dashboard/properties/${id}/overview`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/overview`) },
   { label: "Profitabilität", href: (id: string) => `/dashboard/properties/${id}/profitability`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/profitability`) },
   { label: "Steuerdaten", href: (id: string) => `/dashboard/properties/${id}/tax`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/tax`) },
+  { label: "Einheiten", href: (id: string) => `/dashboard/properties/${id}/units`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/units`) },
+  { label: "Mieter", href: (id: string) => `/dashboard/properties/${id}/tenants`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/tenants`) },
+  { label: "Zahlungen", href: (id: string) => `/dashboard/properties/${id}/payments`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/payments`) },
 ];
 
 export default function PropertyLayout({ children }: { children: React.ReactNode }) {
