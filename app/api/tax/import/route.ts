@@ -43,6 +43,7 @@ partners, expense_blocks, depreciation_items, maintenance_distributions
 
 Wichtig:
 - Datumswerte immer als exaktes Kalenderdatum ausgeben, bevorzugt DD.MM.YYYY oder YYYY-MM-DD. Keine Uhrzeiten oder ISO-Timestamps mit Zeitzonen ausgeben.
+- ownership_share_pct = Miteigentumsanteil der GbR / des Eigentuemers an der IMMOBILIE (typisch 100). NICHT der GbR-Partner-Anteil (der kommt in partners.anteil) und NICHT der Vermietungsanteil/Nutzungsanteil. Nur setzen wenn die Immobilie fraktioniert besessen wird (z.B. 50 % Erbengemeinschaft). Bei einer GbR die das Objekt vollstaendig haelt: 100.
 - maintenance_costs nur fuer sofort abzugsfaehigen Erhaltungsaufwand verwenden.
 - Auf mehrere Jahre verteilte Erhaltungsaufwaende nach §§ 11a, 11b EStG / § 82b EStDV immer in maintenance_distributions abbilden.
 - special_deduction_renovation nur fuer echte steuerliche Sonderabschreibungen / Sonderabzuege verwenden, NICHT fuer verteilten Erhaltungsaufwand aus Vorjahren oder dem aktuellen Jahr.
