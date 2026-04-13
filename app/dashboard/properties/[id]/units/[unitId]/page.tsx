@@ -119,6 +119,7 @@ export default function UnitDetailPage() {
   const [reviewMode, setReviewMode] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const [savedDocumentId, setSavedDocumentId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -158,10 +159,13 @@ export default function UnitDetailPage() {
       fd.append("file", file);
       fd.append("unit_id", unitId);
       const res = await fetch("/api/tenants/extract", { method: "POST", body: fd });
-      if (!res.ok) throw new Error("Extraktion fehlgeschlagen");
-      const data: LeaseExtractionResult = await res.json();
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+      }
+      const data: LeaseExtractionResult & { document_id?: string } = await res.json();
+      if (data.document_id) setSavedDocumentId(data.document_id);
       setExtractedData(data);
-      // Pre-fill form from extracted data
       setFormData({
         first_name: data.first_name?.value ?? "",
         last_name: data.last_name?.value ?? "",
@@ -247,6 +251,7 @@ export default function UnitDetailPage() {
     setExtractedData(null);
     setReviewMode(false);
     setFormData(emptyForm);
+    setSavedDocumentId(null);
   }
 
   if (loading) {
@@ -538,6 +543,20 @@ export default function UnitDetailPage() {
                     {reviewMode ? "Extrahierte Daten prüfen" : "Mieterdaten eingeben"}
                   </h2>
                 </div>
+                {savedDocumentId && (
+                  <div className="mb-4 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                    <span>✓</span>
+                    <span>Mietvertrag wurde in Dokumenten gespeichert.</span>
+                    <a
+                      href={`/dashboard/documents/${savedDocumentId}`}
+                      className="ml-auto underline"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Öffnen →
+                    </a>
+                  </div>
+                )}
                 <form
                   onSubmit={handleTenantSubmit}
                   className="max-h-[70vh] space-y-3 overflow-y-auto pr-1"
