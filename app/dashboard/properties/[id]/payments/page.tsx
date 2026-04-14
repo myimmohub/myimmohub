@@ -107,7 +107,7 @@ function getAvailableYears(): number[] {
 type PeriodMode = "month" | "year" | "custom";
 
 /** Generates months from pastMonths ago to futureMonths ahead (oldest first), always including preselectedMonth. */
-function getModalMonths(preselectedMonth?: string, pastMonths = 23, futureMonths = 12): string[] {
+function getModalMonths(preselectedMonth?: string, pastMonths = 60, futureMonths = 12): string[] {
   const result: string[] = [];
   const now = new Date();
   for (let i = pastMonths; i >= -futureMonths; i--) {
