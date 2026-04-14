@@ -106,16 +106,15 @@ function getAvailableYears(): number[] {
 
 type PeriodMode = "month" | "year" | "custom";
 
-/** Generates the last N months (oldest first), always including preselectedMonth. */
-function getModalMonths(preselectedMonth?: string, count = 24): string[] {
+/** Generates months from pastMonths ago to futureMonths ahead (oldest first), always including preselectedMonth. */
+function getModalMonths(preselectedMonth?: string, pastMonths = 23, futureMonths = 12): string[] {
   const result: string[] = [];
   const now = new Date();
-  for (let i = count - 1; i >= 0; i--) {
+  for (let i = pastMonths; i >= -futureMonths; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     result.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   }
   if (preselectedMonth && !result.includes(preselectedMonth)) {
-    // Insert in chronological order
     const idx = result.findIndex((m) => m > preselectedMonth);
     if (idx === -1) result.push(preselectedMonth);
     else result.splice(idx, 0, preselectedMonth);
