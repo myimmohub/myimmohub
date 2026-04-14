@@ -747,6 +747,22 @@ export default function PaymentsPage() {
     suggestionSource?: "saved" | "reference" | "name" | "";
   } | null>(null);
 
+  // Cell detail modal state (click on a matched cell → see transaction details)
+  const [cellDetailModal, setCellDetailModal] = useState<{
+    unit: Unit;
+    month: string;
+    matches: PaymentMatch[];
+  } | null>(null);
+
+  function handleReassign(match: PaymentMatch) {
+    setCellDetailModal(null);
+    setAssignModal({
+      preTxId: match.transaction_id,
+      preUnitId: match.unit_id ?? undefined,
+      preMonth: match.period_month?.slice(0, 7),
+    });
+  }
+
   // Multi-select for unmatched transactions
   const [selectedUnmatched, setSelectedUnmatched] = useState<Set<string>>(new Set());
   const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
@@ -861,15 +877,15 @@ export default function PaymentsPage() {
   const matrix = useMemo<Array<{ unit: Unit; cells: Array<{ month: string; cell: CellData }> }>>(() => {
     return unitsWithTenant.map((unit) => {
       const cells = months.map((ym) => {
-        const match = matches.find(
+        const cellMatches = matches.filter(
           (m) =>
             m.unit_id === unit.id &&
             m.period_month?.startsWith(ym) &&
             m.status !== "rejected",
         );
 
-        if (match) {
-          return { month: ym, cell: { kind: "matched" as const, match } };
+        if (cellMatches.length > 0) {
+          return { month: ym, cell: { kind: "matched" as const, matches: cellMatches } };
         }
 
         const tenant = unit.active_tenant!;
@@ -1138,6 +1154,9 @@ export default function PaymentsPage() {
                           onAssign={() =>
                             setAssignModal({ preUnitId: unit.id, preMonth: month })
                           }
+                          onDetail={(cellMatches) =>
+                            setCellDetailModal({ unit, month, matches: cellMatches })
+                          }
                         />
                       </td>
                     ))}
@@ -1320,6 +1339,29 @@ export default function PaymentsPage() {
         />
       )}
 
+      {/* Cell detail modal */}
+      {cellDetailModal && (
+        <CellDetailModal
+          unit={cellDetailModal.unit}
+          month={cellDetailModal.month}
+          matches={cellDetailModal.matches}
+          actionLoading={actionLoading}
+          onClose={() => setCellDetailModal(null)}
+          onRemove={async (matchId) => {
+            await handleStatusUpdate(matchId, "rejected");
+            setCellDetailModal(null);
+          }}
+          onReassign={handleReassign}
+          onAddAnother={() => {
+            setCellDetailModal(null);
+            setAssignModal({
+              preUnitId: cellDetailModal.unit.id,
+              preMonth: cellDetailModal.month,
+            });
+          }}
+        />
+      )}
+
       {/* Bulk assign modal */}
       {bulkAssignOpen && (
         <BulkAssignModal
@@ -1341,11 +1383,179 @@ export default function PaymentsPage() {
 }
 
 // ---------------------------------------------------------------------------
+// Cell detail modal
+// ---------------------------------------------------------------------------
+
+function CellDetailModal({
+  unit,
+  month,
+  matches,
+  actionLoading,
+  onClose,
+  onRemove,
+  onReassign,
+  onAddAnother,
+}: {
+  unit: Unit;
+  month: string;
+  matches: PaymentMatch[];
+  actionLoading: string | null;
+  onClose: () => void;
+  onRemove: (matchId: string) => void;
+  onReassign: (match: PaymentMatch) => void;
+  onAddAnother: () => void;
+}) {
+  const confirmedMatches = matches.filter(
+    (m) => m.status === "confirmed" || m.status === "auto_matched",
+  );
+  const allActive = matches.filter((m) => m.status !== "rejected");
+  const totalReceived = confirmedMatches.reduce((s, m) => s + (m.transactions?.amount ?? 0), 0);
+  const expectedEur = unit.active_tenant
+    ? (unit.active_tenant.cold_rent_cents + (unit.active_tenant.additional_costs_cents ?? 0)) / 100
+    : 0;
+  const diff = totalReceived - expectedEur;
+
+  const statusLabel: Record<string, string> = {
+    confirmed: "Bestätigt",
+    auto_matched: "Automatisch",
+    suggested: "Vorschlag",
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+        {/* Header */}
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Zahlungen — {fmtMonthLabel(month)}
+            </h2>
+            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+              {unit.label} · {unit.active_tenant?.first_name} {unit.active_tenant?.last_name}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+          >
+            <XIcon className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Summary bar */}
+        <div className="mb-5 grid grid-cols-3 gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/40">
+          <div className="text-center">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Soll</p>
+            <p className="mt-0.5 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              {fmtEur(expectedEur)}
+            </p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Eingegangen</p>
+            <p className={`mt-0.5 text-sm font-semibold ${
+              totalReceived >= expectedEur
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-red-600 dark:text-red-400"
+            }`}>
+              {fmtEur(totalReceived)}
+            </p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Differenz</p>
+            <p className={`mt-0.5 text-sm font-semibold ${
+              diff >= 0
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-red-600 dark:text-red-400"
+            }`}>
+              {diff >= 0 ? "+" : ""}{fmtEur(diff)}
+            </p>
+          </div>
+        </div>
+
+        {/* Transaction list */}
+        <div className="space-y-2">
+          {allActive.map((match) => {
+            const tx = match.transactions;
+            const isLoading = actionLoading === match.id;
+            const isConfirmed = match.status === "confirmed" || match.status === "auto_matched";
+            return (
+              <div
+                key={match.id}
+                className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800/60"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-medium text-slate-900 dark:text-slate-100">
+                        {tx?.counterpart ?? "—"}
+                      </p>
+                      <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                        isConfirmed
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                          : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300"
+                      }`}>
+                        {statusLabel[match.status] ?? match.status}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {tx ? fmtDate(tx.date) : "—"}
+                    </p>
+                    {tx?.description && (
+                      <p className="mt-0.5 truncate text-[11px] text-slate-400 dark:text-slate-500">
+                        {tx.description}
+                      </p>
+                    )}
+                  </div>
+                  <p className="shrink-0 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                    {fmtEur(tx?.amount ?? 0)}
+                  </p>
+                </div>
+                <div className="mt-2.5 flex gap-2 border-t border-slate-100 pt-2.5 dark:border-slate-700">
+                  <button
+                    onClick={() => onReassign(match)}
+                    className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-blue-700 dark:hover:text-blue-400"
+                  >
+                    Umbuchen
+                  </button>
+                  <button
+                    disabled={isLoading}
+                    onClick={() => onRemove(match.id)}
+                    className="rounded-lg border border-red-200 px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+                  >
+                    {isLoading ? "…" : "Entfernen"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">
+          <button
+            onClick={onAddAnother}
+            className="rounded-lg border border-dashed border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-500 transition hover:border-blue-400 hover:text-blue-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-blue-700 dark:hover:text-blue-400"
+          >
+            + Weitere Transaktion zuordnen
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded-lg bg-slate-100 px-4 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+          >
+            Schließen
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Matrix cell
 // ---------------------------------------------------------------------------
 
 type CellData =
-  | { kind: "matched"; match: PaymentMatch }
+  | { kind: "matched"; matches: PaymentMatch[] }
   | { kind: "missing"; expectedEur: number }
   | { kind: "no_tenant" };
 
@@ -1357,6 +1567,7 @@ function MatrixCell({
   onConfirm,
   onReject,
   onAssign,
+  onDetail,
 }: {
   cell: CellData;
   unit: Unit;
@@ -1365,8 +1576,9 @@ function MatrixCell({
   onConfirm: (matchId: string) => void;
   onReject: (matchId: string) => void;
   onAssign: () => void;
+  onDetail: (matches: PaymentMatch[]) => void;
 }) {
-  void unit; // used by parent caller context
+  void unit;
   void month;
 
   if (cell.kind === "no_tenant") {
@@ -1386,34 +1598,53 @@ function MatrixCell({
     );
   }
 
-  const { match } = cell;
-  const amountEur = match.transactions?.amount ?? 0;
+  const { matches } = cell;
+  const confirmedMatches = matches.filter(
+    (m) => m.status === "confirmed" || m.status === "auto_matched",
+  );
+  const suggestedMatch = matches.find((m) => m.status === "suggested");
 
-  if (match.status === "confirmed" || match.status === "auto_matched") {
+  // Confirmed / auto_matched → green, clickable for details
+  if (confirmedMatches.length > 0) {
+    const total = confirmedMatches.reduce((s, m) => s + (m.transactions?.amount ?? 0), 0);
+    const isMulti = confirmedMatches.length > 1;
     return (
-      <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-100 px-2 py-1.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-        ✓ {fmtEur(amountEur)}
-      </span>
+      <button
+        onClick={() => onDetail(matches)}
+        title="Details anzeigen"
+        className="inline-flex flex-col items-center gap-0.5 rounded-lg bg-emerald-100 px-2 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/50"
+      >
+        <span>✓ {fmtEur(total)}</span>
+        {isMulti && (
+          <span className="text-[10px] font-normal opacity-75">{confirmedMatches.length}× Zahlungen</span>
+        )}
+      </button>
     );
   }
 
-  if (match.status === "suggested") {
+  // Suggested → yellow with confirm/reject
+  if (suggestedMatch) {
+    const amountEur = suggestedMatch.transactions?.amount ?? 0;
     return (
       <div className="flex flex-col items-center gap-1">
-        <span className="inline-flex items-center gap-1 rounded-lg bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+        <button
+          onClick={() => onDetail(matches)}
+          title="Details anzeigen"
+          className="inline-flex items-center gap-1 rounded-lg bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-700 hover:bg-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:hover:bg-yellow-900/50"
+        >
           ⚠ {fmtEur(amountEur)}
-        </span>
+        </button>
         <div className="flex gap-1">
           <button
-            disabled={actionLoading === match.id}
-            onClick={() => onConfirm(match.id)}
+            disabled={actionLoading === suggestedMatch.id}
+            onClick={() => onConfirm(suggestedMatch.id)}
             className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
           >
             ✓
           </button>
           <button
-            disabled={actionLoading === match.id}
-            onClick={() => onReject(match.id)}
+            disabled={actionLoading === suggestedMatch.id}
+            onClick={() => onReject(suggestedMatch.id)}
             className="rounded border border-slate-300 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
           >
             ✗
