@@ -18,6 +18,12 @@ interface Unit {
   vat_liable: boolean;
 }
 
+interface StaffelEntry {
+  effective_date: string;
+  cold_rent_cents: number;
+  additional_costs_cents: number;
+}
+
 interface Tenant {
   id: string;
   unit_id: string;
@@ -33,6 +39,22 @@ interface Tenant {
   rent_type: RentType;
   payment_reference?: string | null;
   status: TenantStatus;
+  index_base_value?: number | null;
+  index_base_date?: string | null;
+  index_interval_months?: number | null;
+  staffel_entries?: StaffelEntry[] | null;
+}
+
+interface RentAdjustment {
+  id: string;
+  tenant_id: string;
+  effective_date: string;
+  cold_rent_cents: number;
+  additional_costs_cents: number;
+  adjustment_type: "manual" | "index" | "stepped";
+  index_value?: number | null;
+  note?: string | null;
+  created_at: string;
 }
 
 interface ExtractedField {
@@ -78,6 +100,12 @@ function formatDate(dateStr: string): string {
   });
 }
 
+function addMonths(dateStr: string, months: number): string {
+  const d = new Date(dateStr);
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
 function ConfidenceBadge({ confidence }: { confidence: number }) {
   if (confidence >= 0.9)
     return <span className="text-green-600 dark:text-green-400" title="Hohe Konfidenz">●</span>;
@@ -88,6 +116,9 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
 
 const inputClass =
   "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100";
+
+const cardClass =
+  "rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900";
 
 const emptyForm = {
   first_name: "",
@@ -103,12 +134,66 @@ const emptyForm = {
   payment_reference: "",
 };
 
+const emptyAdjustForm = {
+  effective_date: "",
+  cold_rent_eur: "",
+  additional_costs_eur: "",
+  adjustment_type: "manual" as "manual" | "index" | "stepped",
+  index_value: "",
+  note: "",
+};
+
+function RentTypeBadge({ rentType }: { rentType: RentType }) {
+  if (rentType === "index") {
+    return (
+      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+        Indexmiete
+      </span>
+    );
+  }
+  if (rentType === "stepped") {
+    return (
+      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+        Staffelmiete
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+      Festmiete
+    </span>
+  );
+}
+
+function AdjustmentTypeBadge({ type }: { type: string }) {
+  if (type === "index") {
+    return (
+      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+        Index
+      </span>
+    );
+  }
+  if (type === "stepped") {
+    return (
+      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+        Staffel
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+      Manuell
+    </span>
+  );
+}
+
 export default function UnitDetailPage() {
   const { id, unitId } = useParams<{ id: string; unitId: string }>();
 
   const [unit, setUnit] = useState<Unit | null>(null);
   const [activeTenant, setActiveTenant] = useState<Tenant | null>(null);
   const [pastTenants, setPastTenants] = useState<Tenant[]>([]);
+  const [rentAdjustments, setRentAdjustments] = useState<RentAdjustment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -120,6 +205,10 @@ export default function UnitDetailPage() {
   const [formData, setFormData] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [savedDocumentId, setSavedDocumentId] = useState<string | null>(null);
+
+  const [showAdjustModal, setShowAdjustModal] = useState(false);
+  const [adjustForm, setAdjustForm] = useState(emptyAdjustForm);
+  const [submittingAdjust, setSubmittingAdjust] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -137,12 +226,23 @@ export default function UnitDetailPage() {
       const unitData = await unitRes.json();
       const tenantsData = tenantsRes.ok ? await tenantsRes.json() : [];
       setUnit(unitData);
-      setActiveTenant(tenantsData.find((t: Tenant) => t.status === "active") ?? null);
+      const active = tenantsData.find((t: Tenant) => t.status === "active") ?? null;
+      setActiveTenant(active);
       setPastTenants(
         tenantsData.filter(
           (t: Tenant) => t.status === "ended" || t.status === "notice_given"
         )
       );
+
+      // Load rent adjustments for active tenant
+      if (active) {
+        const adjRes = await fetch(`/api/rent-adjustments?tenant_id=${active.id}`);
+        if (adjRes.ok) {
+          setRentAdjustments(await adjRes.json());
+        }
+      } else {
+        setRentAdjustments([]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unbekannter Fehler");
     } finally {
@@ -245,6 +345,48 @@ export default function UnitDetailPage() {
     }
   }
 
+  async function handleCreateAdjustment(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activeTenant) return;
+    setSubmittingAdjust(true);
+    try {
+      const res = await fetch("/api/rent-adjustments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: activeTenant.id,
+          effective_date: adjustForm.effective_date,
+          cold_rent_cents: Math.round(parseFloat(adjustForm.cold_rent_eur) * 100),
+          additional_costs_cents: Math.round(parseFloat(adjustForm.additional_costs_eur || "0") * 100),
+          adjustment_type: adjustForm.adjustment_type,
+          index_value: adjustForm.index_value ? parseFloat(adjustForm.index_value) : undefined,
+          note: adjustForm.note || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+      }
+      setShowAdjustModal(false);
+      setAdjustForm(emptyAdjustForm);
+      await loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Unbekannter Fehler");
+    } finally {
+      setSubmittingAdjust(false);
+    }
+  }
+
+  function openAdjustModal() {
+    if (!activeTenant) return;
+    setAdjustForm({
+      ...emptyAdjustForm,
+      cold_rent_eur: String(activeTenant.cold_rent_cents / 100),
+      additional_costs_eur: String(activeTenant.additional_costs_cents / 100),
+    });
+    setShowAdjustModal(true);
+  }
+
   function closeAddTenant() {
     setShowAddTenant(false);
     setAddMode(null);
@@ -252,6 +394,20 @@ export default function UnitDetailPage() {
     setReviewMode(false);
     setFormData(emptyForm);
     setSavedDocumentId(null);
+  }
+
+  // Compute next adjustment due date for Indexmiete
+  function computeIndexNextDue(tenant: Tenant, adjustments: RentAdjustment[]): string | null {
+    const interval = tenant.index_interval_months ?? 12;
+    const indexAdjustments = adjustments.filter((a) => a.adjustment_type === "index");
+    if (indexAdjustments.length > 0) {
+      // most recent index adjustment (already sorted desc)
+      return addMonths(indexAdjustments[0].effective_date, interval);
+    }
+    if (tenant.index_base_date) {
+      return addMonths(tenant.index_base_date, interval);
+    }
+    return null;
   }
 
   if (loading) {
@@ -279,10 +435,12 @@ export default function UnitDetailPage() {
     );
   }
 
+  const today = new Date().toISOString().slice(0, 10);
+
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
       {/* Unit header */}
-      <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+      <div className={cardClass}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
@@ -308,8 +466,8 @@ export default function UnitDetailPage() {
         </div>
       </div>
 
-      {/* Active tenant */}
-      <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+      {/* Active tenant section */}
+      <div className={cardClass}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
             Aktueller Mieter
@@ -325,90 +483,323 @@ export default function UnitDetailPage() {
         </div>
 
         {activeTenant ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-              <div>
-                <span className="text-slate-500 dark:text-slate-400">Name</span>
-                <div className="font-medium text-slate-900 dark:text-slate-100">
-                  {activeTenant.first_name} {activeTenant.last_name}
-                </div>
-              </div>
-              {activeTenant.email && (
+          <div className="space-y-6">
+            {/* A) Kontakt & Vertrag */}
+            <div>
+              {/* Tenant name + contact */}
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <span className="text-slate-500 dark:text-slate-400">E-Mail</span>
-                  <div className="text-slate-900 dark:text-slate-100">{activeTenant.email}</div>
-                </div>
-              )}
-              {activeTenant.phone && (
-                <div>
-                  <span className="text-slate-500 dark:text-slate-400">Telefon</span>
-                  <div className="text-slate-900 dark:text-slate-100">{activeTenant.phone}</div>
-                </div>
-              )}
-              <div>
-                <span className="text-slate-500 dark:text-slate-400">Mietbeginn</span>
-                <div className="text-slate-900 dark:text-slate-100">
-                  {formatDate(activeTenant.lease_start)}
-                </div>
-              </div>
-              {activeTenant.lease_end && (
-                <div>
-                  <span className="text-slate-500 dark:text-slate-400">Mietende</span>
-                  <div className="text-slate-900 dark:text-slate-100">
-                    {formatDate(activeTenant.lease_end)}
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                      {activeTenant.first_name} {activeTenant.last_name}
+                    </h3>
+                    <RentTypeBadge rentType={activeTenant.rent_type} />
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {activeTenant.email && (
+                      <a
+                        href={`mailto:${activeTenant.email}`}
+                        className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                      >
+                        <span>✉</span>
+                        {activeTenant.email}
+                      </a>
+                    )}
+                    {activeTenant.phone && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                        <span>📞</span>
+                        {activeTenant.phone}
+                      </span>
+                    )}
                   </div>
                 </div>
-              )}
-              <div>
-                <span className="text-slate-500 dark:text-slate-400">Kaltmiete</span>
-                <div className="font-medium text-slate-900 dark:text-slate-100">
-                  {formatEur(activeTenant.cold_rent_cents)}
-                </div>
               </div>
-              <div>
-                <span className="text-slate-500 dark:text-slate-400">Nebenkosten</span>
-                <div className="text-slate-900 dark:text-slate-100">
-                  {formatEur(activeTenant.additional_costs_cents)}
-                </div>
-              </div>
-              <div>
-                <span className="text-slate-500 dark:text-slate-400">Kaution</span>
-                <div className="text-slate-900 dark:text-slate-100">
-                  {formatEur(activeTenant.deposit_cents)}
-                </div>
-              </div>
-              {activeTenant.payment_reference && (
+
+              {/* Contract grid */}
+              <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
                 <div>
-                  <span className="text-slate-500 dark:text-slate-400">Verwendungszweck</span>
-                  <div className="font-mono text-xs text-slate-900 dark:text-slate-100">
-                    {activeTenant.payment_reference}
+                  <div className="mb-0.5 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Mieter seit
+                  </div>
+                  <div className="font-medium text-slate-900 dark:text-slate-100">
+                    {formatDate(activeTenant.lease_start)}
                   </div>
                 </div>
-              )}
+                <div>
+                  <div className="mb-0.5 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Mietende
+                  </div>
+                  <div className="font-medium text-slate-900 dark:text-slate-100">
+                    {activeTenant.lease_end ? formatDate(activeTenant.lease_end) : "Unbefristet"}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-0.5 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Kaution
+                  </div>
+                  <div className="font-medium text-slate-900 dark:text-slate-100">
+                    {formatEur(activeTenant.deposit_cents)}
+                  </div>
+                </div>
+                {activeTenant.payment_reference && (
+                  <div>
+                    <div className="mb-0.5 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      Verwendungszweck
+                    </div>
+                    <div className="font-mono text-xs text-slate-900 dark:text-slate-100">
+                      {activeTenant.payment_reference}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Rent row */}
+              <div className="mt-4 flex flex-wrap items-center gap-4 rounded-lg bg-slate-50 px-4 py-3 dark:bg-slate-800/50">
+                <div>
+                  <div className="mb-0.5 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Kaltmiete
+                  </div>
+                  <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                    {formatEur(activeTenant.cold_rent_cents)}
+                  </div>
+                </div>
+                <div className="text-slate-300 dark:text-slate-600">+</div>
+                <div>
+                  <div className="mb-0.5 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Nebenkosten
+                  </div>
+                  <div className="text-base font-semibold text-slate-700 dark:text-slate-300">
+                    {formatEur(activeTenant.additional_costs_cents)}
+                  </div>
+                </div>
+                <div className="text-slate-300 dark:text-slate-600">=</div>
+                <div>
+                  <div className="mb-0.5 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Warmmiete
+                  </div>
+                  <div className="text-base font-semibold text-green-700 dark:text-green-400">
+                    {formatEur(activeTenant.cold_rent_cents + activeTenant.additional_costs_cents)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+                {activeTenant.status === "active" && (
+                  <button
+                    onClick={() => handleStatusChange(activeTenant.id, "notice_given")}
+                    className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    Kündigung vermerken
+                  </button>
+                )}
+                {activeTenant.status === "notice_given" && (
+                  <button
+                    onClick={() => handleStatusChange(activeTenant.id, "ended")}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700"
+                  >
+                    Mietverhältnis beenden
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowAddTenant(true)}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+                >
+                  Mieter hinzufügen
+                </button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
-              {activeTenant.status === "active" && (
-                <button
-                  onClick={() => handleStatusChange(activeTenant.id, "notice_given")}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                >
-                  Kündigung vermerken
-                </button>
+
+            {/* B) Indexmiete section */}
+            {activeTenant.rent_type === "index" && (
+              <div className="border-t border-slate-100 pt-6 dark:border-slate-800">
+                <h3 className="mb-4 text-base font-semibold text-slate-900 dark:text-slate-100">
+                  Indexmiete
+                </h3>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                  <div>
+                    <div className="mb-0.5 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      Basis-Index
+                    </div>
+                    <div className="font-medium text-slate-900 dark:text-slate-100">
+                      {activeTenant.index_base_value != null
+                        ? activeTenant.index_base_value.toLocaleString("de-DE")
+                        : "–"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-0.5 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      Basis-Datum
+                    </div>
+                    <div className="font-medium text-slate-900 dark:text-slate-100">
+                      {activeTenant.index_base_date
+                        ? formatDate(activeTenant.index_base_date)
+                        : "–"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-0.5 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      Prüfintervall
+                    </div>
+                    <div className="font-medium text-slate-900 dark:text-slate-100">
+                      {activeTenant.index_interval_months ?? 12} Monate
+                    </div>
+                  </div>
+                  {(() => {
+                    const nextDue = computeIndexNextDue(activeTenant, rentAdjustments);
+                    if (!nextDue) return null;
+                    const daysUntil = Math.ceil(
+                      (new Date(nextDue).getTime() - new Date(today).getTime()) / 86400000
+                    );
+                    const isOverdue = daysUntil < 0;
+                    const isDueSoon = daysUntil >= 0 && daysUntil <= 60;
+                    return (
+                      <div>
+                        <div className="mb-0.5 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Nächste Anpassung
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-slate-900 dark:text-slate-100">
+                            {formatDate(nextDue)}
+                          </span>
+                          {isOverdue && (
+                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                              Anpassung überfällig
+                            </span>
+                          )}
+                          {isDueSoon && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                              Anpassung fällig
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* C) Staffelmiete section */}
+            {activeTenant.rent_type === "stepped" &&
+              activeTenant.staffel_entries &&
+              activeTenant.staffel_entries.length > 0 && (
+                <div className="border-t border-slate-100 pt-6 dark:border-slate-800">
+                  <h3 className="mb-4 text-base font-semibold text-slate-900 dark:text-slate-100">
+                    Staffelmiete – Übersicht
+                  </h3>
+                  <div className="space-y-2">
+                    {activeTenant.staffel_entries
+                      .slice()
+                      .sort((a, b) => a.effective_date.localeCompare(b.effective_date))
+                      .map((entry, idx) => {
+                        const isFuture = entry.effective_date > today;
+                        const isNext =
+                          isFuture &&
+                          activeTenant.staffel_entries!.filter((e) => e.effective_date > today)
+                            .sort((a, b) => a.effective_date.localeCompare(b.effective_date))[0]
+                            ?.effective_date === entry.effective_date;
+                        return (
+                          <div
+                            key={idx}
+                            className={`flex items-center justify-between rounded-lg px-4 py-3 ${
+                              isNext
+                                ? "border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30"
+                                : "border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/30"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              {isNext && (
+                                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                  Nächste Stufe
+                                </span>
+                              )}
+                              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                ab {formatDate(entry.effective_date)}
+                              </span>
+                            </div>
+                            <div className="text-right text-sm">
+                              <span className="font-medium text-slate-900 dark:text-slate-100">
+                                {formatEur(entry.cold_rent_cents)}
+                              </span>
+                              {entry.additional_costs_cents > 0 && (
+                                <span className="ml-2 text-slate-500 dark:text-slate-400">
+                                  + {formatEur(entry.additional_costs_cents)} NK
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
               )}
-              {activeTenant.status === "notice_given" && (
+
+            {/* D) Mietanpassungen section */}
+            <div className="border-t border-slate-100 pt-6 dark:border-slate-800">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  Mietanpassungen
+                </h3>
                 <button
-                  onClick={() => handleStatusChange(activeTenant.id, "ended")}
-                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700"
+                  onClick={openAdjustModal}
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700"
                 >
-                  Mietverhältnis beenden
+                  Neue Anpassung
                 </button>
+              </div>
+              {rentAdjustments.length === 0 ? (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Keine Mietanpassungen erfasst
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {rentAdjustments.map((adj) => (
+                    <div
+                      key={adj.id}
+                      className="rounded-lg border border-slate-100 p-4 dark:border-slate-800"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                            {formatDate(adj.effective_date)}
+                          </span>
+                          <AdjustmentTypeBadge type={adj.adjustment_type} />
+                        </div>
+                        <div className="flex items-center gap-4 text-sm">
+                          <div>
+                            <span className="text-slate-500 dark:text-slate-400">Kaltmiete: </span>
+                            <span className="font-medium text-slate-900 dark:text-slate-100">
+                              {formatEur(adj.cold_rent_cents)}
+                            </span>
+                          </div>
+                          {adj.additional_costs_cents > 0 && (
+                            <div>
+                              <span className="text-slate-500 dark:text-slate-400">NK: </span>
+                              <span className="font-medium text-slate-900 dark:text-slate-100">
+                                {formatEur(adj.additional_costs_cents)}
+                              </span>
+                            </div>
+                          )}
+                          {adj.adjustment_type === "index" && adj.index_value != null && (
+                            <div>
+                              <span className="text-slate-500 dark:text-slate-400">Index: </span>
+                              <span className="font-medium text-slate-900 dark:text-slate-100">
+                                {Number(adj.index_value).toLocaleString("de-DE")}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {adj.note && (
+                        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                          {adj.note}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
-              <button
-                onClick={() => setShowAddTenant(true)}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
-              >
-                Mieter hinzufügen
-              </button>
             </div>
           </div>
         ) : (
@@ -418,7 +809,7 @@ export default function UnitDetailPage() {
 
       {/* Tenant history */}
       {pastTenants.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <div className={cardClass}>
           <h2 className="mb-4 text-base font-semibold text-slate-900 dark:text-slate-100">
             Mieterverlauf
           </h2>
@@ -735,6 +1126,126 @@ export default function UnitDetailPage() {
                 </form>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Rent adjustment modal */}
+      {showAdjustModal && activeTenant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+            <h2 className="mb-5 text-base font-semibold text-slate-900 dark:text-slate-100">
+              Neue Mietanpassung
+            </h2>
+            <form onSubmit={handleCreateAdjustment} className="space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+                  Wirksamkeitsdatum *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={adjustForm.effective_date}
+                  onChange={(e) => setAdjustForm({ ...adjustForm, effective_date: e.target.value })}
+                  className={inputClass}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+                    Neue Kaltmiete (€) *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={adjustForm.cold_rent_eur}
+                    onChange={(e) => setAdjustForm({ ...adjustForm, cold_rent_eur: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+                    Neue Nebenkosten (€)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={adjustForm.additional_costs_eur}
+                    onChange={(e) => setAdjustForm({ ...adjustForm, additional_costs_eur: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+                  Art der Anpassung
+                </label>
+                <select
+                  value={adjustForm.adjustment_type}
+                  onChange={(e) =>
+                    setAdjustForm({
+                      ...adjustForm,
+                      adjustment_type: e.target.value as "manual" | "index" | "stepped",
+                    })
+                  }
+                  className={inputClass}
+                >
+                  <option value="manual">Manuell</option>
+                  <option value="index">Indexanpassung</option>
+                  <option value="stepped">Staffelanpassung</option>
+                </select>
+              </div>
+              {adjustForm.adjustment_type === "index" && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+                    Indexwert (VPI)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    value={adjustForm.index_value}
+                    onChange={(e) => setAdjustForm({ ...adjustForm, index_value: e.target.value })}
+                    placeholder="z. B. 118.6"
+                    className={inputClass}
+                  />
+                </div>
+              )}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+                  Notiz
+                </label>
+                <textarea
+                  rows={3}
+                  value={adjustForm.note}
+                  onChange={(e) => setAdjustForm({ ...adjustForm, note: e.target.value })}
+                  placeholder="Optionale Anmerkung zur Mietanpassung"
+                  className={inputClass}
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAdjustModal(false);
+                    setAdjustForm(emptyAdjustForm);
+                  }}
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingAdjust}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {submittingAdjust ? "Speichern…" : "Anpassung speichern"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

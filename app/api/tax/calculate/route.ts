@@ -53,6 +53,44 @@ export async function POST(request: Request) {
     .eq("property_id", property_id)
     .eq("user_id", user.id);
 
+  // ── Split matched rent transactions into Kaltmiete + Nebenkosten ─────────────
+  // Fetch confirmed payment matches with tenant rent split data
+  const { data: paymentMatchData } = await supabase
+    .from("payment_matches")
+    .select("transaction_id, tenants(cold_rent_cents, additional_costs_cents)")
+    .eq("property_id", property_id)
+    .in("status", ["confirmed", "auto_matched"]);
+
+  const splitMap = new Map<string, { coldRentCents: number; additionalCostsCents: number }>();
+  for (const m of (paymentMatchData ?? [])) {
+    const t = Array.isArray(m.tenants) ? m.tenants[0] : m.tenants;
+    if (m.transaction_id && t) {
+      splitMap.set(m.transaction_id as string, {
+        coldRentCents: (t as { cold_rent_cents: number; additional_costs_cents: number }).cold_rent_cents ?? 0,
+        additionalCostsCents: (t as { cold_rent_cents: number; additional_costs_cents: number }).additional_costs_cents ?? 0,
+      });
+    }
+  }
+
+  const RENT_INCOME_CATS = new Set(["Mieteinnahmen", "Ferienvermietung – Einnahmen", "miete_einnahmen_wohnen", "miete_einnahmen_gewerbe"]);
+
+  const processedTxData: TaxCalculationTransaction[] = [];
+  for (const tx of (txData ?? []) as TaxCalculationTransaction[]) {
+    const split = tx.id ? splitMap.get(tx.id) : undefined;
+    const isRent = tx.category != null && RENT_INCOME_CATS.has(tx.category);
+
+    if (split && isRent && split.additionalCostsCents > 0) {
+      const total = split.coldRentCents + split.additionalCostsCents;
+      const coldRentRatio = total > 0 ? split.coldRentCents / total : 1;
+      // Cold rent portion → Mieteinnahmen
+      processedTxData.push({ ...tx, amount: Number(tx.amount) * coldRentRatio, category: "Mieteinnahmen" });
+      // Additional costs portion → Nebenkostenerstattungen
+      processedTxData.push({ ...tx, id: (tx.id ?? "") + "_nk", amount: Number(tx.amount) * (1 - coldRentRatio), category: "Nebenkostenerstattungen" });
+    } else {
+      processedTxData.push(tx);
+    }
+  }
+
   // Load categories
   const { data: categories } = await supabase
     .from("categories")
@@ -81,7 +119,7 @@ export async function POST(request: Request) {
   ));
 
   const calculated = calculateTaxFromTransactions(
-    (txData ?? []) as TaxCalculationTransaction[],
+    processedTxData,
     prop as { kaufpreis: number | null; gebaeudewert: number | null; grundwert: number | null; inventarwert: number | null; baujahr: number | null; afa_satz: number | null; kaufdatum: string | null; address: string | null; type: string | null },
     tax_year,
     (categories ?? []) as { label: string; typ: string; anlage_v: string | null; gruppe: string }[],
