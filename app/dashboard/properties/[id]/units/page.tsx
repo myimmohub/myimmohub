@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { parseGermanDecimal } from "@/lib/utils/numberFormat";
 
 type UnitType = "residential" | "commercial" | "parking" | "other";
 
@@ -197,8 +198,8 @@ export default function UnitsPage() {
           label:    formData.label,
           unit_type: formData.unit_type,
           floor:    formData.floor || null,
-          area_sqm: formData.area_sqm ? parseFloat(formData.area_sqm) : null,
-          rooms:    formData.rooms   ? parseFloat(formData.rooms)    : null,
+          area_sqm: formData.area_sqm ? parseGermanDecimal(formData.area_sqm) : null,
+          rooms:    formData.rooms   ? parseGermanDecimal(formData.rooms)    : null,
           vat_liable: formData.vat_liable,
         }),
       });
@@ -250,8 +251,8 @@ export default function UnitsPage() {
             label:      row.label,
             unit_type:  row.unit_type,
             floor:      row.floor || null,
-            area_sqm:   row.area_sqm ? parseFloat(row.area_sqm) : null,
-            rooms:      row.rooms   ? parseFloat(row.rooms)    : null,
+            area_sqm:   row.area_sqm ? parseGermanDecimal(row.area_sqm) : null,
+            rooms:      row.rooms   ? parseGermanDecimal(row.rooms)    : null,
             vat_liable: row.vat_liable,
           }),
         });
@@ -421,12 +422,12 @@ export default function UnitsPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Fläche (m²)</label>
-                  <input type="number" min="0" step="0.01" value={formData.area_sqm} onChange={(e) => setFormData({ ...formData, area_sqm: e.target.value })} placeholder="0" className={inputClass} />
+                  <input type="text" inputMode="decimal" value={formData.area_sqm} onChange={(e) => setFormData({ ...formData, area_sqm: e.target.value })} placeholder="0" className={inputClass} />
                 </div>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">Zimmer</label>
-                <input type="number" min="0" step="0.5" value={formData.rooms} onChange={(e) => setFormData({ ...formData, rooms: e.target.value })} placeholder="0" className={inputClass} />
+                <input type="text" inputMode="decimal" value={formData.rooms} onChange={(e) => setFormData({ ...formData, rooms: e.target.value })} placeholder="0" className={inputClass} />
               </div>
               <div className="flex items-center gap-2">
                 <input type="checkbox" id="vat_liable" checked={formData.vat_liable} onChange={(e) => setFormData({ ...formData, vat_liable: e.target.checked })} className="h-4 w-4 rounded border-slate-300 accent-blue-600" />

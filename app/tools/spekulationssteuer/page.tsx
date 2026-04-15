@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import { parseGermanDecimal } from "@/lib/utils/numberFormat";
 
 function formatEuro(value: number): string {
   return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value);
@@ -33,9 +34,9 @@ export default function SpekulationssteuerRechner() {
     if (isNaN(kauf.getTime()) || isNaN(verkauf.getTime())) return null;
     if (verkauf <= kauf) return null;
 
-    const kp = parseFloat(kaufpreis) || 0;
-    const vp = parseFloat(verkaufspreis) || 0;
-    const sz = parseFloat(steuersatz) || 0;
+    const kp = parseGermanDecimal(kaufpreis) || 0;
+    const vp = parseGermanDecimal(verkaufspreis) || 0;
+    const sz = parseGermanDecimal(steuersatz) || 0;
 
     // Haltedauer
     const diffMs = verkauf.getTime() - kauf.getTime();
@@ -157,8 +158,8 @@ export default function SpekulationssteuerRechner() {
               <div>
                 <label className={labelClass}>Kaufpreis (€)</label>
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   value={kaufpreis}
                   onChange={(e) => setKaufpreis(e.target.value)}
                   className={inputClass}
@@ -168,8 +169,8 @@ export default function SpekulationssteuerRechner() {
               <div>
                 <label className={labelClass}>Verkaufspreis (€)</label>
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   value={verkaufspreis}
                   onChange={(e) => setVerkaufspreis(e.target.value)}
                   className={inputClass}
@@ -180,10 +181,8 @@ export default function SpekulationssteuerRechner() {
             <div>
               <label className={labelClass}>Persönlicher Steuersatz (%)</label>
               <input
-                type="number"
-                min="0"
-                max="100"
-                step="1"
+                type="text"
+                inputMode="decimal"
                 value={steuersatz}
                 onChange={(e) => setSteuersatz(e.target.value)}
                 className={inputClass}

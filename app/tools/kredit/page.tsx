@@ -2,13 +2,14 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import { parseGermanDecimal, fmtPct } from "@/lib/utils/numberFormat";
 
 function formatEuro(value: number): string {
   return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value);
 }
 
 function formatPercent(value: number, decimals = 1): string {
-  return `${value.toFixed(decimals).replace(".", ",")} %`;
+  return fmtPct(value, decimals);
 }
 
 export default function KreditRechner() {
@@ -19,10 +20,10 @@ export default function KreditRechner() {
   const [zinsbindung, setZinsbindung] = useState<string>("10");
 
   const result = useMemo(() => {
-    const kp = parseFloat(kaufpreis) || 0;
-    const ek = parseFloat(eigenkapital) || 0;
-    const z = parseFloat(zinssatz) || 0;
-    const t = parseFloat(tilgung) || 0;
+    const kp = parseGermanDecimal(kaufpreis) || 0;
+    const ek = parseGermanDecimal(eigenkapital) || 0;
+    const z = parseGermanDecimal(zinssatz) || 0;
+    const t = parseGermanDecimal(tilgung) || 0;
     const zb = parseInt(zinsbindung) || 0;
 
     if (kp <= 0) return null;
@@ -94,8 +95,8 @@ export default function KreditRechner() {
             <div>
               <label className={labelClass}>Kaufpreis (€)</label>
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={kaufpreis}
                 onChange={(e) => setKaufpreis(e.target.value)}
                 className={inputClass}
@@ -105,8 +106,8 @@ export default function KreditRechner() {
             <div>
               <label className={labelClass}>Eigenkapital (€)</label>
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={eigenkapital}
                 onChange={(e) => setEigenkapital(e.target.value)}
                 className={inputClass}
@@ -117,10 +118,8 @@ export default function KreditRechner() {
               <div>
                 <label className={labelClass}>Zinssatz (%)</label>
                 <input
-                  type="number"
-                  min="0"
-                  max="20"
-                  step="0.1"
+                  type="text"
+                  inputMode="decimal"
                   value={zinssatz}
                   onChange={(e) => setZinssatz(e.target.value)}
                   className={inputClass}
@@ -129,10 +128,8 @@ export default function KreditRechner() {
               <div>
                 <label className={labelClass}>Anfangstilgung (%)</label>
                 <input
-                  type="number"
-                  min="0"
-                  max="20"
-                  step="0.1"
+                  type="text"
+                  inputMode="decimal"
                   value={tilgung}
                   onChange={(e) => setTilgung(e.target.value)}
                   className={inputClass}
@@ -142,9 +139,8 @@ export default function KreditRechner() {
             <div>
               <label className={labelClass}>Zinsbindung (Jahre)</label>
               <input
-                type="number"
-                min="1"
-                max="30"
+                type="text"
+                inputMode="decimal"
                 value={zinsbindung}
                 onChange={(e) => setZinsbindung(e.target.value)}
                 className={inputClass}

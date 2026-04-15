@@ -6,6 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { TAX_FIELDS, TAX_FIELD_GROUPS } from "@/lib/tax/fieldMeta";
 import type { TaxData, TaxConfidence } from "@/types/tax";
+import { fmtDecimal } from "@/lib/utils/numberFormat";
 
 type Property = { id: string; name: string };
 type ImportedPartnerPreview = {
@@ -382,7 +383,7 @@ export default function TaxImportPage() {
                         label="Vermietungsanteil manuell"
                         value={
                           result.supplemental_data.rental_share_override_pct != null
-                            ? `${(result.supplemental_data.rental_share_override_pct * 100).toFixed(2).replace(".", ",")} %`
+                            ? `${fmtDecimal(result.supplemental_data.rental_share_override_pct * 100, 2, 2)} %`
                             : null
                         }
                       />
@@ -415,7 +416,7 @@ export default function TaxImportPage() {
                                 <p className="text-xs text-slate-400 dark:text-slate-500">{partner.email || "Keine E-Mail"}</p>
                               </td>
                               <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">
-                                {partner.anteil_pct != null ? `${partner.anteil_pct.toFixed(2)} %` : "—"}
+                                {partner.anteil_pct != null ? `${fmtDecimal(partner.anteil_pct, 2, 2)} %` : "—"}
                               </td>
                               <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">
                                 {partner.special_expenses != null ? fmtVal(partner.special_expenses, "numeric") : "—"}

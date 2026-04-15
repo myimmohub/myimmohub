@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { fmtDecimal, parseGermanDecimal } from "@/lib/utils/numberFormat";
 import { computeRentalShare } from "@/lib/tax/rentalShare";
 import { usePropertyId } from "../property-context";
 
@@ -119,9 +120,8 @@ export default function SteuerPage() {
               Eigennutzung (Tage/Jahr)
             </label>
             <input
-              type="number"
-              min={0}
-              max={365}
+              type="text"
+              inputMode="decimal"
               value={data.eigennutzung_tage}
               onChange={(e) => update("eigennutzung_tage", parseInt(e.target.value) || 0)}
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
@@ -132,9 +132,8 @@ export default function SteuerPage() {
               Gesamttage im Jahr
             </label>
             <input
-              type="number"
-              min={1}
-              max={366}
+              type="text"
+              inputMode="decimal"
               value={data.gesamt_tage}
               onChange={(e) => update("gesamt_tage", parseInt(e.target.value) || 365)}
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
@@ -145,20 +144,18 @@ export default function SteuerPage() {
               Vermietungsanteil FE/FB (optional)
             </label>
             <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.01}
+              type="text"
+              inputMode="decimal"
               value={data.rental_share_override_pct != null ? (data.rental_share_override_pct * 100).toString() : ""}
               onChange={(e) => {
                 const raw = e.target.value.trim();
-                update("rental_share_override_pct", raw === "" ? null : (parseFloat(raw.replace(",", ".")) / 100));
+                update("rental_share_override_pct", raw === "" ? null : (parseGermanDecimal(raw) / 100));
               }}
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              placeholder={`${(autoRentalShare * 100).toFixed(2).replace(".", ",")}`}
+              placeholder={`${fmtDecimal(autoRentalShare * 100, 2, 2)}`}
             />
             <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-              Leer lassen für Automatik aus Eigennutzung: {(autoRentalShare * 100).toFixed(2).replace(".", ",")} %
+              Leer lassen für Automatik aus Eigennutzung: {fmtDecimal(autoRentalShare * 100, 2, 2)} %
             </p>
             {rentalShare.warnings.length > 0 && (
               <div className="mt-2 space-y-1 text-xs text-amber-600 dark:text-amber-400">
@@ -225,7 +222,7 @@ export default function SteuerPage() {
               <p className="text-xs text-slate-500 dark:text-slate-400">AfA-Satz</p>
               <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
                 {propAfa.afa_satz != null
-                  ? `${(propAfa.afa_satz * 100).toFixed(1).replace(".", ",")} %`
+                  ? `${fmtDecimal(propAfa.afa_satz * 100, 1, 1)} %`
                   : "—"}
               </p>
             </div>

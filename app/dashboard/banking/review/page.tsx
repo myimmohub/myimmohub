@@ -16,6 +16,7 @@ import {
   type BadgeVariant,
 } from "@/lib/banking/categoryLookup";
 import ReceiptButton from "@/components/banking/ReceiptButton";
+import { parseGermanDecimal, fmtDecimal } from "@/lib/utils/numberFormat";
 
 // ── Typen ─────────────────────────────────────────────────────────────────────
 
@@ -799,21 +800,21 @@ export default function BankingReviewPage() {
 
   // ── Aufteilen ─────────────────────────────────────────────────────────────────
   const handleInterestChange = (txAmount: number, value: string) => {
-    const interest  = parseFloat(value.replace(",", ".")) || 0;
+    const interest  = parseGermanDecimal(value) || 0;
     const principal = Math.max(0, Math.abs(txAmount) - interest);
-    setSplitDraft({ interestAmount: value, principalAmount: principal.toFixed(2) });
+    setSplitDraft({ interestAmount: value, principalAmount: fmtDecimal(principal, 2, 2) });
   };
 
   const handlePrincipalChange = (txAmount: number, value: string) => {
-    const principal = parseFloat(value.replace(",", ".")) || 0;
+    const principal = parseGermanDecimal(value) || 0;
     const interest  = Math.max(0, Math.abs(txAmount) - principal);
-    setSplitDraft({ interestAmount: interest.toFixed(2), principalAmount: value });
+    setSplitDraft({ interestAmount: fmtDecimal(interest, 2, 2), principalAmount: value });
   };
 
   const handleSplit = async (tx: Transaction) => {
     setSplitError(null);
-    const interest  = parseFloat(splitDraft.interestAmount.replace(",", "."));
-    const principal = parseFloat(splitDraft.principalAmount.replace(",", "."));
+    const interest  = parseGermanDecimal(splitDraft.interestAmount);
+    const principal = parseGermanDecimal(splitDraft.principalAmount);
     if (isNaN(interest) || isNaN(principal)) { setSplitError("Bitte gültige Beträge eingeben."); return; }
 
     setSavingId(tx.id);
@@ -874,8 +875,8 @@ export default function BankingReviewPage() {
     const isExpanded  = expandedId === tx.id;
     const isLearned   = tx.confidence === 0.95;
     const splitSum    =
-      (parseFloat(splitDraft.interestAmount.replace(",", ".")) || 0) +
-      (parseFloat(splitDraft.principalAmount.replace(",", ".")) || 0);
+      (parseGermanDecimal(splitDraft.interestAmount) || 0) +
+      (parseGermanDecimal(splitDraft.principalAmount) || 0);
     const splitOk     = Math.abs(splitSum - Math.abs(Number(tx.amount))) <= 0.02;
 
     return (
@@ -1131,7 +1132,7 @@ export default function BankingReviewPage() {
                   <label className="mb-1 block text-xs font-medium text-slate-500">
                     Zinsanteil (€) <span className="text-blue-500">· absetzbar Z. 35</span>
                   </label>
-                  <input type="number" min="0" step="0.01"
+                  <input type="text" inputMode="decimal"
                     value={splitDraft.interestAmount}
                     onChange={(e) => handleInterestChange(Number(tx.amount), e.target.value)}
                     placeholder="z. B. 312,50"
@@ -1141,7 +1142,7 @@ export default function BankingReviewPage() {
                   <label className="mb-1 block text-xs font-medium text-slate-500">
                     Tilgungsanteil (€) <span className="text-slate-400">· nicht absetzbar</span>
                   </label>
-                  <input type="number" min="0" step="0.01"
+                  <input type="text" inputMode="decimal"
                     value={splitDraft.principalAmount}
                     onChange={(e) => handlePrincipalChange(Number(tx.amount), e.target.value)}
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" />

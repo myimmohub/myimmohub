@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { parseGermanDecimal } from "@/lib/utils/numberFormat";
 
 type PropertyRef = { id: string; name: string };
 type CategoryOption = { id: string; label: string; typ: string };
@@ -89,7 +90,7 @@ export default function DocumentDetailPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         category: editCategory || null,
-        amount: editAmount !== "" ? parseFloat(editAmount.replace(",", ".")) : null,
+        amount: editAmount !== "" ? parseGermanDecimal(editAmount) : null,
         document_date: editDate || null,
         property_id: editPropertyId || null,
       }),
@@ -112,7 +113,7 @@ export default function DocumentDetailPage() {
         doc: {
           ...prev.doc,
           category: editCategory || null,
-          amount: editAmount !== "" ? parseFloat(editAmount.replace(",", ".")) : null,
+          amount: editAmount !== "" ? parseGermanDecimal(editAmount) : null,
           document_date: editDate || null,
           property_id: editPropertyId || null,
           properties: matchedProperty,
@@ -257,10 +258,9 @@ export default function DocumentDetailPage() {
 
                     <Field label="Betrag (€)">
                       <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0.00"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0,00"
                         value={editAmount}
                         onChange={(e) => setEditAmount(e.target.value)}
                         className={inputClass}

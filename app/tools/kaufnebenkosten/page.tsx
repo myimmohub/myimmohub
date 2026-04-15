@@ -2,13 +2,14 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import { parseGermanDecimal, fmtDecimal, fmtPct } from "@/lib/utils/numberFormat";
 
 function formatEuro(value: number): string {
   return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value);
 }
 
 function formatPercent(value: number, decimals = 2): string {
-  return `${value.toFixed(decimals).replace(".", ",")} %`;
+  return fmtPct(value, decimals);
 }
 
 const grunderwerbsteuer: Record<string, number> = {
@@ -41,14 +42,14 @@ export default function KaufnebenkostenRechner() {
   const [maklercourtage, setMaklercourtage] = useState<string>("3.57");
 
   const result = useMemo(() => {
-    const kp = parseFloat(kaufpreis) || 0;
+    const kp = parseGermanDecimal(kaufpreis) || 0;
     if (kp <= 0) return null;
 
     const gewSatz = grunderwerbsteuer[bundesland] ?? 3.5;
     const grunderwerbsteuerBetrag = (kp * gewSatz) / 100;
-    const notarkosten = (kp * parseFloat(notarPct || "0")) / 100;
-    const grundbuch = (kp * parseFloat(grundbuchPct || "0")) / 100;
-    const makler = mitMakler ? (kp * parseFloat(maklercourtage || "0")) / 100 : 0;
+    const notarkosten = (kp * parseGermanDecimal(notarPct || "0")) / 100;
+    const grundbuch = (kp * parseGermanDecimal(grundbuchPct || "0")) / 100;
+    const makler = mitMakler ? (kp * parseGermanDecimal(maklercourtage || "0")) / 100 : 0;
 
     const gesamtNebenkosten = grunderwerbsteuerBetrag + notarkosten + grundbuch + makler;
     const gesamtInvestition = kp + gesamtNebenkosten;
@@ -61,7 +62,7 @@ export default function KaufnebenkostenRechner() {
       notarkosten,
       grundbuch,
       makler,
-      maklerPct: parseFloat(maklercourtage || "0"),
+      maklerPct: parseGermanDecimal(maklercourtage || "0"),
       gesamtNebenkosten,
       gesamtInvestition,
       nebenkostenPct,
@@ -98,8 +99,8 @@ export default function KaufnebenkostenRechner() {
             <div>
               <label className={labelClass}>Kaufpreis (€)</label>
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={kaufpreis}
                 onChange={(e) => setKaufpreis(e.target.value)}
                 className={inputClass}
@@ -115,7 +116,7 @@ export default function KaufnebenkostenRechner() {
               >
                 {bundeslaender.map((bl) => (
                   <option key={bl} value={bl}>
-                    {bl} ({grunderwerbsteuer[bl].toFixed(1).replace(".", ",")} %)
+                    {bl} ({fmtDecimal(grunderwerbsteuer[bl], 1, 1)} %)
                   </option>
                 ))}
               </select>
@@ -123,28 +124,24 @@ export default function KaufnebenkostenRechner() {
             <div>
               <label className={labelClass}>Notarkosten (%)</label>
               <input
-                type="number"
-                min="0"
-                max="5"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
                 value={notarPct}
                 onChange={(e) => setNotarPct(e.target.value)}
                 className={inputClass}
-                placeholder="z. B. 1.2"
+                placeholder="z. B. 1,2"
               />
               <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Üblich: 1,0–1,5 % · Standard: 1,2 %</p>
             </div>
             <div>
               <label className={labelClass}>Grundbucheintragung (%)</label>
               <input
-                type="number"
-                min="0"
-                max="3"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
                 value={grundbuchPct}
                 onChange={(e) => setGrundbuchPct(e.target.value)}
                 className={inputClass}
-                placeholder="z. B. 0.5"
+                placeholder="z. B. 0,5"
               />
               <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Üblich: ca. 0,5 %</p>
             </div>
@@ -164,10 +161,8 @@ export default function KaufnebenkostenRechner() {
               <div>
                 <label className={labelClass}>Maklercourtage (%)</label>
                 <input
-                  type="number"
-                  min="0"
-                  max="10"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={maklercourtage}
                   onChange={(e) => setMaklercourtage(e.target.value)}
                   className={inputClass}
@@ -191,13 +186,13 @@ export default function KaufnebenkostenRechner() {
                 </span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-700">
-                <span className="text-sm text-zinc-600 dark:text-zinc-400">Notarkosten ({formatPercent(parseFloat(notarPct || "0"), 1)})</span>
+                <span className="text-sm text-zinc-600 dark:text-zinc-400">Notarkosten ({formatPercent(parseGermanDecimal(notarPct || "0"), 1)})</span>
                 <span className="text-base font-semibold text-zinc-800 dark:text-zinc-200">
                   {formatEuro(result.notarkosten)}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-700">
-                <span className="text-sm text-zinc-600 dark:text-zinc-400">Grundbucheintragung ({formatPercent(parseFloat(grundbuchPct || "0"), 1)})</span>
+                <span className="text-sm text-zinc-600 dark:text-zinc-400">Grundbucheintragung ({formatPercent(parseGermanDecimal(grundbuchPct || "0"), 1)})</span>
                 <span className="text-base font-semibold text-zinc-800 dark:text-zinc-200">
                   {formatEuro(result.grundbuch)}
                 </span>

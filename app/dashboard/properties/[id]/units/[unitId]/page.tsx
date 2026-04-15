@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { parseGermanDecimal } from "@/lib/utils/numberFormat";
 
 type UnitType = "residential" | "commercial" | "parking" | "other";
 type TenantStatus = "active" | "notice_given" | "ended";
@@ -274,13 +275,13 @@ export default function UnitDetailPage() {
         lease_start: data.lease_start?.value ?? "",
         lease_end: data.lease_end?.value ?? "",
         cold_rent_eur: data.cold_rent_cents
-          ? String(parseFloat(data.cold_rent_cents.value) / 100)
+          ? String(parseGermanDecimal(data.cold_rent_cents.value) / 100)
           : "",
         additional_costs_eur: data.additional_costs_cents
-          ? String(parseFloat(data.additional_costs_cents.value) / 100)
+          ? String(parseGermanDecimal(data.additional_costs_cents.value) / 100)
           : "",
         deposit_eur: data.deposit_cents
-          ? String(parseFloat(data.deposit_cents.value) / 100)
+          ? String(parseGermanDecimal(data.deposit_cents.value) / 100)
           : "",
         rent_type: "fixed",
         payment_reference: "",
@@ -308,11 +309,11 @@ export default function UnitDetailPage() {
           phone: formData.phone || null,
           lease_start: formData.lease_start,
           lease_end: formData.lease_end || null,
-          cold_rent_cents: Math.round(parseFloat(formData.cold_rent_eur) * 100),
+          cold_rent_cents: Math.round(parseGermanDecimal(formData.cold_rent_eur) * 100),
           additional_costs_cents: Math.round(
-            parseFloat(formData.additional_costs_eur || "0") * 100
+            parseGermanDecimal(formData.additional_costs_eur || "0") * 100
           ),
-          deposit_cents: Math.round(parseFloat(formData.deposit_eur || "0") * 100),
+          deposit_cents: Math.round(parseGermanDecimal(formData.deposit_eur || "0") * 100),
           rent_type: formData.rent_type,
           payment_reference: formData.payment_reference || null,
           status: "active",
@@ -356,10 +357,10 @@ export default function UnitDetailPage() {
         body: JSON.stringify({
           tenant_id: activeTenant.id,
           effective_date: adjustForm.effective_date,
-          cold_rent_cents: Math.round(parseFloat(adjustForm.cold_rent_eur) * 100),
-          additional_costs_cents: Math.round(parseFloat(adjustForm.additional_costs_eur || "0") * 100),
+          cold_rent_cents: Math.round(parseGermanDecimal(adjustForm.cold_rent_eur) * 100),
+          additional_costs_cents: Math.round(parseGermanDecimal(adjustForm.additional_costs_eur || "0") * 100),
           adjustment_type: adjustForm.adjustment_type,
-          index_value: adjustForm.index_value ? parseFloat(adjustForm.index_value) : undefined,
+          index_value: adjustForm.index_value ? parseGermanDecimal(adjustForm.index_value) : undefined,
           note: adjustForm.note || undefined,
         }),
       });
@@ -1029,10 +1030,9 @@ export default function UnitDetailPage() {
                         )}
                       </label>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         required
-                        min="0"
-                        step="0.01"
                         value={formData.cold_rent_eur}
                         onChange={(e) =>
                           setFormData({ ...formData, cold_rent_eur: e.target.value })
@@ -1050,9 +1050,8 @@ export default function UnitDetailPage() {
                         )}
                       </label>
                       <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={formData.additional_costs_eur}
                         onChange={(e) =>
                           setFormData({ ...formData, additional_costs_eur: e.target.value })
@@ -1069,9 +1068,8 @@ export default function UnitDetailPage() {
                       )}
                     </label>
                     <input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       value={formData.deposit_eur}
                       onChange={(e) => setFormData({ ...formData, deposit_eur: e.target.value })}
                       className={inputClass}
@@ -1156,10 +1154,9 @@ export default function UnitDetailPage() {
                     Neue Kaltmiete (€) *
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     required
-                    min="0"
-                    step="0.01"
                     value={adjustForm.cold_rent_eur}
                     onChange={(e) => setAdjustForm({ ...adjustForm, cold_rent_eur: e.target.value })}
                     className={inputClass}
@@ -1170,9 +1167,8 @@ export default function UnitDetailPage() {
                     Neue Nebenkosten (€)
                   </label>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     value={adjustForm.additional_costs_eur}
                     onChange={(e) => setAdjustForm({ ...adjustForm, additional_costs_eur: e.target.value })}
                     className={inputClass}
@@ -1204,12 +1200,11 @@ export default function UnitDetailPage() {
                     Indexwert (VPI)
                   </label>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.001"
+                    type="text"
+                    inputMode="decimal"
                     value={adjustForm.index_value}
                     onChange={(e) => setAdjustForm({ ...adjustForm, index_value: e.target.value })}
-                    placeholder="z. B. 118.6"
+                    placeholder="z. B. 118,6"
                     className={inputClass}
                   />
                 </div>

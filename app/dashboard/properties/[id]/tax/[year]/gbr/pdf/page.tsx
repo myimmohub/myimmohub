@@ -14,10 +14,10 @@ const fmtEur = (value: number | null | undefined) =>
     : value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " EUR";
 
 const fmtPct = (value: number | null | undefined) =>
-  value == null ? "—" : `${(value * 100).toFixed(2).replace(".", ",")} %`;
+  value == null ? "—" : (value * 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " %";
 
 const fmtIntPct = (value: number | null | undefined) =>
-  value == null ? "—" : `${value.toFixed(2).replace(".", ",")} %`;
+  value == null ? "—" : value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " %";
 
 const fmtDate = (value: string | null | undefined) => formatDateForDisplay(value);
 
@@ -219,7 +219,7 @@ export default function GbrTaxPdfPage() {
                 ["1", "Feststellungserklärung", report.gbr.feststellungserklaerung ? "Ja" : "Nein"],
                 ["2", "Sonderwerbungskosten je Partner", report.gbr.sonder_werbungskosten ? "Ja" : "Nein"],
                 ["3", "Teilweise Eigennutzung", report.gbr.teilweise_eigennutzung ? "Ja" : "Nein"],
-                ["4", "Gesamte Beteiligungsquote", `${report.gbr.partner_total_share_pct.toFixed(2).replace(".", ",")} %`],
+                ["4", "Gesamte Beteiligungsquote", `${report.gbr.partner_total_share_pct.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %`],
               ]}
             />
           </ElsterSection>
@@ -262,7 +262,7 @@ export default function GbrTaxPdfPage() {
               items={[
                 ["Gesellschafter", partner.partner_name],
                 ["E-Mail", partner.email || "—"],
-                ["Beteiligungsquote", `${partner.anteil_pct.toFixed(2).replace(".", ",")} %`],
+                ["Beteiligungsquote", `${partner.anteil_pct.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %`],
                 ["Steuerjahr", String(report.tax_year)],
               ]}
             />

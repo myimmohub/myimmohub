@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePropertyId } from "../property-context";
+import { parseGermanDecimal, fmtDecimal } from "@/lib/utils/numberFormat";
 
 type Partner = {
   id: string;
@@ -164,7 +165,7 @@ export default function GbrPage() {
     if (!newName.trim() || !newAnteil) return;
     const created = await createPartner({
       name: newName,
-      anteil: parseFloat(newAnteil),
+      anteil: parseGermanDecimal(newAnteil),
       email: newEmail,
     });
     if (created) {
@@ -270,7 +271,7 @@ export default function GbrPage() {
     setPartnerTaxMessage(null);
 
     const rawValue = partnerTaxValues[partnerId]?.trim() ?? "";
-    const specialExpenses = rawValue === "" ? 0 : parseFloat(rawValue.replace(",", "."));
+    const specialExpenses = rawValue === "" ? 0 : parseGermanDecimal(rawValue);
 
     const res = await fetch("/api/settings/gbr/partner-tax", {
       method: "POST",
@@ -411,9 +412,8 @@ export default function GbrPage() {
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Veranlagungszeitraum</label>
             <input
-              type="number"
-              min={2020}
-              max={2030}
+              type="text"
+              inputMode="decimal"
               value={data.veranlagungszeitraum}
               onChange={(e) => setData({ ...data, veranlagungszeitraum: parseInt(e.target.value) || new Date().getFullYear() })}
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
@@ -488,7 +488,7 @@ export default function GbrPage() {
               ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
               : "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
           }`}>
-            Summe: {totalAnteil.toFixed(1)} %
+            Summe: {fmtDecimal(totalAnteil, 1, 1)} %
           </div>
         </div>
 
@@ -544,10 +544,8 @@ export default function GbrPage() {
                 placeholder="Name *"
               />
               <input
-                type="number"
-                min={0}
-                max={100}
-                step={0.1}
+                type="text"
+                inputMode="decimal"
                 value={newAnteil}
                 onChange={(e) => setNewAnteil(e.target.value)}
                 className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
@@ -615,7 +613,7 @@ export default function GbrPage() {
                     <div>
                       <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{partner.name}</p>
                       <p className="text-xs text-slate-400 dark:text-slate-500">
-                        {partner.anteil.toFixed(2)} % {partner.email ? `· ${partner.email}` : ""}
+                        {fmtDecimal(partner.anteil, 2, 2)} % {partner.email ? `· ${partner.email}` : ""}
                       </p>
                     </div>
                     <div>

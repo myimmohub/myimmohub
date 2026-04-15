@@ -10,6 +10,7 @@ import { formatDateForDisplay } from "@/lib/tax/partnerNormalization";
 import { computeRentalShare } from "@/lib/tax/rentalShare";
 import { computeStructuredTaxData } from "@/lib/tax/structuredTaxLogic";
 import TaxYearNavigation from "@/components/tax/TaxYearNavigation";
+import { parseGermanDecimal, fmtDecimal } from "@/lib/utils/numberFormat";
 import type {
   TaxConfidence,
   TaxData,
@@ -294,7 +295,7 @@ export default function TaxYearPage() {
       if (raw === "") {
         updates[field.key] = null;
       } else if (field.type === "numeric" || field.type === "percent") {
-        updates[field.key] = parseFloat(raw.replace(",", "."));
+        updates[field.key] = parseGermanDecimal(raw);
       } else if (field.type === "integer") {
         updates[field.key] = parseInt(raw, 10);
       } else {
@@ -742,8 +743,8 @@ export default function TaxYearPage() {
               <label className="space-y-1.5">
                 <span className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Eigennutzungstage</span>
                 <input
-                  type="number"
-                  min={0}
+                  type="text"
+                  inputMode="decimal"
                   value={taxSettings.eigennutzung_tage}
                   onChange={(e) => setTaxSettings((current) => current ? { ...current, eigennutzung_tage: Math.max(0, Number(e.target.value) || 0) } : current)}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
@@ -752,8 +753,8 @@ export default function TaxYearPage() {
               <label className="space-y-1.5">
                 <span className="text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Gesamttage</span>
                 <input
-                  type="number"
-                  min={1}
+                  type="text"
+                  inputMode="decimal"
                   value={taxSettings.gesamt_tage}
                   onChange={(e) => setTaxSettings((current) => current ? { ...current, gesamt_tage: Math.max(1, Number(e.target.value) || 365) } : current)}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
@@ -764,22 +765,22 @@ export default function TaxYearPage() {
                 <input
                   type="text"
                   inputMode="decimal"
-                  value={taxSettings.rental_share_override_pct != null ? (taxSettings.rental_share_override_pct * 100).toString().replace(".", ",") : ""}
+                  value={taxSettings.rental_share_override_pct != null ? fmtDecimal(taxSettings.rental_share_override_pct * 100, 2, 2) : ""}
                   onChange={(e) => {
                     const raw = e.target.value.trim();
                     setTaxSettings((current) => current ? {
                       ...current,
-                      rental_share_override_pct: raw === "" ? null : Math.max(0, Math.min(100, Number(raw.replace(",", ".")) || 0)) / 100,
+                      rental_share_override_pct: raw === "" ? null : Math.max(0, Math.min(100, parseGermanDecimal(raw) || 0)) / 100,
                     } : current);
                   }}
-                  placeholder={`${(rentalSharePct * 100).toFixed(2).replace(".", ",")} % automatisch`}
+                  placeholder={`${fmtDecimal(rentalSharePct * 100, 2, 2)} % automatisch`}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </label>
             </div>
             <div className="flex items-center justify-between gap-4 border-t border-slate-100 px-5 py-3 dark:border-slate-800">
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Automatischer Vermietungsanteil aktuell: {(rentalSharePct * 100).toFixed(2).replace(".", ",")} %
+                Automatischer Vermietungsanteil aktuell: {fmtDecimal(rentalSharePct * 100, 2, 2)} %
               </p>
               <div className="flex items-center gap-3">
                 {taxSettingsMessage && <span className="text-xs text-slate-500 dark:text-slate-400">{taxSettingsMessage}</span>}
@@ -1070,7 +1071,7 @@ export default function TaxYearPage() {
                                 type="text"
                                 inputMode="decimal"
                                 value={item.gross_annual_amount ?? ""}
-                                onChange={(e) => setDepreciationItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, gross_annual_amount: Number(e.target.value.replace(",", ".")) || 0 } : candidate))}
+                                onChange={(e) => setDepreciationItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, gross_annual_amount: parseGermanDecimal(e.target.value) || 0 } : candidate))}
                                 className="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-right text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                               />
                             </td>
@@ -1319,7 +1320,8 @@ export default function TaxYearPage() {
                             </td>
                             <td className="px-4 py-3">
                               <input
-                                type="number"
+                                type="text"
+                                inputMode="decimal"
                                 value={item.source_year ?? taxYear}
                                 onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, source_year: Number(e.target.value) || taxYear } : candidate))}
                                 className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-right text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
@@ -1330,15 +1332,14 @@ export default function TaxYearPage() {
                                 type="text"
                                 inputMode="decimal"
                                 value={item.total_amount ?? ""}
-                                onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, total_amount: Number(e.target.value.replace(",", ".")) || 0 } : candidate))}
+                                onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, total_amount: parseGermanDecimal(e.target.value) || 0 } : candidate))}
                                 className="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-right text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                               />
                             </td>
                             <td className="px-4 py-3">
                               <input
-                                type="number"
-                                min={(item.deduction_mode ?? "distributed") === "distributed" ? 2 : 1}
-                                max={(item.deduction_mode ?? "distributed") === "distributed" ? 5 : 1}
+                                type="text"
+                                inputMode="decimal"
                                 value={(item.classification ?? "maintenance_expense") === "maintenance_expense"
                                   ? ((item.deduction_mode ?? "distributed") === "distributed" ? (item.distribution_years ?? 3) : 1)
                                   : (item.distribution_years ?? 50)}
@@ -1352,7 +1353,7 @@ export default function TaxYearPage() {
                                 type="text"
                                 inputMode="decimal"
                                 value={item.current_year_share_override ?? ""}
-                                onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, current_year_share_override: e.target.value === "" ? null : (Number(e.target.value.replace(",", ".")) || null) } : candidate))}
+                                onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, current_year_share_override: e.target.value === "" ? null : (parseGermanDecimal(e.target.value) || null) } : candidate))}
                                 className="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-right text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                                 placeholder={computed?.current_year_share?.toString() ?? "auto"}
                               />

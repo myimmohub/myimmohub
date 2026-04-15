@@ -7,6 +7,7 @@ import TaxYearNavigation from "@/components/tax/TaxYearNavigation";
 import { allocateElsterLineSummary, buildElsterLineSummary } from "@/lib/tax/elsterLineLogic";
 import { computeRentalShare } from "@/lib/tax/rentalShare";
 import type { GbrTaxReport } from "@/types/tax";
+import { parseGermanDecimal, fmtDecimal } from "@/lib/utils/numberFormat";
 
 const fmtEur = (value: number) =>
   value.toLocaleString("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -43,7 +44,7 @@ export default function GbrTaxYearPage() {
           partner.partner_special_expenses ? String(partner.partner_special_expenses) : "",
         ])),
       );
-      setRentalShareValue((nextReport.gbr.rental_share_pct * 100).toFixed(2).replace(".", ","));
+      setRentalShareValue(fmtDecimal(nextReport.gbr.rental_share_pct * 100, 2, 2));
       setLoading(false);
     };
     void load();
@@ -60,14 +61,14 @@ export default function GbrTaxYearPage() {
         partner.partner_special_expenses ? String(partner.partner_special_expenses) : "",
       ])),
     );
-    setRentalShareValue((nextReport.gbr.rental_share_pct * 100).toFixed(2).replace(".", ","));
+    setRentalShareValue(fmtDecimal(nextReport.gbr.rental_share_pct * 100, 2, 2));
   };
 
   const savePartnerSpecialExpenses = async (partnerId: string) => {
     setSavingPartnerId(partnerId);
     setSaveMessage(null);
     const rawValue = partnerSpecialValues[partnerId]?.trim() ?? "";
-    const specialExpenses = rawValue === "" ? 0 : parseFloat(rawValue.replace(",", "."));
+    const specialExpenses = rawValue === "" ? 0 : parseGermanDecimal(rawValue);
 
     const res = await fetch("/api/settings/gbr/partner-tax", {
       method: "POST",
@@ -95,7 +96,7 @@ export default function GbrTaxYearPage() {
   const saveRentalShare = async () => {
     setSavingRentalShare(true);
     setSaveMessage(null);
-    const parsed = parseFloat(rentalShareValue.replace(",", "."));
+    const parsed = parseGermanDecimal(rentalShareValue);
     const normalized = Number.isNaN(parsed) ? null : Math.max(0, Math.min(100, parsed)) / 100;
 
     const res = await fetch("/api/settings/tax", {
@@ -206,7 +207,7 @@ export default function GbrTaxYearPage() {
 
         <div className="grid gap-4 md:grid-cols-4">
           <MetricCard label="Partner" value={String(report.gbr.partner_count)} />
-          <MetricCard label="Anteile gesamt" value={`${report.gbr.partner_total_share_pct.toFixed(2)} %`} />
+          <MetricCard label="Anteile gesamt" value={`${fmtDecimal(report.gbr.partner_total_share_pct, 2, 2)} %`} />
           <MetricCard label="Anlage FE Ergebnis" value={fmtEur(report.fe.final_result)} tone={report.fe.final_result < 0 ? "positive" : "neutral"} />
           <MetricCard label="Engine-Status" value={report.engine?.status === "ok" ? "OK" : report.engine?.status === "review_required" ? "Prüfen" : report.engine?.status === "blocking_error" ? "Blockiert" : report.gbr.feststellungserklaerung ? "Aktiv" : "Inaktiv"} />
         </div>
@@ -416,7 +417,7 @@ export default function GbrTaxYearPage() {
                             <p className="font-medium text-slate-900 dark:text-slate-100">{partner.partner_name}</p>
                             <p className="text-xs text-slate-400 dark:text-slate-500">{partner.email || "Keine E-Mail"}</p>
                           </td>
-                          <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{partner.anteil_pct.toFixed(2)} %</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{fmtDecimal(partner.anteil_pct, 2, 2)} %</td>
                           <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{fmtEur(partner.total_income)}</td>
                           <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{fmtEur(partner.total_expenses)}</td>
                           <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{fmtEur(partner.depreciation_total + partner.special_deductions_total)}</td>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { fmtDecimal, parseGermanDecimal } from "@/lib/utils/numberFormat";
 import { supabase } from "@/lib/supabase";
 import { calculateAfA } from "@/lib/calculateAfA";
 import { ProfitabilityCard } from "@/components/properties/ProfitabilityCard";
@@ -116,11 +117,11 @@ export default function PropertyOverviewPage() {
     setIsSaving(true);
     setSaveError(null);
 
-    const kaufpreis = edit.kaufpreis ? Number(edit.kaufpreis) : null;
-    const afaSatz = edit.afa_satz ? Number(edit.afa_satz) / 100 : null;
-    const gebaeudewert = edit.gebaeudewert ? Number(edit.gebaeudewert) : null;
-    const grundwert = edit.grundwert ? Number(edit.grundwert) : null;
-    const inventarwert = edit.inventarwert ? Number(edit.inventarwert) : null;
+    const kaufpreis = edit.kaufpreis ? parseGermanDecimal(edit.kaufpreis) : null;
+    const afaSatz = edit.afa_satz ? parseGermanDecimal(edit.afa_satz) / 100 : null;
+    const gebaeudewert = edit.gebaeudewert ? parseGermanDecimal(edit.gebaeudewert) : null;
+    const grundwert = edit.grundwert ? parseGermanDecimal(edit.grundwert) : null;
+    const inventarwert = edit.inventarwert ? parseGermanDecimal(edit.inventarwert) : null;
     const afaBasis = gebaeudewert ?? kaufpreis;
     const afaJahresbetrag = afaBasis && afaSatz ? afaBasis * afaSatz : null;
 
@@ -134,8 +135,8 @@ export default function PropertyOverviewPage() {
         kaufpreis,
         kaufdatum: edit.kaufdatum || null,
         baujahr: edit.baujahr ? Number(edit.baujahr) : null,
-        wohnflaeche: edit.wohnflaeche ? Number(edit.wohnflaeche) : null,
-        kaufnebenkosten_geschaetzt: edit.kaufnebenkosten_geschaetzt ? Number(edit.kaufnebenkosten_geschaetzt) : null,
+        wohnflaeche: edit.wohnflaeche ? parseGermanDecimal(edit.wohnflaeche) : null,
+        kaufnebenkosten_geschaetzt: edit.kaufnebenkosten_geschaetzt ? parseGermanDecimal(edit.kaufnebenkosten_geschaetzt) : null,
         afa_satz: afaSatz,
         afa_jahresbetrag: afaJahresbetrag,
         gebaeudewert,
@@ -252,7 +253,7 @@ export default function PropertyOverviewPage() {
                 <DataRow label="Baujahr" value={property.baujahr ? String(property.baujahr) : "—"} />
                 <DataRow label="Wohnfläche" value={property.wohnflaeche ? `${property.wohnflaeche} m²` : "—"} />
                 <DataRow label="Nebenkosten" value={formatEur(property.kaufnebenkosten_geschaetzt)} />
-                <DataRow label="AfA-Satz" value={property.afa_satz != null ? `${(property.afa_satz * 100).toFixed(1).replace(".", ",")} %` : "—"} />
+                <DataRow label="AfA-Satz" value={property.afa_satz != null ? `${fmtDecimal(property.afa_satz * 100, 1, 1)} %` : "—"} />
               </div>
             ) : (
               <div className="space-y-4">
@@ -282,7 +283,7 @@ export default function PropertyOverviewPage() {
               <Kpi label="Kaufpreisaufteilung" value={property.kaufpreis_split_quelle ? "Manuell" : "Nicht gesetzt"} />
               {afaSuggestion && property.afa_satz == null && (
                 <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                  KI-Vorschlag: {(afaSuggestion.satz * 100).toFixed(1).replace(".", ",")} % · {formatEur(afaSuggestion.jahresbetrag)} / Jahr
+                  KI-Vorschlag: {fmtDecimal(afaSuggestion.satz * 100, 1, 1)} % · {formatEur(afaSuggestion.jahresbetrag)} / Jahr
                 </div>
               )}
             </div>
@@ -307,7 +308,7 @@ export default function PropertyOverviewPage() {
                     return (
                       <div
                         key={item.label}
-                        title={`${item.label}: ${formatEur(item.value)} · ${property.kaufpreis && item.value ? ((item.value / property.kaufpreis) * 100).toFixed(1).replace(".", ",") : "0,0"} %`}
+                        title={`${item.label}: ${formatEur(item.value)} · ${property.kaufpreis && item.value ? fmtDecimal((item.value / property.kaufpreis) * 100, 1, 1) : "0,0"} %`}
                         className={`h-full ${item.color} float-left`}
                         style={{ width }}
                       />
@@ -371,7 +372,7 @@ function prefillEdit(property: Property): EditState {
     baujahr: property.baujahr?.toString() ?? "",
     wohnflaeche: property.wohnflaeche?.toString() ?? "",
     kaufnebenkosten_geschaetzt: property.kaufnebenkosten_geschaetzt?.toString() ?? "",
-    afa_satz: property.afa_satz != null ? (property.afa_satz * 100).toFixed(1) : "",
+    afa_satz: property.afa_satz != null ? (property.afa_satz * 100).toLocaleString("de-DE", { maximumFractionDigits: 1 }) : "",
     gebaeudewert: property.gebaeudewert?.toString() ?? "",
     grundwert: property.grundwert?.toString() ?? "",
     inventarwert: property.inventarwert?.toString() ?? "",

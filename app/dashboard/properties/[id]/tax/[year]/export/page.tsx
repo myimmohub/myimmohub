@@ -11,6 +11,7 @@ import { formatDateForDisplay } from "@/lib/tax/partnerNormalization";
 import { computeRentalShare } from "@/lib/tax/rentalShare";
 import TaxYearNavigation from "@/components/tax/TaxYearNavigation";
 import type { TaxData, TaxDepreciationItem, TaxMaintenanceDistributionItem } from "@/types/tax";
+import { fmtDecimal } from "@/lib/utils/numberFormat";
 
 type Property = { id: string; name: string; address: string | null };
 type TaxSettingsSummary = { eigennutzung_tage: number; gesamt_tage: number; rental_share_override_pct: number | null };
@@ -80,7 +81,7 @@ export default function TaxExportPage() {
 
   const handleCopy = async (key: string, value: unknown) => {
     if (value == null) return;
-    const text = typeof value === "number" ? value.toFixed(2).replace(".", ",") : String(value);
+    const text = typeof value === "number" ? fmtDecimal(value, 2, 2) : String(value);
     await navigator.clipboard.writeText(text);
     setCopiedField(key);
     setTimeout(() => setCopiedField(null), 1500);

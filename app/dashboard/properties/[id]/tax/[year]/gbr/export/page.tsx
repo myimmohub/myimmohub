@@ -6,6 +6,7 @@ import Link from "next/link";
 import TaxYearNavigation from "@/components/tax/TaxYearNavigation";
 import { allocateElsterLineSummary, buildElsterLineSummary } from "@/lib/tax/elsterLineLogic";
 import type { GbrTaxReport } from "@/types/tax";
+import { fmtDecimal } from "@/lib/utils/numberFormat";
 
 const fmtEur = (value: number) =>
   value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -174,11 +175,11 @@ function PartnerSection({
       <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
         <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Anlage FB — {partner.partner_name}</h2>
         <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
-          Beteiligungsquote {partner.anteil_pct.toFixed(2)} % {partner.email ? `· ${partner.email}` : ""}
+          Beteiligungsquote {fmtDecimal(partner.anteil_pct, 2, 2)} % {partner.email ? `· ${partner.email}` : ""}
         </p>
       </div>
       <div className="divide-y divide-slate-100 dark:divide-slate-800">
-        <ExportRow label="Beteiligungsquote" value={`${partner.anteil_pct.toFixed(2)} %`} rawValue={partner.anteil_pct} copyKey={`${partner.partner_id}-share`} copied={copied} onCopy={onCopy} />
+        <ExportRow label="Beteiligungsquote" value={`${fmtDecimal(partner.anteil_pct, 2, 2)} %`} rawValue={partner.anteil_pct} copyKey={`${partner.partner_id}-share`} copied={copied} onCopy={onCopy} />
         <ExportRow label="Einnahmenanteil" value={fmtEur(partner.total_income)} rawValue={partner.total_income} copyKey={`${partner.partner_id}-income`} copied={copied} onCopy={onCopy} />
         <ExportRow label="Werbungskostenanteil" value={fmtEur(partner.total_expenses)} rawValue={partner.total_expenses} copyKey={`${partner.partner_id}-expenses`} copied={copied} onCopy={onCopy} />
         <ExportRow label="AfA-Anteil" value={fmtEur(partner.depreciation_total)} rawValue={partner.depreciation_total} copyKey={`${partner.partner_id}-afa`} copied={copied} onCopy={onCopy} />

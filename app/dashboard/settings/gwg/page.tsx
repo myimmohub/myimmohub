@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePropertyId } from "../property-context";
+import { parseGermanDecimal } from "@/lib/utils/numberFormat";
 
 type Nutzungsdauern = Record<string, number>;
 
@@ -83,10 +84,10 @@ export default function GwgPage() {
             </label>
             <div className="relative">
               <input
-                type="number"
-                min={0}
+                type="text"
+                inputMode="decimal"
                 value={data.sofortabzug_grenze}
-                onChange={(e) => setData({ ...data, sofortabzug_grenze: parseFloat(e.target.value) || 0 })}
+                onChange={(e) => setData({ ...data, sofortabzug_grenze: parseGermanDecimal(e.target.value) || 0 })}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 pr-8 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">&euro;</span>
@@ -98,10 +99,10 @@ export default function GwgPage() {
             </label>
             <div className="relative">
               <input
-                type="number"
-                min={0}
+                type="text"
+                inputMode="decimal"
                 value={data.sammelposten_grenze}
-                onChange={(e) => setData({ ...data, sammelposten_grenze: parseFloat(e.target.value) || 0 })}
+                onChange={(e) => setData({ ...data, sammelposten_grenze: parseGermanDecimal(e.target.value) || 0 })}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 pr-8 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">&euro;</span>
@@ -125,9 +126,8 @@ export default function GwgPage() {
               <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">{meta.label}</label>
               <div className="relative">
                 <input
-                  type="number"
-                  min={1}
-                  max={50}
+                  type="text"
+                  inputMode="decimal"
                   value={data.nutzungsdauern[key] ?? meta.default}
                   onChange={(e) =>
                     setData({

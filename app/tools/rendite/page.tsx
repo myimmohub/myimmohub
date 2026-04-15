@@ -2,13 +2,14 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import { parseGermanDecimal, fmtPct } from "@/lib/utils/numberFormat";
 
 function formatEuro(value: number): string {
   return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value);
 }
 
 function formatPercent(value: number, decimals = 2): string {
-  return `${value.toFixed(decimals).replace(".", ",")} %`;
+  return fmtPct(value, decimals);
 }
 
 export default function RenditeRechner() {
@@ -18,10 +19,10 @@ export default function RenditeRechner() {
   const [kaufnebenkosten, setKaufnebenkosten] = useState<string>("10");
 
   const result = useMemo(() => {
-    const kp = parseFloat(kaufpreis) || 0;
-    const km = parseFloat(kaltmiete) || 0;
-    const nk = parseFloat(nebenkosten) || 0;
-    const knkPct = parseFloat(kaufnebenkosten) || 0;
+    const kp = parseGermanDecimal(kaufpreis) || 0;
+    const km = parseGermanDecimal(kaltmiete) || 0;
+    const nk = parseGermanDecimal(nebenkosten) || 0;
+    const knkPct = parseGermanDecimal(kaufnebenkosten) || 0;
 
     if (kp <= 0 || km <= 0) return null;
 
@@ -71,8 +72,8 @@ export default function RenditeRechner() {
             <div>
               <label className={labelClass}>Kaufpreis (€)</label>
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={kaufpreis}
                 onChange={(e) => setKaufpreis(e.target.value)}
                 className={inputClass}
@@ -82,8 +83,8 @@ export default function RenditeRechner() {
             <div>
               <label className={labelClass}>Monatliche Kaltmiete (€)</label>
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={kaltmiete}
                 onChange={(e) => setKaltmiete(e.target.value)}
                 className={inputClass}
@@ -93,8 +94,8 @@ export default function RenditeRechner() {
             <div>
               <label className={labelClass}>Monatliche Nebenkosten / Verwaltung (€, optional)</label>
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={nebenkosten}
                 onChange={(e) => setNebenkosten(e.target.value)}
                 className={inputClass}
@@ -104,10 +105,8 @@ export default function RenditeRechner() {
             <div>
               <label className={labelClass}>Kaufnebenkosten (%, optional)</label>
               <input
-                type="number"
-                min="0"
-                max="30"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
                 value={kaufnebenkosten}
                 onChange={(e) => setKaufnebenkosten(e.target.value)}
                 className={inputClass}
