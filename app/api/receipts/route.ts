@@ -61,6 +61,20 @@ export async function POST(req: NextRequest) {
 
   // ── 1. Upload to Supabase Storage ─────────────────────────────────────────
   const db = serviceRoleClient();
+
+  if (transactionId) {
+    const { data: transaction } = await db
+      .from("transactions")
+      .select("id")
+      .eq("id", transactionId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!transaction) {
+      return NextResponse.json({ error: "Transaktion nicht gefunden." }, { status: 404 });
+    }
+  }
+
   const storagePath = `receipts/${user.id}/${Date.now()}_${file.name}`;
   const fileBuffer = Buffer.from(await file.arrayBuffer());
 

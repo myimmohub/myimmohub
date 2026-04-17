@@ -36,6 +36,19 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  if (transactionId) {
+    const { data: transaction } = await db
+      .from("transactions")
+      .select("id")
+      .eq("id", transactionId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!transaction) {
+      return NextResponse.json({ error: "Transaktion nicht gefunden." }, { status: 404 });
+    }
+  }
+
   const { error: updateError } = await db
     .from("receipts")
     .update({

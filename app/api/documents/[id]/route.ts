@@ -57,6 +57,30 @@ export async function PATCH(
     property_id?: string | null;
   };
 
+  const { data: existing } = await db
+    .from("documents")
+    .select("id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!existing) {
+    return NextResponse.json({ error: "Dokument nicht gefunden." }, { status: 404 });
+  }
+
+  if (body.property_id) {
+    const { data: property } = await db
+      .from("properties")
+      .select("id")
+      .eq("id", body.property_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!property) {
+      return NextResponse.json({ error: "Immobilie nicht gefunden." }, { status: 404 });
+    }
+  }
+
   const { error } = await db
     .from("documents")
     .update({
@@ -65,7 +89,6 @@ export async function PATCH(
       document_date: body.document_date ?? null,
       property_id: body.property_id ?? null,
     })
-    .or(`user_id.eq.${user.id},user_id.is.null`)
     .eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -85,7 +108,7 @@ export async function DELETE(
   const { data: doc, error: fetchError } = await db
     .from("documents")
     .select("id, storage_path, user_id")
-    .or(`user_id.eq.${user.id},user_id.is.null`)
+    .eq("user_id", user.id)
     .eq("id", id)
     .maybeSingle();
 
@@ -100,7 +123,7 @@ export async function DELETE(
   const { error: deleteError } = await db
     .from("documents")
     .delete()
-    .or(`user_id.eq.${user.id},user_id.is.null`)
+    .eq("user_id", user.id)
     .eq("id", id);
 
   if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });

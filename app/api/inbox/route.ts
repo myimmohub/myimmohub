@@ -10,7 +10,7 @@ export async function GET() {
     serviceRoleClient(),
     user.id,
     "pending_review",
-    true, // unzugeordnete IMAP-Emails einschließen
+    false,
   );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -32,14 +32,38 @@ export async function PATCH(request: Request) {
 
   const db = serviceRoleClient();
 
+  const { data: existingDoc } = await db
+    .from("documents")
+    .select("id")
+    .eq("id", body.id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!existingDoc) {
+    return NextResponse.json({ error: "Dokument nicht gefunden." }, { status: 404 });
+  }
+
+  if (body.property_id) {
+    const { data: property } = await db
+      .from("properties")
+      .select("id")
+      .eq("id", body.property_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!property) {
+      return NextResponse.json({ error: "Immobilie nicht gefunden." }, { status: 404 });
+    }
+  }
+
   const { error: updateError } = await db
     .from("documents")
     .update({
-      user_id: user.id, // Dokument dem bestätigenden Nutzer zuordnen
       status: body.status,
       category: body.category,
       property_id: body.property_id ?? null,
     })
+    .eq("user_id", user.id)
     .eq("id", body.id);
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });

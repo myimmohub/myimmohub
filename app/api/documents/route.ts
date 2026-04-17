@@ -35,7 +35,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "storagePath und fileName sind erforderlich." }, { status: 400 });
   }
 
+  if (!body.storagePath.startsWith(`${user.id}/`)) {
+    return NextResponse.json({ error: "Ungültiger Speicherpfad." }, { status: 403 });
+  }
+
   const db = serviceRoleClient();
+
+  if (body.propertyId) {
+    const { data: property } = await db
+      .from("properties")
+      .select("id")
+      .eq("id", body.propertyId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!property) {
+      return NextResponse.json({ error: "Immobilie nicht gefunden." }, { status: 404 });
+    }
+  }
 
   // 1. Dokument-Eintrag mit status=pending_analysis anlegen
   const { data: doc, error: insertError } = await db
@@ -61,6 +78,10 @@ export async function POST(request: Request) {
   const { data: fileData, error: downloadError } = await db.storage
     .from("documents")
     .download(body.storagePath);
+
+  if (downloadError || !fileData) {
+    return NextResponse.json({ error: "Datei im Storage nicht gefunden." }, { status: 400 });
+  }
 
   if (!downloadError && fileData) {
     const buffer = Buffer.from(await fileData.arrayBuffer());

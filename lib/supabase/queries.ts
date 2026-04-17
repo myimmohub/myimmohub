@@ -117,6 +117,7 @@ export async function fetchDocumentById(
        )`,
     )
     .eq("id", documentId)
+    .eq("user_id", userId)
     .single();
 }
 

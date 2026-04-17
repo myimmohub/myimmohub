@@ -51,12 +51,13 @@ function extractAliasFromTo(to: string): string | null {
 export async function POST(request: Request) {
   const url = new URL(request.url);
   const queryToken = url.searchParams.get("token");
-  // Optionale Token-Prüfung (Header: X-Webhook-Token)
-  if (POSTMARK_WEBHOOK_TOKEN) {
-    const token = request.headers.get("x-webhook-token");
-    if (token !== POSTMARK_WEBHOOK_TOKEN && queryToken !== POSTMARK_WEBHOOK_TOKEN) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-    }
+  if (!POSTMARK_WEBHOOK_TOKEN) {
+    return NextResponse.json({ error: "Missing webhook token configuration." }, { status: 500 });
+  }
+
+  const token = request.headers.get("x-webhook-token");
+  if (token !== POSTMARK_WEBHOOK_TOKEN && queryToken !== POSTMARK_WEBHOOK_TOKEN) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
