@@ -214,6 +214,30 @@ function computeTransactionDeductibleAmount(args: {
   return round2(args.grossAmount);
 }
 
+function hasOwnManagementTransaction(
+  transactions: TaxCalculationTransaction[],
+  categories: DbCategory[],
+  taxYear: number,
+) {
+  const dbCategoryMap = new Map(categories.map((category) => [category.label, category]));
+  return transactions
+    .filter((tx) => tx.date >= `${taxYear}-01-01` && tx.date <= `${taxYear}-12-31`)
+    .filter((tx) => tx.category != null && tx.category !== "aufgeteilt")
+    .filter((tx) => !(tx.amount < 0 && tx.is_tax_deductible === false))
+    .some((tx) => resolveField(tx.category ?? "", tx.anlage_v_zeile, dbCategoryMap) === "property_management");
+}
+
+function hasOwnPortoTransaction(
+  transactions: TaxCalculationTransaction[],
+  taxYear: number,
+) {
+  return transactions
+    .filter((tx) => tx.date >= `${taxYear}-01-01` && tx.date <= `${taxYear}-12-31`)
+    .filter((tx) => tx.category != null && tx.category !== "aufgeteilt")
+    .filter((tx) => !(tx.amount < 0 && tx.is_tax_deductible === false))
+    .some((tx) => normalizeForMatching([tx.category, tx.counterpart, tx.description].filter(Boolean).join(" ")).includes("porto"));
+}
+
 function buildCalculatedExpenseBlocks(args: {
   items: ReconciliationItem[];
   taxYear: number;
@@ -468,7 +492,7 @@ export async function POST(request: Request) {
     supabase.from("gbr_settings").select("*, gbr_partner(*)").eq("property_id", property_id).maybeSingle(),
     supabase
       .from("tax_settings")
-      .select("eigennutzung_tage, gesamt_tage, rental_share_override_pct, tax_year")
+      .select("eigennutzung_tage, gesamt_tage, rental_share_override_pct, verwaltungspauschale_eur, porto_pauschale_eur, tax_year")
       .eq("property_id", property_id)
       .in("tax_year", [0, tax_year])
       .order("tax_year", { ascending: false })
@@ -482,6 +506,12 @@ export async function POST(request: Request) {
   const excludedTransactionIds = Array.from(new Set(
     normalizedMaintenanceItems.flatMap((item) => Array.isArray(item.source_transaction_ids) ? item.source_transaction_ids : []),
   ));
+
+  const rentalSharePct = effectiveTaxSettings?.rental_share_override_pct != null
+    ? effectiveTaxSettings.rental_share_override_pct / 100
+    : effectiveTaxSettings?.eigennutzung_tage != null && effectiveTaxSettings?.gesamt_tage != null
+      ? Math.max(0, Math.min(1, 1 - effectiveTaxSettings.eigennutzung_tage / effectiveTaxSettings.gesamt_tage))
+      : 1.0;
 
   const calculated = calculateTaxFromTransactions(
     processedTxData,
@@ -499,6 +529,18 @@ export async function POST(request: Request) {
   });
   calculated.maintenance_costs = maintenanceSourceResolution.immediateTotal;
 
+  const managementFallback = Number(effectiveTaxSettings?.verwaltungspauschale_eur ?? 240);
+  const portoFallback = Number(effectiveTaxSettings?.porto_pauschale_eur ?? 17);
+  const hasManagementTx = hasOwnManagementTransaction(processedTxData, ((categories ?? []) as DbCategory[]), tax_year);
+  const hasPortoTx = hasOwnPortoTransaction(processedTxData, tax_year);
+  const nonAllocableFallback = round2(
+    (!hasManagementTx && Number.isFinite(managementFallback) ? managementFallback * rentalSharePct : 0) +
+    (!hasPortoTx && Number.isFinite(portoFallback) ? portoFallback * rentalSharePct : 0),
+  );
+  if (nonAllocableFallback > 0) {
+    calculated.property_management = round2(Number(calculated.property_management ?? 0) + nonAllocableFallback);
+  }
+
   // Upsert: nur berechnete Felder setzen, manuelle Werte nicht überschreiben
   const { data: existing } = await supabase
     .from("tax_data")
@@ -506,14 +548,6 @@ export async function POST(request: Request) {
     .eq("property_id", property_id)
     .eq("tax_year", tax_year)
     .single();
-
-  // ── Mietanteil berechnen ────────────────────────────────────────────────────
-  // Basis für Instandhaltungsverteilungen und AfA-Proration
-  const rentalSharePct = effectiveTaxSettings?.rental_share_override_pct != null
-    ? effectiveTaxSettings.rental_share_override_pct / 100
-    : effectiveTaxSettings?.eigennutzung_tage != null && effectiveTaxSettings?.gesamt_tage != null
-      ? Math.max(0, Math.min(1, 1 - effectiveTaxSettings.eigennutzung_tage / effectiveTaxSettings.gesamt_tage))
-      : 1.0;
 
   // ── Hilfsfunktion: Structured Tax Data berechnen & in DB schreiben ──────────
   async function applyStructuredData(baseData: TaxData): Promise<{ finalData: TaxData; reconciliation: ReturnType<typeof buildReconciliation> }> {

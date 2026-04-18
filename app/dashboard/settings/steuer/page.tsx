@@ -13,6 +13,8 @@ type TaxSettings = {
   eigennutzung_tage: number;
   gesamt_tage: number;
   rental_share_override_pct?: number | null;
+  verwaltungspauschale_eur?: number | null;
+  porto_pauschale_eur?: number | null;
   kleinunternehmer: boolean;
   option_ust: boolean;
 };
@@ -194,6 +196,44 @@ export default function SteuerPage() {
               Option zur Umsatzsteuer (§ 9 UStG)
             </span>
           </label>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+        <h3 className="mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100">Pauschalen für Steuerberechnung</h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
+              Verwaltungspauschale (Standard)
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={data.verwaltungspauschale_eur != null ? fmtDecimal(data.verwaltungspauschale_eur, 2, 2) : ""}
+              onChange={(e) => update("verwaltungspauschale_eur", parseGermanDecimal(e.target.value))}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              placeholder="240,00"
+            />
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+              Wird nur berücksichtigt, wenn im Jahr keine eigene Verwaltungs-Transaktion vorhanden ist.
+            </p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
+              Porto-Pauschale (Standard)
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={data.porto_pauschale_eur != null ? fmtDecimal(data.porto_pauschale_eur, 2, 2) : ""}
+              onChange={(e) => update("porto_pauschale_eur", parseGermanDecimal(e.target.value))}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              placeholder="17,00"
+            />
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+              Wird nur berücksichtigt, wenn im Jahr keine eigene Porto-Transaktion vorhanden ist.
+            </p>
+          </div>
         </div>
       </section>
 

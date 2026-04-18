@@ -59,6 +59,8 @@ export async function GET(request: Request) {
       eigennutzung_tage: 0,
       gesamt_tage: 365,
       rental_share_override_pct: null,
+      verwaltungspauschale_eur: 240,
+      porto_pauschale_eur: 17,
       kleinunternehmer: false,
       option_ust: false,
       ak_gebaeude: akGebaeude,
