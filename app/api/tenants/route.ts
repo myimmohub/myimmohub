@@ -35,10 +35,14 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const property_id = searchParams.get("property_id");
+    const unit_id = searchParams.get("unit_id");
     const status = searchParams.get("status");
 
-    if (!property_id) {
-      return NextResponse.json({ error: "Query-Parameter 'property_id' fehlt." }, { status: 400 });
+    if (!property_id && !unit_id) {
+      return NextResponse.json(
+        { error: "Query-Parameter 'property_id' oder 'unit_id' fehlt." },
+        { status: 400 },
+      );
     }
 
     const supabase = await createClient();
@@ -47,11 +51,38 @@ export async function GET(request: Request) {
     } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Nicht authentifiziert." }, { status: 401 });
 
-    // Verify property belongs to user
+    // ── Query by unit_id (unit detail page) ──────────────────────────────────
+    if (unit_id) {
+      // Verify ownership via join
+      let q = supabase
+        .from("tenants")
+        .select(
+          `*, unit:units!tenants_unit_id_fkey(id, label, unit_type, floor, area_sqm, property_id,
+           properties!inner(user_id))`,
+        )
+        .eq("unit_id", unit_id);
+
+      if (status) q = q.eq("status", status);
+
+      const { data, error } = await q.order("created_at", { ascending: false });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+      // Enforce ownership in JS
+      const filtered = (data ?? []).filter((t) => {
+        const props = Array.isArray(t.unit?.properties)
+          ? t.unit.properties[0]
+          : t.unit?.properties;
+        return props?.user_id === user.id;
+      });
+
+      return NextResponse.json(filtered);
+    }
+
+    // ── Query by property_id (existing behaviour) ─────────────────────────────
     const { data: property } = await supabase
       .from("properties")
       .select("id")
-      .eq("id", property_id)
+      .eq("id", property_id!)
       .eq("user_id", user.id)
       .single();
 
@@ -62,31 +93,18 @@ export async function GET(request: Request) {
     let query = supabase
       .from("tenants")
       .select(
-        `
-        *,
-        unit:units!tenants_unit_id_fkey (
-          id,
-          label,
-          unit_type,
-          floor,
-          area_sqm,
-          property_id
-        )
-      `,
+        `*, unit:units!tenants_unit_id_fkey(id, label, unit_type, floor, area_sqm, property_id)`,
       )
-      .eq("unit.property_id", property_id);
+      .eq("unit.property_id", property_id!);
 
     if (status) {
       query = query.eq("status", status);
     }
 
     const { data, error } = await query.order("created_at", { ascending: false });
-
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // Filter out tenants whose unit doesn't belong to the property.
-    // PostgREST may not honour the .eq("unit.property_id", …) filter on aliased joins,
-    // so we enforce the ownership check here in JS as well.
+    // JS-side ownership check (PostgREST aliased join filter may not be enforced)
     const filtered = (data ?? []).filter(
       (t) => t.unit !== null && (t.unit as { property_id: string }).property_id === property_id,
     );
