@@ -1,305 +1,265 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { parseGermanDecimal } from "@/lib/utils/numberFormat";
+import SliderInput from "@/components/marketing/SliderInput";
+import { calcSpekulationssteuer, type SpekulationsStatus } from "@/lib/calculators/spekulationssteuer";
+import { fmtEUR, fmtDate } from "@/lib/format";
 
-function formatEuro(value: number): string {
-  return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value);
-}
+const STATUS_INFO: Record<SpekulationsStatus, { label: string; desc: string; bg: string; text: string }> = {
+  steuerfrei_10j: {
+    label: "Bereits steuerfrei",
+    desc: "Die 10-jährige Spekulationsfrist ist abgelaufen.",
+    bg: "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800",
+    text: "text-emerald-700 dark:text-emerald-400",
+  },
+  steuerfrei_selbstnutzung: {
+    label: "Steuerfrei durch Selbstnutzung",
+    desc: "Eigennutzung in den letzten 2 Kalenderjahren vor Verkauf (§ 23 Abs. 1 Nr. 1 EStG).",
+    bg: "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800",
+    text: "text-emerald-700 dark:text-emerald-400",
+  },
+  steuerpflichtig: {
+    label: "Steuerpflichtig",
+    desc: "Die 10-jährige Spekulationsfrist ist noch nicht abgelaufen.",
+    bg: "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
+    text: "text-red-700 dark:text-red-400",
+  },
+};
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
-function toDateString(date: Date): string {
-  return date.toISOString().split("T")[0];
+function todayISO() {
+  return new Date().toISOString().split("T")[0];
 }
 
 export default function SpekulationssteuerRechner() {
-  const today = new Date();
+  const [kaufdatum, setKaufdatum] = useState("2016-01-15");
+  const [verkaufsdatum, setVerkaufsdatum] = useState(todayISO);
+  const [kaufpreis, setKaufpreis] = useState(250_000);
+  const [verkaufspreis, setVerkaufspreis] = useState(350_000);
+  const [steuersatzPct, setSteuersatzPct] = useState(35);
+  const [selbstgenutzt, setSelbstgenutzt] = useState(false);
 
-  const [kaufdatum, setKaufdatum] = useState<string>("2016-01-15");
-  const [verkaufsdatum, setVerkaufsdatum] = useState<string>(toDateString(today));
-  const [kaufpreis, setKaufpreis] = useState<string>("250000");
-  const [verkaufspreis, setVerkaufspreis] = useState<string>("350000");
-  const [steuersatz, setSteuersatz] = useState<string>("35");
-  const [selbstgenutzt, setSelbstgenutzt] = useState<boolean>(false);
+  const result = useMemo(
+    () =>
+      calcSpekulationssteuer({
+        kaufdatum,
+        verkaufsdatum,
+        kaufpreis,
+        verkaufspreis,
+        steuersatzPct,
+        selbstgenutzt,
+      }),
+    [kaufdatum, verkaufsdatum, kaufpreis, verkaufspreis, steuersatzPct, selbstgenutzt],
+  );
 
-  const result = useMemo(() => {
-    if (!kaufdatum || !verkaufsdatum) return null;
-
-    const kauf = new Date(kaufdatum);
-    const verkauf = new Date(verkaufsdatum);
-    if (isNaN(kauf.getTime()) || isNaN(verkauf.getTime())) return null;
-    if (verkauf <= kauf) return null;
-
-    const kp = parseGermanDecimal(kaufpreis) || 0;
-    const vp = parseGermanDecimal(verkaufspreis) || 0;
-    const sz = parseGermanDecimal(steuersatz) || 0;
-
-    // Haltedauer
-    const diffMs = verkauf.getTime() - kauf.getTime();
-    const diffDays = diffMs / (1000 * 60 * 60 * 24);
-    const jahre = Math.floor(diffDays / 365.25);
-    const restMonate = Math.floor((diffDays % 365.25) / 30.44);
-
-    // Steuerfreies Verkaufsdatum: Kaufdatum + 10 Jahre
-    const steuerfreiAb = new Date(kauf);
-    steuerfreiAb.setFullYear(steuerfreiAb.getFullYear() + 10);
-
-    const zehnjahreUm = verkauf >= steuerfreiAb;
-
-    // Status bestimmen
-    let status: "steuerfrei_10j" | "steuerfrei_selbstnutzung" | "steuerpflichtig";
-    if (zehnjahreUm) {
-      status = "steuerfrei_10j";
-    } else if (selbstgenutzt) {
-      status = "steuerfrei_selbstnutzung";
-    } else {
-      status = "steuerpflichtig";
-    }
-
-    const gewinn = vp - kp;
-    const steuer = status === "steuerpflichtig" && gewinn > 0 ? (gewinn * sz) / 100 : 0;
-    const nettogewinn = gewinn - steuer;
-
-    return {
-      jahre,
-      restMonate,
-      steuerfreiAb,
-      zehnjahreUm,
-      status,
-      gewinn,
-      steuer,
-      nettogewinn,
-      sz,
-      vp,
-      kp,
-    };
-  }, [kaufdatum, verkaufsdatum, kaufpreis, verkaufspreis, steuersatz, selbstgenutzt]);
-
-  const inputClass =
-    "w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-4 py-2 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-500";
-  const labelClass = "block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1";
-  const cardClass =
-    "bg-white dark:bg-zinc-800 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-700 p-6";
-
-  function getStatusInfo(status: string): { label: string; desc: string; bg: string; text: string } {
-    switch (status) {
-      case "steuerfrei_10j":
-        return {
-          label: "Bereits steuerfrei",
-          desc: "Die 10-jährige Spekulationsfrist ist abgelaufen.",
-          bg: "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800",
-          text: "text-green-700 dark:text-green-400",
-        };
-      case "steuerfrei_selbstnutzung":
-        return {
-          label: "Steuerfrei durch Selbstnutzung",
-          desc: "Eigennutzung in den letzten 2 Kalenderjahren vor Verkauf (§ 23 Abs. 1 Nr. 1 EStG).",
-          bg: "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800",
-          text: "text-green-700 dark:text-green-400",
-        };
-      case "steuerpflichtig":
-        return {
-          label: "Steuerpflichtig",
-          desc: "Die 10-jährige Spekulationsfrist ist noch nicht abgelaufen.",
-          bg: "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
-          text: "text-red-700 dark:text-red-400",
-        };
-      default:
-        return { label: "", desc: "", bg: "", text: "" };
-    }
-  }
+  const statusInfo = result ? STATUS_INFO[result.status] : null;
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900 py-8 px-4">
-      <div className="max-w-lg mx-auto space-y-6">
-        {/* Back link */}
+    <div className="min-h-screen bg-slate-50 py-10 px-4 dark:bg-slate-950">
+      <div className="mx-auto max-w-xl space-y-6">
+        {/* Back */}
         <Link
           href="/tools"
-          className="inline-flex items-center gap-1 text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
         >
-          ← Alle Rechner
+          <ChevronLeftIcon className="h-4 w-4" /> Alle Rechner
         </Link>
 
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Spekulationssteuer-Rechner</h1>
-          <p className="mt-1 text-zinc-500 dark:text-zinc-400">Ab wann kann ich steuerfrei verkaufen?</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+            Spekulationssteuer-Rechner
+          </h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Ab wann kann ich steuerfrei verkaufen?
+          </p>
         </div>
 
-        {/* Inputs */}
-        <div className={cardClass}>
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Angaben zum Verkauf</h2>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelClass}>Kaufdatum</label>
-                <input
-                  type="date"
-                  value={kaufdatum}
-                  onChange={(e) => setKaufdatum(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Geplantes Verkaufsdatum</label>
-                <input
-                  type="date"
-                  value={verkaufsdatum}
-                  onChange={(e) => setVerkaufsdatum(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelClass}>Kaufpreis (€)</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={kaufpreis}
-                  onChange={(e) => setKaufpreis(e.target.value)}
-                  className={inputClass}
-                  placeholder="z. B. 250000"
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Verkaufspreis (€)</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={verkaufspreis}
-                  onChange={(e) => setVerkaufspreis(e.target.value)}
-                  className={inputClass}
-                  placeholder="z. B. 350000"
-                />
-              </div>
+        {/* Dates card */}
+        <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="mb-5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Zeitraum
+          </h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                Kaufdatum
+              </label>
+              <input
+                type="date"
+                value={kaufdatum}
+                onChange={(e) => setKaufdatum(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
             </div>
             <div>
-              <label className={labelClass}>Persönlicher Steuersatz (%)</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={steuersatz}
-                onChange={(e) => setSteuersatz(e.target.value)}
-                className={inputClass}
-                placeholder="z. B. 35"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="selbstgenutzt"
-                checked={selbstgenutzt}
-                onChange={(e) => setSelbstgenutzt(e.target.checked)}
-                className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-600 accent-zinc-700 dark:accent-zinc-300"
-              />
-              <label htmlFor="selbstgenutzt" className="text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer">
-                Immobilie in den letzten 2 Jahren selbst bewohnt
+              <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                Geplantes Verkaufsdatum
               </label>
+              <input
+                type="date"
+                value={verkaufsdatum}
+                onChange={(e) => setVerkaufsdatum(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
             </div>
+          </div>
+
+          {/* Selbstnutzung toggle */}
+          <label className="mt-4 flex cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              checked={selbstgenutzt}
+              onChange={(e) => setSelbstgenutzt(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 accent-blue-600 dark:border-slate-600"
+            />
+            <span className="text-sm text-slate-700 dark:text-slate-300">
+              Immobilie in den letzten 2 Jahren selbst bewohnt
+            </span>
+          </label>
+        </div>
+
+        {/* Prices + tax card */}
+        <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="mb-5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Preise &amp; Steuersatz
+          </h2>
+          <div className="space-y-6">
+            <SliderInput
+              label="Kaufpreis"
+              value={kaufpreis}
+              min={50_000}
+              max={2_000_000}
+              step={10_000}
+              displayValue={fmtEUR(kaufpreis)}
+              onChange={setKaufpreis}
+            />
+            <SliderInput
+              label="Geplanter Verkaufspreis"
+              value={verkaufspreis}
+              min={50_000}
+              max={2_000_000}
+              step={10_000}
+              displayValue={fmtEUR(verkaufspreis)}
+              onChange={setVerkaufspreis}
+            />
+            <SliderInput
+              label="Persönlicher Steuersatz"
+              value={steuersatzPct}
+              min={14}
+              max={45}
+              step={1}
+              displayValue={`${steuersatzPct} %`}
+              onChange={setSteuersatzPct}
+            />
           </div>
         </div>
 
-        {/* Results */}
-        {result && (
+        {/* Result */}
+        {result && statusInfo && (
           <>
             {/* Status banner */}
-            <div className={`rounded-xl border p-4 ${getStatusInfo(result.status).bg}`}>
-              <p className={`text-base font-bold ${getStatusInfo(result.status).text}`}>
-                {getStatusInfo(result.status).label}
-              </p>
-              <p className={`text-sm mt-1 ${getStatusInfo(result.status).text} opacity-80`}>
-                {getStatusInfo(result.status).desc}
-              </p>
+            <div className={`rounded-xl border p-4 ${statusInfo.bg}`}>
+              <p className={`text-sm font-semibold ${statusInfo.text}`}>{statusInfo.label}</p>
+              <p className={`mt-1 text-xs ${statusInfo.text} opacity-80`}>{statusInfo.desc}</p>
             </div>
 
-            <div className={cardClass}>
-              <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Ergebnis</h2>
+            <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+              <h2 className="mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100">Ergebnis</h2>
               <div className="space-y-3">
-                <div className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-700">
-                  <span className="text-sm text-zinc-600 dark:text-zinc-400">Haltedauer</span>
-                  <span className="text-base font-semibold text-zinc-800 dark:text-zinc-200">
-                    {result.jahre} Jahre, {result.restMonate} Monate
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-700">
-                  <span className="text-sm text-zinc-600 dark:text-zinc-400">Steuerfreies Verkaufsdatum (10 Jahre)</span>
-                  <span className="text-base font-semibold text-zinc-800 dark:text-zinc-200">
-                    {formatDate(result.steuerfreiAb)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-700">
-                  <span className="text-sm text-zinc-600 dark:text-zinc-400">Gewinn (brutto)</span>
-                  <span
-                    className={`text-base font-semibold ${
-                      result.gewinn >= 0
-                        ? "text-green-600 dark:text-green-400"
-                        : "text-red-600 dark:text-red-400"
-                    }`}
-                  >
-                    {formatEuro(result.gewinn)}
-                  </span>
-                </div>
-
-                {result.status === "steuerpflichtig" && result.gewinn > 0 && (
+                <ResultRow
+                  label="Haltedauer"
+                  value={`${result.halteJahre} Jahre, ${result.halteMonate} Monate`}
+                />
+                <ResultRow
+                  label="Steuerfreies Verkaufsdatum"
+                  value={fmtDate(result.steuerfreiAb)}
+                />
+                <ResultRow
+                  label="Gewinn (brutto)"
+                  value={fmtEUR(result.gewinn)}
+                  valueClass={
+                    result.gewinn >= 0
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-red-600 dark:text-red-400"
+                  }
+                />
+                {result.status === "steuerpflichtig" && result.gewinn > 0 ? (
                   <>
-                    <div className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-700">
-                      <span className="text-sm text-zinc-600 dark:text-zinc-400">
-                        Spekulationssteuer ({result.sz} %)
-                      </span>
-                      <span className="text-base font-bold text-red-600 dark:text-red-400">
-                        {formatEuro(result.steuer)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between py-2">
-                      <span className="text-sm text-zinc-600 dark:text-zinc-400">Nettogewinn nach Steuer</span>
-                      <span className="text-base font-bold text-zinc-800 dark:text-zinc-200">
-                        {formatEuro(result.nettogewinn)}
-                      </span>
-                    </div>
+                    <ResultRow
+                      label={`Spekulationssteuer (${steuersatzPct} %)`}
+                      value={fmtEUR(result.steuer)}
+                      valueClass="text-red-600 dark:text-red-400"
+                    />
+                    <ResultRow
+                      label="Nettogewinn nach Steuer"
+                      value={fmtEUR(result.nettogewinn)}
+                      last
+                    />
                   </>
-                )}
-
-                {result.status !== "steuerpflichtig" && (
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-sm text-zinc-600 dark:text-zinc-400">Spekulationssteuer</span>
-                    <span className="text-base font-bold text-green-600 dark:text-green-400">Keine (0 €)</span>
-                  </div>
+                ) : (
+                  <ResultRow
+                    label="Spekulationssteuer"
+                    value="Keine (0 €)"
+                    valueClass="text-emerald-600 dark:text-emerald-400"
+                    last
+                  />
                 )}
               </div>
             </div>
 
-            {result.status === "steuerpflichtig" && !result.zehnjahreUm && (
-              <div className="rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 p-4 text-sm text-zinc-600 dark:text-zinc-400">
-                Tipp: Warte bis zum <strong className="text-zinc-800 dark:text-zinc-200">{formatDate(result.steuerfreiAb)}</strong>, um{" "}
-                <strong className="text-zinc-800 dark:text-zinc-200">{formatEuro(result.steuer)}</strong> Spekulationssteuer zu sparen.
+            {/* Tipp */}
+            {result.status === "steuerpflichtig" && result.gewinn > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/20">
+                <p className="text-sm text-amber-800 dark:text-amber-300">
+                  <span className="font-semibold">Tipp:</span> Warte bis zum{" "}
+                  <span className="font-semibold">{fmtDate(result.steuerfreiAb)}</span>, um{" "}
+                  <span className="font-semibold">{fmtEUR(result.steuer)}</span>{" "}
+                  Spekulationssteuer zu sparen.
+                </p>
               </div>
             )}
           </>
         )}
 
-        {/* Legal note */}
-        <p className="text-xs text-zinc-400 dark:text-zinc-500">
-          Hinweis: Diese Berechnung dient nur zur Orientierung und ersetzt keine Steuerberatung. Maßgeblich ist § 23 EStG. Bitte konsultiere einen Steuerberater für deine individuelle Situation.
+        <p className="text-xs text-slate-400 dark:text-slate-500">
+          Diese Berechnung dient nur zur Orientierung und ersetzt keine Steuerberatung.
+          Maßgeblich ist § 23 EStG.
         </p>
 
         {/* CTA */}
-        <div className={cardClass}>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
-            Behalte den Überblick über all deine Immobilien – kostenlos mit MyImmoHub.
-          </p>
-          <Link
-            href="/auth"
-            className="w-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg py-3 font-semibold text-center block hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
-          >
-            Immobilie kostenlos verwalten mit MyImmoHub
-          </Link>
-        </div>
+        <CtaCard text="Behalte den Überblick über all deine Immobilien – kostenlos mit MyImmoHub." />
       </div>
     </div>
+  );
+}
+
+function ResultRow({
+  label, value, valueClass, last = false,
+}: { label: string; value: string; valueClass?: string; last?: boolean }) {
+  return (
+    <div className={`flex items-center justify-between py-2 ${!last ? "border-b border-slate-100 dark:border-slate-800" : ""}`}>
+      <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
+      <span className={`text-sm font-medium ${valueClass ?? "text-slate-900 dark:text-slate-100"}`}>{value}</span>
+    </div>
+  );
+}
+
+function CtaCard({ text }: { text: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+      <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">{text}</p>
+      <Link href="/auth" className="block w-full rounded-xl bg-blue-600 py-3 text-center text-sm font-medium text-white transition hover:bg-blue-700">
+        Kostenlos starten
+      </Link>
+    </div>
+  );
+}
+
+function ChevronLeftIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+      <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
+    </svg>
   );
 }

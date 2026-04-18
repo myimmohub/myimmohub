@@ -27,7 +27,12 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Öffentliche Seiten – kein Basic-Auth, kein Login erforderlich
-  const isPublicPage = pathname.startsWith("/tools") || pathname.startsWith("/wissen");
+  const isPublicPage =
+    pathname === "/" ||
+    pathname.startsWith("/tools") ||
+    pathname.startsWith("/wissen") ||
+    pathname.startsWith("/gratis-tools") ||
+    pathname.startsWith("/steuer-tipps");
   if (isPublicPage) return NextResponse.next({ request });
 
   // Basic-Auth vor allem anderen prüfen

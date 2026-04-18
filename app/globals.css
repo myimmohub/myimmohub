@@ -1,10 +1,13 @@
 @import "tailwindcss";
 
+/* Class-based dark mode — JS sets .dark on <html> based on system preference or user toggle */
+@variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #f8fafc; /* slate-50 */
   --foreground: #0f172a; /* slate-900 */
-  --font-sans: "Geist", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --font-sans: var(--font-geist-sans, "Geist", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif);
+  --font-mono: var(--font-geist-mono, "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace);
 }
 
 @theme inline {
@@ -14,11 +17,10 @@
   --font-mono: var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #020617; /* slate-950 */
-    --foreground: #e2e8f0; /* slate-200 */
-  }
+/* Dark mode via .dark class (set by ThemeScript in root layout) */
+.dark {
+  --background: #020617; /* slate-950 */
+  --foreground: #e2e8f0; /* slate-200 */
 }
 
 body {
@@ -48,4 +50,80 @@ body {
   border-radius: 2px;
   background: #10b981;
   transition: width 0.3s ease;
+}
+
+/* ─── SliderInput range track + thumb ──────────────────────────────────── */
+input[type="range"].slider-thumb {
+  --track-h: 6px;
+  --thumb-size: 18px;
+  height: var(--thumb-size);
+}
+
+/* WebKit track */
+input[type="range"].slider-thumb::-webkit-slider-runnable-track {
+  height: var(--track-h);
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    #2563eb var(--pct, 0%),
+    #e2e8f0 var(--pct, 0%)
+  );
+}
+.dark input[type="range"].slider-thumb::-webkit-slider-runnable-track {
+  background: linear-gradient(
+    to right,
+    #3b82f6 var(--pct, 0%),
+    #1e293b var(--pct, 0%)
+  );
+}
+
+/* WebKit thumb */
+input[type="range"].slider-thumb::-webkit-slider-thumb {
+  appearance: none;
+  margin-top: calc((var(--track-h) - var(--thumb-size)) / 2);
+  width: var(--thumb-size);
+  height: var(--thumb-size);
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #2563eb;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input[type="range"].slider-thumb::-webkit-slider-thumb:hover {
+  border-color: #1d4ed8;
+  box-shadow: 0 0 0 4px rgba(37,99,235,0.15);
+}
+
+/* Firefox track */
+input[type="range"].slider-thumb::-moz-range-track {
+  height: var(--track-h);
+  border-radius: 9999px;
+  background: #e2e8f0;
+}
+.dark input[type="range"].slider-thumb::-moz-range-track {
+  background: #1e293b;
+}
+input[type="range"].slider-thumb::-moz-range-progress {
+  height: var(--track-h);
+  border-radius: 9999px;
+  background: #2563eb;
+}
+.dark input[type="range"].slider-thumb::-moz-range-progress {
+  background: #3b82f6;
+}
+
+/* Firefox thumb */
+input[type="range"].slider-thumb::-moz-range-thumb {
+  width: var(--thumb-size);
+  height: var(--thumb-size);
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #2563eb;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  cursor: pointer;
+}
+input[type="range"].slider-thumb:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
