@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { calculateTaxTotals } from "@/lib/tax/gbrTaxReport";
@@ -15,6 +15,7 @@ const fmtEur = (n: number | null) =>
 
 export default function TaxOverviewPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [property, setProperty] = useState<Property | null>(null);
   const [entries, setEntries] = useState<TaxData[]>([]);
   const [gbrSettings, setGbrSettings] = useState<GbrSettingsSummary | null>(null);
@@ -45,20 +46,7 @@ export default function TaxOverviewPage() {
 
   const handleCalculate = async (year: number) => {
     setCalculating(true);
-    const res = await fetch("/api/tax/calculate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ property_id: id, tax_year: year }),
-    });
-    if (res.ok) {
-      const updated = await res.json();
-      setEntries((prev) => {
-        const idx = prev.findIndex((e) => e.tax_year === year);
-        if (idx >= 0) return [...prev.slice(0, idx), updated, ...prev.slice(idx + 1)];
-        return [updated, ...prev].sort((a, b) => b.tax_year - a.tax_year);
-      });
-    }
-    setCalculating(false);
+    router.push(`/dashboard/properties/${id}/tax/${year}?prepare=1`);
   };
 
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -138,7 +126,7 @@ export default function TaxOverviewPage() {
                 disabled={calculating}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
               >
-                {calculating ? "Berechne…" : "Berechnen"}
+                {calculating ? "Öffnet…" : "Vorbereiten & berechnen"}
               </button>
             </div>
           </div>

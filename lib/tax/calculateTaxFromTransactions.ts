@@ -14,6 +14,7 @@ export type TaxCalculationTransaction = {
   date: string;
   amount: number;
   category: string | null;
+  is_tax_deductible?: boolean | null;
   anlage_v_zeile: number | null;
   description?: string | null;
   counterpart?: string | null;
@@ -352,6 +353,7 @@ export function calculateTaxFromTransactions(
       t.date <= bis &&
       t.category != null &&
       t.category !== "aufgeteilt" &&
+      !(t.amount < 0 && t.is_tax_deductible === false) &&
       !(t.id && excludedIds.has(t.id)),
   );
 
