@@ -60,6 +60,13 @@ type PreparationStep = {
   targetId?: string;
 };
 
+type BlockTransactionFilters = {
+  name: string;
+  category: string;
+  amount: string;
+  onlyUnassigned: boolean;
+};
+
 const isTransientLogicId = (value: string | undefined) =>
   typeof value === "string" && (value.startsWith("new-") || value.startsWith("prefill-"));
 
@@ -124,10 +131,7 @@ export default function TaxYearPage() {
   const [maintenanceDistributions, setMaintenanceDistributions] = useState<LocalMaintenanceDistribution[]>([]);
   const [candidateTransactions, setCandidateTransactions] = useState<CandidateTransaction[]>([]);
   const [linkedTransactions, setLinkedTransactions] = useState<CandidateTransaction[]>([]);
-  const [transactionNameFilter, setTransactionNameFilter] = useState("");
-  const [transactionCategoryFilter, setTransactionCategoryFilter] = useState("");
-  const [transactionAmountFilter, setTransactionAmountFilter] = useState("");
-  const [showOnlyUnassignedTransactions, setShowOnlyUnassignedTransactions] = useState(true);
+  const [maintenanceTransactionFilters, setMaintenanceTransactionFilters] = useState<Record<string, BlockTransactionFilters>>({});
   const [logicError, setLogicError] = useState<string | null>(null);
   const [calculationError, setCalculationError] = useState<string | null>(null);
   const [savingLogicId, setSavingLogicId] = useState<string | null>(null);
@@ -525,9 +529,6 @@ export default function TaxYearPage() {
     return ids;
   }, [maintenanceDistributions]);
 
-  const normalizedTransactionNameFilter = transactionNameFilter.trim().toLocaleLowerCase("de-DE");
-  const normalizedTransactionCategoryFilter = transactionCategoryFilter.trim().toLocaleLowerCase("de-DE");
-  const normalizedTransactionAmountFilter = transactionAmountFilter.trim().replace(/\s/g, "").replace(",", ".");
   const availableTransactionCategories = useMemo(() => (
     Array.from(
       new Set(
@@ -538,7 +539,37 @@ export default function TaxYearPage() {
     ).sort((a, b) => a.localeCompare(b, "de-DE"))
   ), [candidateTransactions]);
 
-  const transactionMatchesFilters = useCallback((transaction: CandidateTransaction) => {
+  const getMaintenanceFilters = useCallback((itemId: string): BlockTransactionFilters => (
+    maintenanceTransactionFilters[itemId] ?? {
+      name: "",
+      category: "",
+      amount: "",
+      onlyUnassigned: true,
+    }
+  ), [maintenanceTransactionFilters]);
+
+  const updateMaintenanceFilters = useCallback((itemId: string, patch: Partial<BlockTransactionFilters>) => {
+    setMaintenanceTransactionFilters((current) => ({
+      ...current,
+      [itemId]: {
+        ...(
+          current[itemId] ?? {
+            name: "",
+            category: "",
+            amount: "",
+            onlyUnassigned: true,
+          }
+        ),
+        ...patch,
+      },
+    }));
+  }, []);
+
+  const transactionMatchesFilters = useCallback((transaction: CandidateTransaction, filters: BlockTransactionFilters) => {
+    const normalizedTransactionNameFilter = filters.name.trim().toLocaleLowerCase("de-DE");
+    const normalizedTransactionCategoryFilter = filters.category.trim().toLocaleLowerCase("de-DE");
+    const normalizedTransactionAmountFilter = filters.amount.trim().replace(/\s/g, "").replace(",", ".");
+
     if (normalizedTransactionCategoryFilter) {
       const categoryValue = transaction.category?.trim().toLocaleLowerCase("de-DE") ?? "";
       if (categoryValue !== normalizedTransactionCategoryFilter) return false;
@@ -566,16 +597,19 @@ export default function TaxYearPage() {
     }
 
     return true;
-  }, [normalizedTransactionAmountFilter, normalizedTransactionCategoryFilter, normalizedTransactionNameFilter]);
+  }, []);
 
-  const getAvailableTransactionsForItem = useCallback((selectedTransactionIds: string[]) => (
+  const getAvailableTransactionsForItem = useCallback((itemId: string, selectedTransactionIds: string[]) => {
+    const filters = getMaintenanceFilters(itemId);
+    return (
     candidateTransactions.filter((transaction) => {
       const isSelectedOnThisItem = selectedTransactionIds.includes(transaction.id);
       const isUsedElsewhere = usedTransactionIds.has(transaction.id) && !isSelectedOnThisItem;
-      if (showOnlyUnassignedTransactions && isUsedElsewhere) return false;
-      return transactionMatchesFilters(transaction);
+      if (filters.onlyUnassigned && isUsedElsewhere) return false;
+      return transactionMatchesFilters(transaction, filters);
     })
-  ), [candidateTransactions, showOnlyUnassignedTransactions, transactionMatchesFilters, usedTransactionIds]);
+  );
+  }, [candidateTransactions, getMaintenanceFilters, transactionMatchesFilters, usedTransactionIds]);
 
   const toggleMaintenanceTransaction = (itemId: string, transactionId: string, checked: boolean) => {
     setMaintenanceDistributions((current) => current.map((candidate) => {
@@ -608,7 +642,7 @@ export default function TaxYearPage() {
       if (candidate.id !== itemId) return candidate;
 
       const selectedIds = new Set(candidate.source_transaction_ids ?? []);
-      const visibleTransactions = getAvailableTransactionsForItem(Array.from(selectedIds));
+      const visibleTransactions = getAvailableTransactionsForItem(itemId, Array.from(selectedIds));
 
       for (const transaction of visibleTransactions) {
         selectedIds.add(transaction.id);
@@ -1301,42 +1335,7 @@ export default function TaxYearPage() {
                   Verteilungsblock hinzufügen
                 </button>
               </div>
-              <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-3 dark:border-slate-800 md:flex-row md:items-center md:justify-between">
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="text"
-                    value={transactionNameFilter}
-                    onChange={(e) => setTransactionNameFilter(e.target.value)}
-                    placeholder="Nach Name oder Beschreibung filtern"
-                    className="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                  />
-                  <select
-                    value={transactionCategoryFilter}
-                    onChange={(e) => setTransactionCategoryFilter(e.target.value)}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                  >
-                    <option value="">Alle Kategorien</option>
-                    {availableTransactionCategories.map((category) => (
-                      <option key={category} value={category}>{category}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={transactionAmountFilter}
-                    onChange={(e) => setTransactionAmountFilter(e.target.value)}
-                    placeholder="Nach Betrag filtern"
-                    className="w-48 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                  />
-                  <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={showOnlyUnassignedTransactions}
-                      onChange={(e) => setShowOnlyUnassignedTransactions(e.target.checked)}
-                    />
-                    Nur noch nicht verschobene Buchungen
-                  </label>
-                </div>
+              <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Verknüpfte Zahlungen werden nach dem Speichern aus den normalen Werbungskosten entfernt.
                 </p>
@@ -1371,7 +1370,8 @@ export default function TaxYearPage() {
                         const selectedTransactions = selectedTransactionIds
                           .map((transactionId) => transactionMap.get(transactionId))
                           .filter((value): value is CandidateTransaction => Boolean(value));
-                        const availableForItem = getAvailableTransactionsForItem(selectedTransactionIds);
+                        const availableForItem = getAvailableTransactionsForItem(item.id, selectedTransactionIds);
+                        const blockFilters = getMaintenanceFilters(item.id);
                         return (
                           <tr key={item.id}>
                             <td className="px-4 py-3">
@@ -1410,6 +1410,41 @@ export default function TaxYearPage() {
                               <div className="w-72 space-y-2">
                                 {isNewItem ? (
                                   <>
+                                    <div className="grid gap-2 md:grid-cols-[1.6fr,1fr,0.9fr,auto]">
+                                      <input
+                                        type="text"
+                                        value={blockFilters.name}
+                                        onChange={(e) => updateMaintenanceFilters(item.id, { name: e.target.value })}
+                                        placeholder="Nach Name oder Beschreibung filtern"
+                                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                                      />
+                                      <select
+                                        value={blockFilters.category}
+                                        onChange={(e) => updateMaintenanceFilters(item.id, { category: e.target.value })}
+                                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                                      >
+                                        <option value="">Alle Kategorien</option>
+                                        {availableTransactionCategories.map((category) => (
+                                          <option key={category} value={category}>{category}</option>
+                                        ))}
+                                      </select>
+                                      <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={blockFilters.amount}
+                                        onChange={(e) => updateMaintenanceFilters(item.id, { amount: e.target.value })}
+                                        placeholder="Nach Betrag filtern"
+                                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                                      />
+                                      <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                                        <input
+                                          type="checkbox"
+                                          checked={blockFilters.onlyUnassigned}
+                                          onChange={(e) => updateMaintenanceFilters(item.id, { onlyUnassigned: e.target.checked })}
+                                        />
+                                        Nur freie
+                                      </label>
+                                    </div>
                                     <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
                                       1. Kategorie festlegen
                                       <br />
@@ -1845,33 +1880,6 @@ export default function TaxYearPage() {
                       Block hinzufügen
                     </button>
                   </div>
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <input
-                      type="text"
-                      value={transactionNameFilter}
-                      onChange={(e) => setTransactionNameFilter(e.target.value)}
-                      placeholder="Nach Name oder Beschreibung suchen"
-                      className="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                    />
-                    <select
-                      value={transactionCategoryFilter}
-                      onChange={(e) => setTransactionCategoryFilter(e.target.value)}
-                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                    >
-                      <option value="">Alle Kategorien</option>
-                      {availableTransactionCategories.map((category) => (
-                        <option key={category} value={category}>{category}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={transactionAmountFilter}
-                      onChange={(e) => setTransactionAmountFilter(e.target.value)}
-                      placeholder="Nach Betrag filtern"
-                      className="w-44 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                    />
-                  </div>
                   <div className="space-y-3">
                     {editableMaintenanceDistributions.length === 0 ? (
                       <p className="text-sm text-slate-500 dark:text-slate-400">Noch keine Verteilungsblöcke vorhanden.</p>
@@ -1881,7 +1889,8 @@ export default function TaxYearPage() {
                         const selectedTransactions = selectedTransactionIds
                           .map((transactionId) => transactionMap.get(transactionId))
                           .filter((value): value is CandidateTransaction => Boolean(value));
-                        const availableForItem = getAvailableTransactionsForItem(selectedTransactionIds);
+                        const availableForItem = getAvailableTransactionsForItem(item.id, selectedTransactionIds);
+                        const blockFilters = getMaintenanceFilters(item.id);
                         return (
                         <div key={item.id} className="grid gap-3 rounded-lg border border-slate-200 bg-white p-3 md:grid-cols-[1.5fr,1fr,1fr,0.8fr,0.9fr] dark:border-slate-700 dark:bg-slate-900">
                           <input
@@ -1931,6 +1940,41 @@ export default function TaxYearPage() {
                           <div className="md:col-span-5">
                             {(item.classification ?? "maintenance_expense") === "maintenance_expense" && (
                               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+                                <div className="mb-2 grid gap-2 md:grid-cols-[1.6fr,1fr,0.9fr,auto]">
+                                  <input
+                                    type="text"
+                                    value={blockFilters.name}
+                                    onChange={(e) => updateMaintenanceFilters(item.id, { name: e.target.value })}
+                                    placeholder="Nach Name oder Beschreibung suchen"
+                                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                                  />
+                                  <select
+                                    value={blockFilters.category}
+                                    onChange={(e) => updateMaintenanceFilters(item.id, { category: e.target.value })}
+                                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                                  >
+                                    <option value="">Alle Kategorien</option>
+                                    {availableTransactionCategories.map((category) => (
+                                      <option key={category} value={category}>{category}</option>
+                                    ))}
+                                  </select>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={blockFilters.amount}
+                                    onChange={(e) => updateMaintenanceFilters(item.id, { amount: e.target.value })}
+                                    placeholder="Nach Betrag filtern"
+                                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                                  />
+                                  <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                                    <input
+                                      type="checkbox"
+                                      checked={blockFilters.onlyUnassigned}
+                                      onChange={(e) => updateMaintenanceFilters(item.id, { onlyUnassigned: e.target.checked })}
+                                    />
+                                    Nur freie
+                                  </label>
+                                </div>
                                 <div className="mb-2 flex items-center justify-between gap-3">
                                   <p className="text-xs font-medium text-slate-700 dark:text-slate-200">
                                     Erst Kategorie wählen, dann Buchungen aus {taxYear} zuordnen

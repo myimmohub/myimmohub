@@ -142,6 +142,10 @@ function round2(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+function num(value: number | null | undefined) {
+  return Number(value ?? 0);
+}
+
 function getDepreciationSignature(item: TaxDepreciationItem) {
   return [
     item.property_id,
@@ -241,6 +245,7 @@ function hasOwnPortoTransaction(
 function buildCalculatedExpenseBlocks(args: {
   items: ReconciliationItem[];
   taxYear: number;
+  taxData?: Partial<TaxData>;
 }): ImportedExpenseBlockMetadata[] {
   const totals = new Map<string, { label: string; amount: number; detail?: string | null }>();
   const add = (key: string, label: string, amount: number, detail?: string | null) => {
@@ -282,6 +287,48 @@ function buildCalculatedExpenseBlocks(args: {
         : `Verteilter Erhaltungsaufwand aus ${sourceYear}`;
       add(key, label, item.deductible_amount, null);
     }
+  }
+
+  const aggregatedTaxData = args.taxData;
+  if (aggregatedTaxData) {
+    const ensureMinimum = (key: string, label: string, minimumAmount: number, detail?: string | null) => {
+      const normalizedMinimum = round2(minimumAmount);
+      if (!Number.isFinite(normalizedMinimum) || normalizedMinimum <= 0) return;
+      const currentAmount = totals.get(key)?.amount ?? 0;
+      const delta = round2(normalizedMinimum - currentAmount);
+      if (delta > 0) {
+        add(key, label, delta, detail);
+      }
+    };
+
+    ensureMinimum(
+      "allocated_costs",
+      "Umlagefähige laufende Kosten",
+      num(aggregatedTaxData.property_tax) +
+        num(aggregatedTaxData.insurance) +
+        num(aggregatedTaxData.hoa_fees) +
+        num(aggregatedTaxData.water_sewage) +
+        num(aggregatedTaxData.waste_disposal),
+      "Grundsteuer, Versicherungen, Betriebskosten",
+    );
+    ensureMinimum(
+      "non_allocated_costs",
+      "Nicht umlegbare Objektkosten",
+      num(aggregatedTaxData.property_management) + num(aggregatedTaxData.bank_fees),
+      "Verwaltung und Kontoführung",
+    );
+    ensureMinimum(
+      "financing_costs",
+      "Finanzierungskosten",
+      num(aggregatedTaxData.loan_interest),
+      "Schuldzinsen",
+    );
+    ensureMinimum(
+      "other_expenses",
+      "Sonstige Werbungskosten",
+      num(aggregatedTaxData.other_expenses),
+      null,
+    );
   }
 
   return Array.from(totals.entries()).map(([key, value]) => ({
@@ -703,6 +750,7 @@ export async function POST(request: Request) {
     const calculatedExpenseBlocks = buildCalculatedExpenseBlocks({
       items,
       taxYear: tax_year,
+      taxData: finalData,
     });
     const lineSummary = buildElsterLineSummary({
       ...finalData,
