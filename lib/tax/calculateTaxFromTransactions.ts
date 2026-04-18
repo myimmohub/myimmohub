@@ -27,6 +27,7 @@ type PropertyForTax = {
   inventarwert?: number | null;
   baujahr: number | null;
   afa_satz: number | null;       // dezimal, z. B. 0.02
+  afa_jahresbetrag?: number | null;
   kaufdatum: string | null;
   address: string | null;
   type: string | null;
@@ -94,11 +95,11 @@ const CATEGORY_TO_FIELD: Record<string, keyof TaxData> = {
   "Versicherungen":                   "insurance",
   // Kosten der Hausverwaltung (Z. 35) — nicht Z. 20 (WEG-Hausgeld)
   "Hausverwaltung / WEG-Kosten":      "property_management",
-  // Laufende Betriebskosten nach BetrKV — kein WEG-Hausgeld
-  "Hauswart / Hausmeister":           "other_expenses",
-  "Heizung / Wärme":                  "other_expenses",
-  "Allgemeinstrom / Hausbeleuchtung": "other_expenses",
-  "Schornsteinreinigung":             "other_expenses",
+  // Laufende Betriebskosten nach BetrKV; wir aggregieren sie in den umlagefähigen Kostenblock.
+  "Hauswart / Hausmeister":           "hoa_fees",
+  "Heizung / Wärme":                  "hoa_fees",
+  "Allgemeinstrom / Hausbeleuchtung": "hoa_fees",
+  "Schornsteinreinigung":             "hoa_fees",
 
   // Instandhaltung / Erhaltungsaufwand (Z. 40)
   // Nur Aufwendungen zur Erhaltung/Wiederherstellung des Gebäudes — keine laufenden Betriebsdienste
@@ -107,7 +108,7 @@ const CATEGORY_TO_FIELD: Record<string, keyof TaxData> = {
   "Materialkosten":                   "maintenance_costs",
 
   // Betriebskosten
-  "Energieversorgung":                "other_expenses",
+  "Energieversorgung":                "hoa_fees",
   "Wasser & Abwasser":               "water_sewage",
   "Müllentsorgung":                   "waste_disposal",
   "Internet / Telefon / TV":          "other_expenses",
@@ -244,7 +245,7 @@ function inferFieldFromText(
     "gebaeudereinigung",
     "gartenpflege",
     "winterdienst",
-  ])) return "other_expenses";
+  ])) return "hoa_fees";
   if (containsAny(haystack, ["handwerker", "material", "instandhaltung", "instandsetzung", "reparatur", "wartung", "sanierung", "renovierung"])) return "maintenance_costs";
   if (containsAny(haystack, ["porto", "burokosten", "burokosten", "verwaltungsaufwand"])) return "property_management";
   if (containsAny(haystack, ["nebenkostenerstattung", "umlage"])) return "operating_costs_income";
@@ -279,6 +280,10 @@ function deriveBuildingBasis(property: PropertyForTax): number {
  * Berechnet AfA basierend auf Property-Daten.
  */
 export function calculateDepreciation(property: PropertyForTax): number {
+  if (property.afa_jahresbetrag != null && property.afa_jahresbetrag > 0) {
+    return Math.round(Number(property.afa_jahresbetrag) * 100) / 100;
+  }
+
   const afaBasis = deriveBuildingBasis(property);
 
   if (afaBasis <= 0) return 0;

@@ -77,6 +77,29 @@ function resolveTransactionTargetBlock(
 ) {
   const fallback = mapTaxFieldToTargetBlock(fieldKey);
   const haystack = normalizeForMatching([tx.category, tx.counterpart, tx.description].filter(Boolean).join(" "));
+  const isExplicitOtherExpense = containsAny(haystack, [
+    "steuerberater",
+    "rechtskosten",
+    "kammerjager",
+    "kammerjaeger",
+    "internet",
+    "telefon",
+    "tv",
+    "kurtaxe",
+    "tourismusabgabe",
+    "werkzeug",
+    "material",
+    "einrichtung",
+    "smart home",
+    "entfeuchtungsanlage",
+    "schlussel",
+    "schluessel",
+    "verpflegung",
+  ]);
+
+  if (isExplicitOtherExpense) {
+    return "other_expenses";
+  }
 
   if (
     fallback === "allocated_costs" ||
@@ -92,20 +115,9 @@ function resolveTransactionTargetBlock(
       "hausmeister",
       "heizung",
       "warmwasser",
-      "strom",
-      "energieversorgung",
-      "gas",
-      "fernwarme",
-      "fernwaerme",
       "hausbeleuchtung",
       "allgemeinstrom",
       "schornstein",
-      "strassenreinigung",
-      "treppenhausreinigung",
-      "winterdienst",
-      "gebaudereinigung",
-      "gebaeudereinigung",
-      "gartenpflege",
     ])
   ) {
     return "allocated_costs";
@@ -246,6 +258,7 @@ function buildCalculatedExpenseBlocks(args: {
   items: ReconciliationItem[];
   taxYear: number;
   taxData?: Partial<TaxData>;
+  rentalSharePct: number;
 }): ImportedExpenseBlockMetadata[] {
   const totals = new Map<string, { label: string; amount: number; detail?: string | null }>();
   const add = (key: string, label: string, amount: number, detail?: string | null) => {
@@ -291,6 +304,7 @@ function buildCalculatedExpenseBlocks(args: {
 
   const aggregatedTaxData = args.taxData;
   if (aggregatedTaxData) {
+    const prorate = (value: number) => round2(value * args.rentalSharePct);
     const ensureMinimum = (key: string, label: string, minimumAmount: number, detail?: string | null) => {
       const normalizedMinimum = round2(minimumAmount);
       if (!Number.isFinite(normalizedMinimum) || normalizedMinimum <= 0) return;
@@ -304,30 +318,26 @@ function buildCalculatedExpenseBlocks(args: {
     ensureMinimum(
       "allocated_costs",
       "Umlagefähige laufende Kosten",
-      num(aggregatedTaxData.property_tax) +
-        num(aggregatedTaxData.insurance) +
-        num(aggregatedTaxData.hoa_fees) +
-        num(aggregatedTaxData.water_sewage) +
-        num(aggregatedTaxData.waste_disposal),
+      prorate(
+        num(aggregatedTaxData.property_tax) +
+          num(aggregatedTaxData.insurance) +
+          num(aggregatedTaxData.hoa_fees) +
+          num(aggregatedTaxData.water_sewage) +
+          num(aggregatedTaxData.waste_disposal)
+      ),
       "Grundsteuer, Versicherungen, Betriebskosten",
     );
     ensureMinimum(
       "non_allocated_costs",
       "Nicht umlegbare Objektkosten",
-      num(aggregatedTaxData.property_management) + num(aggregatedTaxData.bank_fees),
+      prorate(num(aggregatedTaxData.property_management) + num(aggregatedTaxData.bank_fees)),
       "Verwaltung und Kontoführung",
     );
     ensureMinimum(
       "financing_costs",
       "Finanzierungskosten",
-      num(aggregatedTaxData.loan_interest),
+      prorate(num(aggregatedTaxData.loan_interest)),
       "Schuldzinsen",
-    );
-    ensureMinimum(
-      "other_expenses",
-      "Sonstige Werbungskosten",
-      num(aggregatedTaxData.other_expenses),
-      null,
     );
   }
 
@@ -473,7 +483,7 @@ export async function POST(request: Request) {
   // Load property
   const { data: prop } = await supabase
     .from("properties")
-    .select("id, name, kaufpreis, gebaeudewert, grundwert, inventarwert, baujahr, afa_satz, kaufdatum, address, type")
+    .select("id, name, kaufpreis, gebaeudewert, grundwert, inventarwert, baujahr, afa_satz, afa_jahresbetrag, kaufdatum, address, type")
     .eq("id", property_id)
     .eq("user_id", user.id)
     .single();
@@ -562,7 +572,7 @@ export async function POST(request: Request) {
 
   const calculated = calculateTaxFromTransactions(
     processedTxData,
-    prop as { kaufpreis: number | null; gebaeudewert: number | null; grundwert: number | null; inventarwert: number | null; baujahr: number | null; afa_satz: number | null; kaufdatum: string | null; address: string | null; type: string | null },
+    prop as { kaufpreis: number | null; gebaeudewert: number | null; grundwert: number | null; inventarwert: number | null; baujahr: number | null; afa_satz: number | null; afa_jahresbetrag: number | null; kaufdatum: string | null; address: string | null; type: string | null },
     tax_year,
     (categories ?? []) as DbCategory[],
     excludedTransactionIds,
@@ -751,6 +761,7 @@ export async function POST(request: Request) {
       items,
       taxYear: tax_year,
       taxData: finalData,
+      rentalSharePct,
     });
     const lineSummary = buildElsterLineSummary({
       ...finalData,
