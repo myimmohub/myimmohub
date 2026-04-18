@@ -109,11 +109,14 @@ function buildMaintenanceBuckets(
   importedReferenceBuckets: Array<ElsterLineBucket & { source_year: number }> = [],
 ) {
   const grouped = new Map<number, number>();
-  let residualImmediateMaintenance = 0;
 
   for (const item of maintenanceDistributions) {
     const classification = "effective_classification" in item ? item.effective_classification : item.classification;
     if (classification !== "maintenance_expense") continue;
+
+    const deductionMode = item.deduction_mode ?? "distributed";
+    const effectiveDistributionYears = Math.max(1, Number(item.distribution_years ?? 1));
+    if (deductionMode === "immediate" || effectiveDistributionYears <= 1) continue;
 
     const amount = isComputedDistribution(item)
       ? num(item.deductible_amount_elster)
@@ -124,10 +127,6 @@ function buildMaintenanceBuckets(
           : num(item.total_amount);
 
     if (amount === 0) continue;
-    if ((item.source_year ?? taxYear) === taxYear && (item.deduction_mode === "immediate" || item.distribution_years <= 1)) {
-      residualImmediateMaintenance += amount;
-      continue;
-    }
     grouped.set(item.source_year ?? taxYear, round2((grouped.get(item.source_year ?? taxYear) ?? 0) + amount));
   }
 
@@ -144,14 +143,6 @@ function buildMaintenanceBuckets(
         : `Verteilter Erhaltungsaufwand aus ${sourceYear}`,
       amount: round2(amount),
     }));
-
-  if (residualImmediateMaintenance !== 0) {
-    buckets.unshift({
-      key: "maintenance_immediate",
-      label: "Sofort abziehbarer Erhaltungsaufwand",
-      amount: round2(residualImmediateMaintenance),
-    });
-  }
 
   return buckets;
 }
@@ -173,27 +164,7 @@ export function buildElsterLineSummary(
   const importedMaintenanceBuckets = buildImportedMaintenanceBuckets(taxData, taxYear);
   const maintenanceBuckets = buildMaintenanceBuckets(options.maintenanceDistributions ?? [], taxYear, importedMaintenanceBuckets);
 
-  // taxData.maintenance_costs is computed by calculateTaxFromTransactions and excludes only
-  // those transaction IDs that are explicitly listed in a distribution item's source_transaction_ids.
-  // When source_transaction_ids is empty/null (typical for manually created distribution items),
-  // the source transactions are still included in taxData.maintenance_costs, causing them to appear
-  // as both immediate AND distributed. We subtract the total_amount of every active current-year
-  // distribution item whose source_transaction_ids is not populated to recover the true immediate.
-  const distributedCurrentYearTotal = (options.maintenanceDistributions ?? [])
-    .filter((item) => {
-      const effectiveClassification = "effective_classification" in item
-        ? (item as ComputedTaxMaintenanceDistributionItem).effective_classification
-        : item.classification;
-      const hasSourceIds = (item.source_transaction_ids?.length ?? 0) > 0;
-      return (
-        effectiveClassification === "maintenance_expense" &&
-        (item.source_year ?? taxYear) === taxYear &&
-        !hasSourceIds
-      );
-    })
-    .reduce((sum, item) => sum + round2(num(item.total_amount)), 0);
-
-  const immediateMaintenanceAmount = round2(Math.max(0, num(taxData.maintenance_costs) - distributedCurrentYearTotal));
+  const immediateMaintenanceAmount = round2(Math.max(0, num(taxData.maintenance_costs)));
   if (immediateMaintenanceAmount > 0) {
     maintenanceBuckets.unshift({
       key: "maintenance_immediate",

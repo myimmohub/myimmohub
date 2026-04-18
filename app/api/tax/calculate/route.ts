@@ -22,6 +22,140 @@ import type { TaxData, TaxDepreciationItem, TaxMaintenanceDistributionItem } fro
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+type DbCategory = {
+  label: string;
+  typ: string;
+  anlage_v: string | null;
+  gruppe: string;
+};
+
+type MaintenanceSourceResolutionItem = {
+  type: "maintenance_source";
+  label: string;
+  target_block: string;
+  source_year: number | null;
+  gross_amount: number;
+  deductible_amount: number;
+  included: boolean;
+  exclusion_reason: string | null;
+};
+
+function buildMaintenanceSourceResolution(args: {
+  transactions: TaxCalculationTransaction[];
+  taxYear: number;
+  categories: DbCategory[];
+  maintenanceDistributions: TaxMaintenanceDistributionItem[];
+}) {
+  const dbCatMap = new Map(args.categories.map((category) => [category.label, category]));
+  const activePlans = args.maintenanceDistributions.filter((item) => isDistributionActiveForYear(item, args.taxYear));
+  const planBySourceTransactionId = new Map<string, TaxMaintenanceDistributionItem>();
+
+  for (const plan of activePlans) {
+    for (const transactionId of plan.source_transaction_ids ?? []) {
+      if (transactionId && !planBySourceTransactionId.has(transactionId)) {
+        planBySourceTransactionId.set(transactionId, plan);
+      }
+    }
+  }
+
+  const maintenanceTransactions = args.transactions
+    .filter((tx) => tx.date >= `${args.taxYear}-01-01` && tx.date <= `${args.taxYear}-12-31`)
+    .filter((tx) => tx.category != null && tx.category !== "aufgeteilt")
+    .filter((tx) => resolveField(tx.category ?? "", tx.anlage_v_zeile, dbCatMap) === "maintenance_costs");
+
+  const items: MaintenanceSourceResolutionItem[] = [];
+  let immediateTotal = 0;
+
+  for (const tx of maintenanceTransactions) {
+    const grossAmount = Math.abs(Number(tx.amount ?? 0));
+    const plan = tx.id ? planBySourceTransactionId.get(tx.id) : undefined;
+
+    if (!plan) {
+      immediateTotal += grossAmount;
+      items.push({
+        type: "maintenance_source",
+        label: tx.counterpart || tx.description || tx.category || "Erhaltungsaufwand",
+        target_block: "maintenance_immediate",
+        source_year: args.taxYear,
+        gross_amount: grossAmount,
+        deductible_amount: grossAmount,
+        included: true,
+        exclusion_reason: null,
+      });
+      continue;
+    }
+
+    if (plan.classification === "maintenance_expense" && plan.deduction_mode === "distributed") {
+      items.push({
+        type: "maintenance_source",
+        label: tx.counterpart || tx.description || plan.label,
+        target_block: `maintenance_${plan.source_year ?? args.taxYear}`,
+        source_year: plan.source_year ?? args.taxYear,
+        gross_amount: grossAmount,
+        deductible_amount: 0,
+        included: false,
+        exclusion_reason: `Bereits über Verteilungsplan "${plan.label}" berücksichtigt`,
+      });
+      continue;
+    }
+
+    if (plan.classification === "maintenance_expense") {
+      immediateTotal += grossAmount;
+      items.push({
+        type: "maintenance_source",
+        label: tx.counterpart || tx.description || plan.label,
+        target_block: "maintenance_immediate",
+        source_year: plan.source_year ?? args.taxYear,
+        gross_amount: grossAmount,
+        deductible_amount: grossAmount,
+        included: true,
+        exclusion_reason: null,
+      });
+      continue;
+    }
+
+    items.push({
+      type: "maintenance_source",
+      label: tx.counterpart || tx.description || plan.label,
+      target_block: plan.classification === "production_cost" ? "capitalized" : "depreciation",
+      source_year: plan.source_year ?? args.taxYear,
+      gross_amount: grossAmount,
+      deductible_amount: 0,
+      included: false,
+      exclusion_reason: plan.classification === "production_cost"
+        ? "Als Herstellungskosten kapitalisiert"
+        : "Über AfA berücksichtigt",
+    });
+  }
+
+  const unlinkedCurrentYearPlans = activePlans.filter((plan) =>
+    (plan.source_year ?? args.taxYear) === args.taxYear &&
+    (plan.source_transaction_ids?.length ?? 0) === 0 &&
+    plan.classification === "maintenance_expense" &&
+    plan.deduction_mode === "distributed",
+  );
+
+  for (const plan of unlinkedCurrentYearPlans) {
+    const grossAmount = Math.abs(Number(plan.total_amount ?? 0));
+    immediateTotal = Math.max(0, immediateTotal - grossAmount);
+    items.push({
+      type: "maintenance_source",
+      label: `${plan.label} (Quelle ohne Transaktionslink)`,
+      target_block: `maintenance_${plan.source_year ?? args.taxYear}`,
+      source_year: plan.source_year ?? args.taxYear,
+      gross_amount: grossAmount,
+      deductible_amount: 0,
+      included: false,
+      exclusion_reason: "Quelle wird über Verteilungsplan statt Sofortabzug behandelt",
+    });
+  }
+
+  return {
+    immediateTotal: Math.round(immediateTotal * 100) / 100,
+    items,
+  };
+}
+
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -122,9 +256,17 @@ export async function POST(request: Request) {
     processedTxData,
     prop as { kaufpreis: number | null; gebaeudewert: number | null; grundwert: number | null; inventarwert: number | null; baujahr: number | null; afa_satz: number | null; kaufdatum: string | null; address: string | null; type: string | null },
     tax_year,
-    (categories ?? []) as { label: string; typ: string; anlage_v: string | null; gruppe: string }[],
+    (categories ?? []) as DbCategory[],
     excludedTransactionIds,
   );
+
+  const maintenanceSourceResolution = buildMaintenanceSourceResolution({
+    transactions: processedTxData,
+    taxYear: tax_year,
+    categories: ((categories ?? []) as DbCategory[]),
+    maintenanceDistributions: (maintenanceItems ?? []) as TaxMaintenanceDistributionItem[],
+  });
+  calculated.maintenance_costs = maintenanceSourceResolution.immediateTotal;
 
   // Upsert: nur berechnete Felder setzen, manuelle Werte nicht überschreiben
   const { data: existing } = await supabase
@@ -177,12 +319,13 @@ export async function POST(request: Request) {
       if (patched) finalData = patched as TaxData;
     }
 
-    return { finalData, reconciliation: buildReconciliation(structured, finalData) };
+    return { finalData, reconciliation: buildReconciliation(structured, finalData, maintenanceSourceResolution.items) };
   }
 
   function buildReconciliation(
     structured: ReturnType<typeof computeStructuredTaxData>,
     finalData: TaxData,
+    maintenanceSourceItems: MaintenanceSourceResolutionItem[],
   ) {
     const lineSummary = buildElsterLineSummary(finalData, {
       maintenanceDistributions: structured.maintenanceDistributions,
@@ -220,6 +363,7 @@ export async function POST(request: Request) {
         };
       });
     const items = [
+      ...maintenanceSourceItems,
       ...transactionItems,
       // Instandhaltungsverteilungen
       ...allDists.map((item) => {
