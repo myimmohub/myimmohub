@@ -60,9 +60,9 @@ export function calcSpekulationssteuer(
   const steuer =
     status === "steuerpflichtig" && gewinn > 0 ? (gewinn * steuersatzPct) / 100 : 0;
   const nettogewinn = gewinn - steuer;
-  // Potenzielle Ersparnis = Steuer auf den Gewinn, falls man noch warten würde
-  const ersparnis =
-    status === "steuerpflichtig" && gewinn > 0 ? (gewinn * steuersatzPct) / 100 : 0;
+  // Ersparnis = Steuer, die man durch Warten bis zur Steuerfreiheit vermeiden würde.
+  // Wenn bereits steuerpflichtig, entspricht das exakt der aktuellen Steuer.
+  const ersparnis = steuer;
 
   return { status, halteJahre, halteMonate, steuerfreiAb, gewinn, steuer, nettogewinn, ersparnis };
 }

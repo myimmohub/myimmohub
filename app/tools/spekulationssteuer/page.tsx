@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import SliderInput from "@/components/marketing/SliderInput";
+import ResultRow from "@/components/tools/ResultRow";
+import CtaCard from "@/components/tools/CtaCard";
+import { ChevronLeftIcon } from "@/components/marketing/icons";
 import { calcSpekulationssteuer, type SpekulationsStatus } from "@/lib/calculators/spekulationssteuer";
 import { fmtEUR, fmtDate } from "@/lib/format";
 
@@ -234,32 +237,3 @@ export default function SpekulationssteuerRechner() {
   );
 }
 
-function ResultRow({
-  label, value, valueClass, last = false,
-}: { label: string; value: string; valueClass?: string; last?: boolean }) {
-  return (
-    <div className={`flex items-center justify-between py-2 ${!last ? "border-b border-slate-100 dark:border-slate-800" : ""}`}>
-      <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
-      <span className={`text-sm font-medium ${valueClass ?? "text-slate-900 dark:text-slate-100"}`}>{value}</span>
-    </div>
-  );
-}
-
-function CtaCard({ text }: { text: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-      <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">{text}</p>
-      <Link href="/auth" className="block w-full rounded-xl bg-blue-600 py-3 text-center text-sm font-medium text-white transition hover:bg-blue-700">
-        Kostenlos starten
-      </Link>
-    </div>
-  );
-}
-
-function ChevronLeftIcon({ className }: { className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
-      <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
-    </svg>
-  );
-}

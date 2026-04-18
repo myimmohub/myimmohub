@@ -18,7 +18,8 @@ export const metadata: Metadata = {
   },
 };
 
-// Inline script: sets .dark on <html> before first paint to avoid flash
+// Inline script: sets .dark on <html> before first paint to avoid flash.
+// Empty catch: localStorage throws in some environments (Safari private mode, strict CSP).
 const themeScript = `(function(){try{var s=localStorage.getItem('theme');if(s==='dark'||(s!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})();`;
 
 export default function RootLayout({
