@@ -17,7 +17,12 @@ import {
 import { computeStructuredTaxData, isDistributionActiveForYear } from "@/lib/tax/structuredTaxLogic";
 import { runRentalTaxEngineFromExistingData } from "@/lib/tax/rentalTaxEngineBridge";
 import { buildElsterLineSummary } from "@/lib/tax/elsterLineLogic";
-import type { TaxData, TaxDepreciationItem, TaxMaintenanceDistributionItem } from "@/types/tax";
+import type {
+  ImportedExpenseBlockMetadata,
+  TaxData,
+  TaxDepreciationItem,
+  TaxMaintenanceDistributionItem,
+} from "@/types/tax";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -39,6 +44,170 @@ type MaintenanceSourceResolutionItem = {
   included: boolean;
   exclusion_reason: string | null;
 };
+
+type ReconciliationItem =
+  | MaintenanceSourceResolutionItem
+  | {
+      type: "transaction" | "maintenance_distribution" | "depreciation_item";
+      label: string;
+      target_block: string;
+      source_year: number | null;
+      gross_amount: number;
+      deductible_amount: number;
+      included: boolean;
+      exclusion_reason: string | null;
+    };
+
+function normalizeForMatching(value: string | null | undefined) {
+  return (value ?? "")
+    .toLocaleLowerCase("de-DE")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function containsAny(text: string, needles: string[]) {
+  return needles.some((needle) => text.includes(needle));
+}
+
+function resolveTransactionTargetBlock(
+  tx: TaxCalculationTransaction,
+  fieldKey: ReturnType<typeof resolveField>,
+) {
+  const fallback = mapTaxFieldToTargetBlock(fieldKey);
+  const haystack = normalizeForMatching([tx.category, tx.counterpart, tx.description].filter(Boolean).join(" "));
+
+  if (
+    fallback === "allocated_costs" ||
+    containsAny(haystack, [
+      "grundsteuer",
+      "versicherung",
+      "wohngebaude",
+      "mull",
+      "abfall",
+      "wasser",
+      "abwasser",
+      "hauswart",
+      "hausmeister",
+      "heizung",
+      "warmwasser",
+      "hausbeleuchtung",
+      "allgemeinstrom",
+      "schornstein",
+      "strassenreinigung",
+      "treppenhausreinigung",
+    ])
+  ) {
+    return "allocated_costs";
+  }
+
+  if (
+    fallback === "non_allocated_costs" ||
+    containsAny(haystack, [
+      "verwaltung",
+      "objektverwaltung",
+      "immobilienverwaltung",
+      "verwaltungspauschale",
+      "porto",
+      "kontofuhr",
+      "kontogebuhr",
+      "bankgebuhr",
+    ])
+  ) {
+    return "non_allocated_costs";
+  }
+
+  if (fallback === "financing_costs") return "financing_costs";
+  if (fallback === "maintenance") return "maintenance";
+  if (fallback === "depreciation") return "depreciation";
+  // Income and unmapped transactions must never land in an expense block
+  if (fallback === "income" || fallback === "unmapped") return fallback;
+  return "other_expenses";
+}
+
+function round2(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function computeTransactionDeductibleAmount(args: {
+  tx: TaxCalculationTransaction;
+  targetBlock: string;
+  grossAmount: number;
+  rentalSharePct: number;
+}) {
+  const haystack = normalizeForMatching([args.tx.category, args.tx.counterpart, args.tx.description].filter(Boolean).join(" "));
+  const fullDeductionKeywords = ["kurtaxe", "tourismusabgabe", "verpflegung arbeitseinsatz", "verpflegung"];
+
+  if (args.targetBlock === "allocated_costs" || args.targetBlock === "non_allocated_costs") {
+    return round2(args.grossAmount * args.rentalSharePct);
+  }
+
+  if (args.targetBlock === "other_expenses") {
+    const applyFullDeduction = containsAny(haystack, fullDeductionKeywords);
+    return round2(args.grossAmount * (applyFullDeduction ? 1 : args.rentalSharePct));
+  }
+
+  if (args.targetBlock === "financing_costs") {
+    return round2(args.grossAmount * args.rentalSharePct);
+  }
+
+  return round2(args.grossAmount);
+}
+
+function buildCalculatedExpenseBlocks(args: {
+  items: ReconciliationItem[];
+  taxYear: number;
+}): ImportedExpenseBlockMetadata[] {
+  const totals = new Map<string, { label: string; amount: number; detail?: string | null }>();
+  const add = (key: string, label: string, amount: number, detail?: string | null) => {
+    if (!Number.isFinite(amount) || amount === 0) return;
+    const current = totals.get(key);
+    totals.set(key, {
+      label,
+      amount: Math.round(((current?.amount ?? 0) + amount) * 100) / 100,
+      detail: detail ?? current?.detail ?? null,
+    });
+  };
+
+  for (const item of args.items) {
+    if (!item.included) continue;
+
+    if (item.type === "transaction") {
+      if (item.target_block === "allocated_costs") {
+        add("allocated_costs", "Umlagefähige laufende Kosten", item.deductible_amount, "Grundsteuer, Versicherungen, Betriebskosten");
+      } else if (item.target_block === "non_allocated_costs") {
+        add("non_allocated_costs", "Nicht umlegbare Objektkosten", item.deductible_amount, "Verwaltung und Kontoführung");
+      } else if (item.target_block === "financing_costs") {
+        add("financing_costs", "Finanzierungskosten", item.deductible_amount, "Schuldzinsen");
+      } else if (item.target_block === "other_expenses") {
+        add("other_expenses", "Sonstige Werbungskosten", item.deductible_amount, null);
+      }
+      continue;
+    }
+
+    if (item.type === "maintenance_source" && item.target_block === "maintenance_immediate") {
+      add("maintenance_immediate", "Sofort abziehbarer Erhaltungsaufwand", item.deductible_amount, null);
+      continue;
+    }
+
+    if (item.type === "maintenance_distribution") {
+      const sourceYear = item.source_year ?? args.taxYear;
+      const key = sourceYear === args.taxYear ? `maintenance_${sourceYear}` : `maintenance_prior_${sourceYear}`;
+      const label = sourceYear === args.taxYear
+        ? `Verteilter Erhaltungsaufwand ${sourceYear}`
+        : `Verteilter Erhaltungsaufwand aus ${sourceYear}`;
+      add(key, label, item.deductible_amount, null);
+    }
+  }
+
+  return Array.from(totals.entries()).map(([key, value]) => ({
+    key,
+    label: value.label,
+    amount: value.amount,
+    detail: value.detail ?? null,
+  }));
+}
 
 function buildMaintenanceSourceResolution(args: {
   transactions: TaxCalculationTransaction[];
@@ -71,16 +240,15 @@ function buildMaintenanceSourceResolution(args: {
     const plan = tx.id ? planBySourceTransactionId.get(tx.id) : undefined;
 
     if (!plan) {
-      immediateTotal += grossAmount;
       items.push({
         type: "maintenance_source",
         label: tx.counterpart || tx.description || tx.category || "Erhaltungsaufwand",
-        target_block: "maintenance_immediate",
+        target_block: "excluded",
         source_year: args.taxYear,
         gross_amount: grossAmount,
-        deductible_amount: grossAmount,
-        included: true,
-        exclusion_reason: null,
+        deductible_amount: 0,
+        included: false,
+        exclusion_reason: "Noch keinem steuerlichen Erhaltungsplan zugeordnet",
       });
       continue;
     }
@@ -131,22 +299,24 @@ function buildMaintenanceSourceResolution(args: {
   const unlinkedCurrentYearPlans = activePlans.filter((plan) =>
     (plan.source_year ?? args.taxYear) === args.taxYear &&
     (plan.source_transaction_ids?.length ?? 0) === 0 &&
-    plan.classification === "maintenance_expense" &&
-    plan.deduction_mode === "distributed",
+    plan.classification === "maintenance_expense",
   );
 
   for (const plan of unlinkedCurrentYearPlans) {
     const grossAmount = Math.abs(Number(plan.total_amount ?? 0));
-    immediateTotal = Math.max(0, immediateTotal - grossAmount);
+    const isImmediatePlan = plan.deduction_mode === "immediate";
+    if (isImmediatePlan) {
+      immediateTotal += grossAmount;
+    }
     items.push({
       type: "maintenance_source",
       label: `${plan.label} (Quelle ohne Transaktionslink)`,
-      target_block: `maintenance_${plan.source_year ?? args.taxYear}`,
+      target_block: isImmediatePlan ? "maintenance_immediate" : `maintenance_${plan.source_year ?? args.taxYear}`,
       source_year: plan.source_year ?? args.taxYear,
       gross_amount: grossAmount,
-      deductible_amount: 0,
-      included: false,
-      exclusion_reason: "Quelle wird über Verteilungsplan statt Sofortabzug behandelt",
+      deductible_amount: isImmediatePlan ? grossAmount : 0,
+      included: isImmediatePlan,
+      exclusion_reason: isImmediatePlan ? null : "Quelle wird über Verteilungsplan statt Sofortabzug behandelt",
     });
   }
 
@@ -183,7 +353,7 @@ export async function POST(request: Request) {
   // Load transactions
   const { data: txData } = await supabase
     .from("transactions")
-    .select("id, date, amount, category, anlage_v_zeile, description, counterpart")
+    .select("id, date, amount, category, is_tax_deductible, anlage_v_zeile, description, counterpart")
     .eq("property_id", property_id)
     .eq("user_id", user.id);
 
@@ -319,7 +489,29 @@ export async function POST(request: Request) {
       if (patched) finalData = patched as TaxData;
     }
 
-    return { finalData, reconciliation: buildReconciliation(structured, finalData, maintenanceSourceResolution.items) };
+    const reconciliation = buildReconciliation(structured, finalData, maintenanceSourceResolution.items);
+    const nextImportConfidence = {
+      ...(typeof finalData.import_confidence === "object" && finalData.import_confidence != null ? finalData.import_confidence : {}),
+      __expense_blocks: reconciliation.calculated_expense_blocks,
+    };
+
+    if (baseData.id) {
+      const { data: patchedConfidence } = await supabase
+        .from("tax_data")
+        .update({ import_confidence: nextImportConfidence })
+        .eq("id", baseData.id)
+        .select()
+        .single();
+      if (patchedConfidence) {
+        finalData = patchedConfidence as TaxData;
+      } else {
+        finalData = { ...finalData, import_confidence: nextImportConfidence };
+      }
+    } else {
+      finalData = { ...finalData, import_confidence: nextImportConfidence };
+    }
+
+    return { finalData, reconciliation };
   }
 
   function buildReconciliation(
@@ -327,10 +519,6 @@ export async function POST(request: Request) {
     finalData: TaxData,
     maintenanceSourceItems: MaintenanceSourceResolutionItem[],
   ) {
-    const lineSummary = buildElsterLineSummary(finalData, {
-      maintenanceDistributions: structured.maintenanceDistributions,
-      taxYear: tax_year,
-    });
     const inferTargetBlock = (label: string, type: "transaction" | "maintenance_distribution" | "depreciation_item", sourceYear: number | null) => {
       if (type === "depreciation_item") return "depreciation";
       if (type === "maintenance_distribution") return sourceYear != null && sourceYear < tax_year ? `maintenance_${sourceYear}` : `maintenance_${tax_year}`;
@@ -346,18 +534,25 @@ export async function POST(request: Request) {
     const transactionItems = ((txData ?? []) as TaxCalculationTransaction[])
       .filter((tx) => tx.date >= `${tax_year}-01-01` && tx.date <= `${tax_year}-12-31`)
       .filter((tx) => tx.category != null && tx.category !== "aufgeteilt")
+      .filter((tx) => !(tx.amount < 0 && tx.is_tax_deductible === false))
       .filter((tx) => !(tx.id && excludedTransactionIds.includes(tx.id)))
       .map((tx) => {
         const fieldKey = resolveField(tx.category ?? "", tx.anlage_v_zeile, dbCategoryMap);
-        const block = mapTaxFieldToTargetBlock(fieldKey);
+        const block = resolveTransactionTargetBlock(tx, fieldKey);
         const absoluteAmount = Math.abs(Number(tx.amount ?? 0));
+        const deductibleAmount = computeTransactionDeductibleAmount({
+          tx,
+          targetBlock: block,
+          grossAmount: absoluteAmount,
+          rentalSharePct,
+        });
         return {
           type: "transaction" as const,
           label: tx.counterpart || tx.description || tx.category || "Transaktion",
           target_block: block,
           source_year: null as number | null,
           gross_amount: absoluteAmount,
-          deductible_amount: absoluteAmount,
+          deductible_amount: deductibleAmount,
           included: fieldKey != null,
           exclusion_reason: fieldKey == null ? "Keine steuerliche Zuordnung" : null,
         };
@@ -410,6 +605,21 @@ export async function POST(request: Request) {
         : []),
     ];
 
+    const calculatedExpenseBlocks = buildCalculatedExpenseBlocks({
+      items,
+      taxYear: tax_year,
+    });
+    const lineSummary = buildElsterLineSummary({
+      ...finalData,
+      import_confidence: {
+        ...(typeof finalData.import_confidence === "object" && finalData.import_confidence != null ? finalData.import_confidence : {}),
+        __expense_blocks: calculatedExpenseBlocks,
+      },
+    }, {
+      maintenanceDistributions: structured.maintenanceDistributions,
+      taxYear: tax_year,
+    });
+
     const einnahmen = lineSummary.income_total;
     const afa = lineSummary.depreciation_total;
     const deductible_without_afa = lineSummary.advertising_costs_total;
@@ -423,6 +633,7 @@ export async function POST(request: Request) {
       total_deductible_with_afa,
       afa,
       result_before_partner,
+      calculated_expense_blocks: calculatedExpenseBlocks,
       expense_buckets: lineSummary.expense_buckets,
       depreciation_buckets: lineSummary.depreciation_buckets,
     };

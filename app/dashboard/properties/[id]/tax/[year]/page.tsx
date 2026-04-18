@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { TAX_FIELDS, TAX_FIELD_GROUPS } from "@/lib/tax/fieldMeta";
@@ -51,6 +51,18 @@ type YearlyChecklistItem = {
   actionLabel: string;
 };
 
+type PreparationStep = {
+  key: string;
+  title: string;
+  description: string;
+  ready: boolean;
+  actionLabel: string;
+  targetId?: string;
+};
+
+const isTransientLogicId = (value: string | undefined) =>
+  typeof value === "string" && (value.startsWith("new-") || value.startsWith("prefill-"));
+
 const CONFIDENCE_DOT: Record<TaxConfidence | "null", string> = {
   high:   "bg-emerald-500",
   medium: "bg-amber-400",
@@ -70,6 +82,7 @@ const fmtVal = (val: unknown, type: string) => {
 export default function TaxYearPage() {
   const { id, year: yearParam } = useParams<{ id: string; year: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const taxYear = Number(yearParam);
 
   const [property, setProperty] = useState<Property | null>(null);
@@ -116,15 +129,25 @@ export default function TaxYearPage() {
   const [transactionAmountFilter, setTransactionAmountFilter] = useState("");
   const [showOnlyUnassignedTransactions, setShowOnlyUnassignedTransactions] = useState(true);
   const [logicError, setLogicError] = useState<string | null>(null);
+  const [calculationError, setCalculationError] = useState<string | null>(null);
   const [savingLogicId, setSavingLogicId] = useState<string | null>(null);
   const [deletingLogicId, setDeletingLogicId] = useState<string | null>(null);
   const [highlightedSectionId, setHighlightedSectionId] = useState<string | null>(null);
+  const [highlightedPrepSectionId, setHighlightedPrepSectionId] = useState<string | null>(null);
 
   const jumpToSection = useCallback((targetId: string) => {
     setHighlightedSectionId(targetId);
     document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
     window.setTimeout(() => {
       setHighlightedSectionId((current) => (current === targetId ? null : current));
+    }, 1800);
+  }, []);
+
+  const jumpToPrepSection = useCallback((targetId: string) => {
+    setHighlightedPrepSectionId(targetId);
+    document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    window.setTimeout(() => {
+      setHighlightedPrepSectionId((current) => (current === targetId ? null : current));
     }, 1800);
   }, []);
 
@@ -209,7 +232,11 @@ export default function TaxYearPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ property_id: id, tax_year: taxYear }),
     });
-    if (!res.ok) return false;
+    if (!res.ok) {
+      const data = await res.json().catch(() => null) as { error?: string } | null;
+      setCalculationError(data?.error ?? "Berechnung konnte nicht durchgeführt werden.");
+      return false;
+    }
     const json = await res.json();
     if (json._reconciliation) {
       setReconciliation(json._reconciliation);
@@ -220,11 +247,12 @@ export default function TaxYearPage() {
     } else {
       setTaxData(json);
     }
+    setCalculationError(null);
     return true;
   }, [id, taxYear]);
 
   const saveTaxSettings = async () => {
-    if (!taxSettings) return;
+    if (!taxSettings) return true;
     setSavingTaxSettings(true);
     setTaxSettingsMessage(null);
 
@@ -244,17 +272,80 @@ export default function TaxYearPage() {
     if (!res.ok) {
       const data = await res.json().catch(() => null) as { error?: string } | null;
       setTaxSettingsMessage(data?.error ?? "Jahreswerte konnten nicht gespeichert werden.");
-      return;
+      return false;
     }
 
     setTaxSettingsMessage("Jahreswerte gespeichert.");
     setTimeout(() => setTaxSettingsMessage(null), 2000);
+    return true;
+  };
+
+  const savePreparationData = async () => {
+    setLogicError(null);
+    setCalculationError(null);
+    const taxSettingsSaved = await saveTaxSettings();
+    if (!taxSettingsSaved) return false;
+
+    const depreciationItemsToSave = depreciationItems.filter((item) => {
+      const label = item.label?.trim() ?? "";
+      const amount = Number(item.gross_annual_amount ?? 0);
+      return label.length > 0 && amount > 0;
+    });
+
+    const maintenanceItemsToSave = maintenanceDistributions.filter((item) => {
+      const label = item.label?.trim() ?? "";
+      const amount = Number(item.total_amount ?? 0);
+      const shouldPersistInWizard = isTransientLogicId(item.id) || Number(item.source_year ?? taxYear) === taxYear;
+      return shouldPersistInWizard && label.length > 0 && amount > 0;
+    });
+
+    for (const item of depreciationItemsToSave) {
+      const payload: Record<string, unknown> = { ...item };
+      if (isTransientLogicId(payload.id as string | undefined)) {
+        payload.id = undefined;
+      }
+
+      const res = await fetch("/api/tax/logic-items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "depreciation", item: payload }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null) as { error?: string } | null;
+        setLogicError(data?.error ?? "AfA-Komponenten konnten nicht gespeichert werden.");
+        return false;
+      }
+    }
+
+    for (const item of maintenanceItemsToSave) {
+      const payload: Record<string, unknown> = { ...item };
+      if (isTransientLogicId(payload.id as string | undefined)) {
+        payload.id = undefined;
+      }
+
+      const res = await fetch("/api/tax/logic-items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "maintenance_distribution", item: payload }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null) as { error?: string } | null;
+        setLogicError(data?.error ?? "Verteilungsblöcke konnten nicht gespeichert werden.");
+        return false;
+      }
+    }
+
+    await loadLogicItems();
+    return true;
   };
 
   const runCalculation = async () => {
     setCalculating(true);
-    await recalculateTaxData();
+    const ok = await recalculateTaxData();
     setCalculating(false);
+    return ok;
   };
 
   const handleCalculate = async () => {
@@ -369,7 +460,7 @@ export default function TaxYearPage() {
     setSavingLogicId(item.id);
     setLogicError(null);
     const payload: Record<string, unknown> = { ...item };
-    if (typeof payload.id === "string" && payload.id.startsWith("new-")) {
+    if (isTransientLogicId(payload.id as string | undefined)) {
       payload.id = undefined;
     }
 
@@ -390,7 +481,7 @@ export default function TaxYearPage() {
   };
 
   const deleteLogicItem = async (kind: "depreciation" | "maintenance_distribution", itemId: string) => {
-    if (itemId.startsWith("new-")) {
+    if (isTransientLogicId(itemId)) {
       if (kind === "depreciation") {
         setDepreciationItems((current) => current.filter((item) => item.id !== itemId));
       } else {
@@ -581,7 +672,7 @@ export default function TaxYearPage() {
         actionLabel: "Zu den Verteilungsblöcken",
       });
     }
-    if (maintenanceDistributions.some((item) => (item.source_transaction_ids?.length ?? 0) === 0)) {
+    if (maintenanceDistributions.some((item) => (item.id.startsWith("new-") || Number(item.source_year ?? taxYear) === taxYear) && (item.source_transaction_ids?.length ?? 0) === 0)) {
       openItems.push({
         label: "Ein oder mehrere Verteilungsblöcke haben noch keine Buchung",
         targetId: "maintenance-distributions-card",
@@ -592,7 +683,74 @@ export default function TaxYearPage() {
       status: openItems.length === 0 ? "vollständig" : openItems.length <= 2 ? "prüfen" : "unvollständig",
       openItems,
     };
-  }, [taxSettings, gbrSettings, candidateTransactions.length, maintenanceDistributions, id]);
+  }, [taxSettings, gbrSettings, candidateTransactions.length, maintenanceDistributions, id, taxYear]);
+
+  const depreciationChecklist = useMemo(() => {
+    const hasBuildingItem = depreciationItems.some((item) => item.item_type === "building" && Number(item.gross_annual_amount ?? 0) > 0);
+    const hasInventoryItem = depreciationItems.some((item) => item.item_type === "movable_asset" && Number(item.gross_annual_amount ?? 0) > 0);
+    return {
+      hasBuildingItem,
+      hasInventoryItem,
+      totalItems: depreciationItems.length,
+    };
+  }, [depreciationItems]);
+
+  const editableMaintenanceDistributions = useMemo(
+    () => maintenanceDistributions.filter((item) => isTransientLogicId(item.id) || Number(item.source_year ?? taxYear) === taxYear),
+    [maintenanceDistributions, taxYear],
+  );
+
+  const carryForwardMaintenanceDistributions = useMemo(
+    () => maintenanceDistributions.filter((item) => !isTransientLogicId(item.id) && Number(item.source_year ?? taxYear) < taxYear),
+    [maintenanceDistributions, taxYear],
+  );
+
+  const preparationSteps = useMemo<PreparationStep[]>(() => {
+    const steps: PreparationStep[] = [
+      {
+        key: "depreciation",
+        title: "AfA-Komponenten",
+        description: depreciationChecklist.hasInventoryItem
+          ? `${depreciationChecklist.totalItems} Komponente(n) vorhanden.`
+          : "Inventar-/AfA-Komponente fehlt noch oder ist leer.",
+        ready: depreciationChecklist.hasBuildingItem && depreciationChecklist.hasInventoryItem,
+        actionLabel: "Zu AfA-Komponenten",
+        targetId: "prep-depreciation",
+      },
+      {
+        key: "maintenance",
+        title: "Verteilungsblöcke",
+        description: editableMaintenanceDistributions.length > 0 || carryForwardMaintenanceDistributions.length > 0
+          ? `${editableMaintenanceDistributions.length} aktuelle und ${carryForwardMaintenanceDistributions.length} fortgeführte Blöcke vorhanden.`
+          : "Noch keine Verteilungsblöcke erfasst.",
+        ready: editableMaintenanceDistributions.length > 0 || carryForwardMaintenanceDistributions.length > 0,
+        actionLabel: "Zu Verteilungsblöcken",
+        targetId: "prep-maintenance",
+      },
+    ];
+
+    if (gbrSettings) {
+      steps.push({
+        key: "gbr",
+        title: "GbR Sonder-WK",
+        description: "Sonderwerbungskosten je Beteiligtem im FE/FB-Bereich prüfen.",
+        ready: true,
+        actionLabel: "Im FE/FB-Bereich",
+      });
+    }
+
+    return steps;
+  }, [carryForwardMaintenanceDistributions.length, depreciationChecklist, editableMaintenanceDistributions.length, gbrSettings]);
+
+  const autoOpenCalculationPrep = !loading && !taxData && searchParams.get("prepare") === "1";
+  const calculationPrepOpen = showCalculationPrep || autoOpenCalculationPrep;
+
+  const dismissCalculationPrep = useCallback(() => {
+    setShowCalculationPrep(false);
+    if (searchParams.get("prepare") === "1") {
+      router.replace(`/dashboard/properties/${id}/tax/${taxYear}`);
+    }
+  }, [id, router, searchParams, taxYear]);
 
   if (loading) return <Skeleton />;
 
@@ -1207,6 +1365,7 @@ export default function TaxYearPage() {
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {maintenanceDistributions.map((item) => {
                         const isNewItem = item.id.startsWith("new-");
+                        const isCarryForwardItem = !isNewItem && Number(item.source_year ?? taxYear) < taxYear;
                         const computed = structuredTax?.maintenanceDistributions.find((candidate) => candidate.id === item.id);
                         const selectedTransactionIds = item.source_transaction_ids ?? [];
                         const selectedTransactions = selectedTransactionIds
@@ -1228,6 +1387,7 @@ export default function TaxYearPage() {
                               <select
                                 value={item.classification ?? "maintenance_expense"}
                                 onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, classification: e.target.value as TaxMaintenanceDistributionItem["classification"] } : candidate))}
+                                disabled={isCarryForwardItem}
                                 className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                               >
                                 <option value="maintenance_expense">Erhaltungsaufwand</option>
@@ -1239,7 +1399,7 @@ export default function TaxYearPage() {
                               <select
                                 value={item.deduction_mode ?? "distributed"}
                                 onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, deduction_mode: e.target.value as TaxMaintenanceDistributionItem["deduction_mode"] } : candidate))}
-                                disabled={(item.classification ?? "maintenance_expense") !== "maintenance_expense"}
+                                disabled={isCarryForwardItem || (item.classification ?? "maintenance_expense") !== "maintenance_expense"}
                                 className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                               >
                                 <option value="immediate">sofort abziehen</option>
@@ -1330,6 +1490,7 @@ export default function TaxYearPage() {
                                 inputMode="decimal"
                                 value={item.source_year ?? taxYear}
                                 onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, source_year: Number(e.target.value) || taxYear } : candidate))}
+                                disabled={isCarryForwardItem}
                                 className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-right text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                               />
                             </td>
@@ -1339,6 +1500,7 @@ export default function TaxYearPage() {
                                 inputMode="decimal"
                                 value={item.total_amount ?? ""}
                                 onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, total_amount: parseGermanDecimal(e.target.value) || 0 } : candidate))}
+                                disabled={isCarryForwardItem}
                                 className="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-right text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                               />
                             </td>
@@ -1350,7 +1512,7 @@ export default function TaxYearPage() {
                                   ? ((item.deduction_mode ?? "distributed") === "distributed" ? (item.distribution_years ?? 3) : 1)
                                   : (item.distribution_years ?? 50)}
                                 onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, distribution_years: Number(e.target.value) || 1 } : candidate))}
-                                disabled={(item.classification ?? "maintenance_expense") !== "maintenance_expense" || (item.deduction_mode ?? "distributed") === "immediate"}
+                                disabled={isCarryForwardItem || (item.classification ?? "maintenance_expense") !== "maintenance_expense" || (item.deduction_mode ?? "distributed") === "immediate"}
                                 className="w-20 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-right text-sm text-slate-900 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                               />
                             </td>
@@ -1360,6 +1522,7 @@ export default function TaxYearPage() {
                                 inputMode="decimal"
                                 value={item.current_year_share_override ?? ""}
                                 onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, current_year_share_override: e.target.value === "" ? null : (parseGermanDecimal(e.target.value) || null) } : candidate))}
+                                disabled={isCarryForwardItem}
                                 className="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-right text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                                 placeholder={computed?.current_year_share?.toString() ?? "auto"}
                               />
@@ -1389,18 +1552,18 @@ export default function TaxYearPage() {
                                 <button
                                   type="button"
                                   onClick={() => void saveLogicItem("maintenance_distribution", item)}
-                                  disabled={savingLogicId === item.id}
+                                  disabled={isCarryForwardItem || savingLogicId === item.id}
                                   className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                                 >
-                                  {savingLogicId === item.id ? "..." : "Speichern"}
+                                  {isCarryForwardItem ? "Vorjahr" : savingLogicId === item.id ? "..." : "Speichern"}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => void deleteLogicItem("maintenance_distribution", item.id)}
-                                  disabled={deletingLogicId === item.id}
+                                  disabled={isCarryForwardItem || deletingLogicId === item.id}
                                   className="rounded-lg border border-red-200 px-2 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-60 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
                                 >
-                                  Löschen
+                                  {isCarryForwardItem ? "Im Vorjahr" : "Löschen"}
                                 </button>
                               </div>
                             </td>
@@ -1467,91 +1630,401 @@ export default function TaxYearPage() {
             </div>
           </div>
         )}
-        {showCalculationPrep && (
+        {calculationPrepOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-            <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+            <div className="w-full max-w-4xl rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-900">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Jahresdaten vor der Berechnung prüfen</h3>
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Berechnung vorbereiten</h3>
                   <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    Das ist optional, hilft aber dabei, dass die Berechnung direkt mit den richtigen Jahreswerten arbeitet.
+                    Wir führen dich einmal kurz durch die jahresrelevanten Punkte, damit die Berechnung direkt auf den richtigen Werten aufsetzt.
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowCalculationPrep(false)}
+                  onClick={dismissCalculationPrep}
                   className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                 >
                   Schließen
                 </button>
               </div>
 
-              <div className="mt-5 grid gap-4 md:grid-cols-3">
-                <div className="rounded-lg bg-slate-50 px-3 py-3 dark:bg-slate-800/60">
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Eigennutzung</p>
-                  <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
-                    {taxSettings ? `${taxSettings.eigennutzung_tage} von ${taxSettings.gesamt_tage} Tagen` : "Noch keine Jahreswerte"}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Direkt oben auf dieser Seite bearbeitbar.
-                  </p>
+              <div className="mt-5 max-h-[72vh] space-y-4 overflow-y-auto pr-1">
+                <div
+                  id="prep-tax-settings"
+                  className={`rounded-lg border bg-slate-50 p-4 transition-all duration-500 dark:bg-slate-800/50 ${
+                    highlightedPrepSectionId === "prep-tax-settings"
+                      ? "border-blue-400 ring-2 ring-blue-500/20 dark:border-blue-500"
+                      : "border-slate-200 dark:border-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Schritt 1</p>
+                      <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">Jahreswerte direkt setzen</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Diese Werte steuern den Vermietungsanteil und sollten vor der Berechnung stimmen.
+                      </p>
+                    </div>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+                      taxSettings && taxSettings.gesamt_tage > 0
+                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                        : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                    }`}>
+                      {taxSettings && taxSettings.gesamt_tage > 0 ? "bereit" : "prüfen"}
+                    </span>
+                  </div>
+                  {taxSettings && (
+                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+                      <label className="space-y-1">
+                        <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Eigennutzungstage</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={taxSettings.eigennutzung_tage}
+                          onChange={(e) => setTaxSettings((current) => current ? { ...current, eigennutzung_tage: Math.max(0, Number(e.target.value) || 0) } : current)}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Gesamttage</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={taxSettings.gesamt_tage}
+                          onChange={(e) => setTaxSettings((current) => current ? { ...current, gesamt_tage: Math.max(1, Number(e.target.value) || 365) } : current)}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Manueller Vermietungsanteil (%)</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={taxSettings.rental_share_override_pct != null ? fmtDecimal(taxSettings.rental_share_override_pct * 100, 2, 2) : ""}
+                          onChange={(e) => {
+                            const raw = e.target.value.trim();
+                            setTaxSettings((current) => current ? {
+                              ...current,
+                              rental_share_override_pct: raw === "" ? null : Math.max(0, Math.min(100, parseGermanDecimal(raw) || 0)) / 100,
+                            } : current);
+                          }}
+                          placeholder={`${fmtDecimal(rentalSharePct * 100, 2, 2)} % automatisch`}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                        />
+                      </label>
+                    </div>
+                  )}
                 </div>
-                <div className="rounded-lg bg-slate-50 px-3 py-3 dark:bg-slate-800/60">
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">GbR Sonder-WK</p>
-                  <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
-                    {gbrSettings ? "Je Beteiligtem im FE/FB-Bereich pflegbar" : "Nicht relevant für dieses Objekt"}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    {gbrSettings ? "Vor allem bei Feststellungserklärungen sinnvoll." : "Nur bei GbR nötig."}
-                  </p>
-                </div>
-                <div className="rounded-lg bg-slate-50 px-3 py-3 dark:bg-slate-800/60">
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Verteilte Ausgaben</p>
-                  <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
-                    {maintenanceDistributions.length} aktive Verteilungsblöcke
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Banking-Buchungen können unten direkt zugeordnet werden.
-                  </p>
-                </div>
-              </div>
 
-              <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
-                Empfohlene Reihenfolge:
-                <div className="mt-2 space-y-1 text-sm">
-                  <p>1. Jahreswerte für Eigennutzung prüfen</p>
-                  <p>2. Verteilte Handwerker-/Sanierungsrechnungen zuordnen</p>
-                  <p>3. Bei GbR Sonderwerbungskosten je Beteiligtem ergänzen</p>
+                <div className="space-y-3">
+                  {preparationSteps.map((step, index) => (
+                    <div key={step.key} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/50">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Schritt {index + 2}</p>
+                          <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{step.title}</p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{step.description}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+                            step.ready
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                              : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                          }`}>
+                            {step.ready ? "bereit" : "prüfen"}
+                          </span>
+                          {step.targetId ? (
+                            <button
+                              type="button"
+                              onClick={() => jumpToPrepSection(step.targetId!)}
+                              className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                            >
+                              {step.actionLabel}
+                            </button>
+                          ) : (
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                              {step.actionLabel}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
+
+                <div
+                  id="prep-depreciation"
+                  className={`rounded-lg border bg-slate-50 p-4 transition-all duration-500 dark:bg-slate-800/50 ${
+                    highlightedPrepSectionId === "prep-depreciation"
+                      ? "border-blue-400 ring-2 ring-blue-500/20 dark:border-blue-500"
+                      : "border-slate-200 dark:border-slate-700"
+                  }`}
+                >
+                  <div className="mb-3 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">AfA-Komponenten</p>
+                      <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
+                        Gebäude, Inventar und Außenanlagen können hier direkt gepflegt werden.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addDepreciationItem}
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                      AfA hinzufügen
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {depreciationItems.length === 0 ? (
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Noch keine AfA-Komponenten vorhanden.</p>
+                    ) : (
+                      depreciationItems.map((item) => (
+                        <div key={item.id} className="grid gap-3 rounded-lg border border-slate-200 bg-white p-3 md:grid-cols-[1.8fr,1fr,1fr,auto] dark:border-slate-700 dark:bg-slate-900">
+                          <input
+                            type="text"
+                            value={item.label ?? ""}
+                            onChange={(e) => setDepreciationItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, label: e.target.value } : candidate))}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                            placeholder="Bezeichnung"
+                          />
+                          <select
+                            value={item.item_type ?? "building"}
+                            onChange={(e) => setDepreciationItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, item_type: e.target.value as TaxDepreciationItem["item_type"] } : candidate))}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                          >
+                            <option value="building">Gebäude</option>
+                            <option value="movable_asset">Inventar</option>
+                            <option value="outdoor">Außenanlagen</option>
+                          </select>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={item.gross_annual_amount ?? ""}
+                            onChange={(e) => setDepreciationItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, gross_annual_amount: parseGermanDecimal(e.target.value) || 0 } : candidate))}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-right text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                            placeholder="Brutto/Jahr"
+                          />
+                          <div className="flex items-center justify-end gap-2">
+                            <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                              <input
+                                type="checkbox"
+                                checked={item.apply_rental_ratio ?? true}
+                                onChange={(e) => setDepreciationItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, apply_rental_ratio: e.target.checked } : candidate))}
+                              />
+                              Quote
+                            </label>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div
+                  id="prep-maintenance"
+                  className={`rounded-lg border bg-slate-50 p-4 transition-all duration-500 dark:bg-slate-800/50 ${
+                    highlightedPrepSectionId === "prep-maintenance"
+                      ? "border-blue-400 ring-2 ring-blue-500/20 dark:border-blue-500"
+                      : "border-slate-200 dark:border-slate-700"
+                  }`}
+                >
+                  <div className="mb-3 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Verteilungsblöcke</p>
+                      <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
+                        Neue oder in {taxYear} beginnende Ausgaben lassen sich direkt hier vorbereiten. Fortgeführte Vorjahresblöcke werden nur noch zur Kontrolle angezeigt.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addMaintenanceDistribution}
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                      Block hinzufügen
+                    </button>
+                  </div>
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      value={transactionNameFilter}
+                      onChange={(e) => setTransactionNameFilter(e.target.value)}
+                      placeholder="Nach Name oder Beschreibung suchen"
+                      className="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                    <select
+                      value={transactionCategoryFilter}
+                      onChange={(e) => setTransactionCategoryFilter(e.target.value)}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    >
+                      <option value="">Alle Kategorien</option>
+                      {availableTransactionCategories.map((category) => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={transactionAmountFilter}
+                      onChange={(e) => setTransactionAmountFilter(e.target.value)}
+                      placeholder="Nach Betrag filtern"
+                      className="w-44 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    {editableMaintenanceDistributions.length === 0 ? (
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Noch keine Verteilungsblöcke vorhanden.</p>
+                    ) : (
+                      editableMaintenanceDistributions.map((item) => {
+                        const selectedTransactionIds = item.source_transaction_ids ?? [];
+                        const selectedTransactions = selectedTransactionIds
+                          .map((transactionId) => transactionMap.get(transactionId))
+                          .filter((value): value is CandidateTransaction => Boolean(value));
+                        const availableForItem = getAvailableTransactionsForItem(selectedTransactionIds);
+                        return (
+                        <div key={item.id} className="grid gap-3 rounded-lg border border-slate-200 bg-white p-3 md:grid-cols-[1.5fr,1fr,1fr,0.8fr,0.9fr] dark:border-slate-700 dark:bg-slate-900">
+                          <input
+                            type="text"
+                            value={item.label ?? ""}
+                            onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, label: e.target.value } : candidate))}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                            placeholder="Bezeichnung"
+                          />
+                          <select
+                            value={item.classification ?? "maintenance_expense"}
+                            onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, classification: e.target.value as TaxMaintenanceDistributionItem["classification"] } : candidate))}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                          >
+                            <option value="maintenance_expense">Erhaltungsaufwand</option>
+                            <option value="production_cost">Herstellungskosten</option>
+                            <option value="depreciation">AfA</option>
+                          </select>
+                          <select
+                            value={item.deduction_mode ?? "distributed"}
+                            onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, deduction_mode: e.target.value as TaxMaintenanceDistributionItem["deduction_mode"] } : candidate))}
+                            disabled={(item.classification ?? "maintenance_expense") !== "maintenance_expense"}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                          >
+                            <option value="immediate">sofort</option>
+                            <option value="distributed">verteilen</option>
+                          </select>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={item.total_amount ?? ""}
+                            onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, total_amount: parseGermanDecimal(e.target.value) || 0 } : candidate))}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-right text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                            placeholder="Gesamt"
+                          />
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={(item.classification ?? "maintenance_expense") === "maintenance_expense"
+                              ? ((item.deduction_mode ?? "distributed") === "distributed" ? (item.distribution_years ?? 3) : 1)
+                              : (item.distribution_years ?? 50)}
+                            onChange={(e) => setMaintenanceDistributions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, distribution_years: Number(e.target.value) || 1 } : candidate))}
+                            disabled={(item.classification ?? "maintenance_expense") !== "maintenance_expense" || (item.deduction_mode ?? "distributed") === "immediate"}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-right text-sm text-slate-900 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                            placeholder="Jahre"
+                          />
+                          <div className="md:col-span-5">
+                            {(item.classification ?? "maintenance_expense") === "maintenance_expense" && (
+                              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+                                <div className="mb-2 flex items-center justify-between gap-3">
+                                  <p className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                                    Erst Kategorie wählen, dann Buchungen aus {taxYear} zuordnen
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => assignVisibleTransactionsToMaintenance(item.id)}
+                                    className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                                  >
+                                    Alle sichtbaren übernehmen
+                                  </button>
+                                </div>
+                                <div className="max-h-36 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+                                  {availableForItem.length === 0 && selectedTransactions.length === 0 ? (
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">Keine passenden Banking-Buchungen im Jahr {taxYear} gefunden.</p>
+                                  ) : (
+                                    availableForItem.map((transaction) => (
+                                      <label key={transaction.id} className="flex items-start gap-2 rounded-md px-1 py-1 text-xs text-slate-600 dark:text-slate-300">
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedTransactionIds.includes(transaction.id)}
+                                          onChange={(e) => toggleMaintenanceTransaction(item.id, transaction.id, e.target.checked)}
+                                        />
+                                        <span className="min-w-0">
+                                          <span className="block truncate font-medium text-slate-700 dark:text-slate-200">
+                                            {transaction.counterpart || transaction.description || "Buchung"}
+                                          </span>
+                                          <span className="block truncate text-slate-500 dark:text-slate-400">
+                                            {formatDateForDisplay(transaction.date)} · {Math.abs(Number(transaction.amount)).toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 })}
+                                            {transaction.category ? ` · ${transaction.category}` : ""}
+                                          </span>
+                                        </span>
+                                      </label>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )})
+                    )}
+                  </div>
+                </div>
+
+                {carryForwardMaintenanceDistributions.length > 0 && (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+                    <div className="mb-3">
+                      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Fortgeführte Vorjahresblöcke</p>
+                      <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
+                        Diese Blöcke stammen aus früheren Jahren und werden hier nur angezeigt. Änderungen solltest du im Ursprungsjahr vornehmen.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      {carryForwardMaintenanceDistributions.map((item) => (
+                        <div key={item.id} className="rounded-lg border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-900">
+                          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{item.label}</p>
+                              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                Ursprungsjahr {item.source_year} · {Number(item.total_amount ?? 0).toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 2 })} · {item.distribution_years} Jahre
+                              </p>
+                            </div>
+                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                              Nur Anzeige
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 flex flex-wrap justify-between gap-3">
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                      onClick={() => {
-                        setShowCalculationPrep(false);
-                        jumpToSection("jahreswerte-card");
-                      }}
-                    className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                  >
-                    Jahreswerte prüfen
-                  </button>
-                  {gbrSettings && (
-                    <Link
-                      href={`/dashboard/properties/${id}/tax/${taxYear}/gbr`}
-                      className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                    >
-                      Sonder-WK öffnen
-                    </Link>
-                  )}
-                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Du kannst die Schritte jetzt prüfen oder direkt mit dem aktuellen Stand weiterrechnen.
+                </p>
+                {calculationError && (
+                  <p className="w-full rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                    {calculationError}
+                  </p>
+                )}
+                {logicError && (
+                  <p className="w-full rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                    {logicError}
+                  </p>
+                )}
                 <div className="flex gap-3">
                   <button
                     type="button"
                     onClick={async () => {
-                      setShowCalculationPrep(false);
-                      await runCalculation();
+                      const ok = await runCalculation();
+                      if (ok) dismissCalculationPrep();
                     }}
                     disabled={calculating}
                     className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -1561,11 +2034,10 @@ export default function TaxYearPage() {
                   <button
                     type="button"
                     onClick={async () => {
-                      if (taxSettings) {
-                        await saveTaxSettings();
-                      }
-                      setShowCalculationPrep(false);
-                      await runCalculation();
+                      const saved = await savePreparationData();
+                      if (!saved) return;
+                      const ok = await runCalculation();
+                      if (ok) dismissCalculationPrep();
                     }}
                     disabled={calculating || savingTaxSettings}
                     className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
@@ -1612,16 +2084,19 @@ function buildDefaultDepreciationItems(args: {
     });
   }
 
-  const fixturesAmount = Math.max(0, Number(taxData?.depreciation_fixtures ?? 0));
-  if (fixturesAmount > 0) {
+  const importedFixturesAmount = Math.max(0, Number(taxData?.depreciation_fixtures ?? 0));
+  const derivedFixturesAmount = deriveMovableAssetAnnualAmount(property.inventarwert);
+  const fixturesAmountSource = importedFixturesAmount > 0 ? importedFixturesAmount : derivedFixturesAmount;
+
+  if (fixturesAmountSource > 0) {
     items.push({
       id: `prefill-fixtures-${taxYear}`,
       property_id: property.id,
       tax_year: taxYear,
       item_type: "movable_asset",
       label: "Inventar",
-      gross_annual_amount: round2(fixturesAmount),
-      apply_rental_ratio: false,
+      gross_annual_amount: round2(fixturesAmountSource),
+      apply_rental_ratio: importedFixturesAmount > 0 ? false : true,
     });
   }
 
@@ -1677,6 +2152,13 @@ function deriveAnnualAmount(
     if (buildYear >= 2023) return basis * 0.03;
   }
   return basis * 0.02;
+}
+
+function deriveMovableAssetAnnualAmount(inventoryValue: number | null) {
+  const basis = Number(inventoryValue ?? 0);
+  if (basis <= 0) return 0;
+  // Movable assets (Inventar) are depreciated at 20% per year (5-year useful life per §7 EStG)
+  return basis / 5;
 }
 
 function round2(value: number) {

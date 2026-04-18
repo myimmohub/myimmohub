@@ -18,7 +18,14 @@ const taxFieldForItemType: Record<TaxDepreciationItem["item_type"], ComputedTaxD
   outdoor: "depreciation_outdoor",
   movable_asset: "depreciation_fixtures",
 };
-const RAW_PRORATED_FIELDS: (keyof StructuredTaxLineTotals | "loan_interest" | "property_tax" | "hoa_fees" | "insurance" | "water_sewage" | "waste_disposal")[] = [
+type ProRatableTaxField =
+  | keyof StructuredTaxLineTotals
+  | "loan_interest" | "property_tax" | "hoa_fees" | "insurance"
+  | "water_sewage" | "waste_disposal"
+  // Non-allocated and catch-all WK fields must also be pro-rated for partial private use
+  | "property_management" | "bank_fees" | "other_expenses";
+
+const RAW_PRORATED_FIELDS: ProRatableTaxField[] = [
   "loan_interest",
   "property_tax",
   "hoa_fees",
@@ -29,6 +36,9 @@ const RAW_PRORATED_FIELDS: (keyof StructuredTaxLineTotals | "loan_interest" | "p
   "depreciation_outdoor",
   "depreciation_fixtures",
   "maintenance_costs",
+  "property_management",
+  "bank_fees",
+  "other_expenses",
 ];
 
 export type StructuredTaxComputation = {
