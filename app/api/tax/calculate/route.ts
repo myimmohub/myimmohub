@@ -130,6 +130,53 @@ function round2(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+function getDepreciationSignature(item: TaxDepreciationItem) {
+  return [
+    item.property_id,
+    item.tax_year,
+    item.item_type,
+    String(item.label ?? "").trim().toLocaleLowerCase("de-DE"),
+    round2(Number(item.gross_annual_amount ?? 0)),
+    item.apply_rental_ratio ? "1" : "0",
+  ].join("::");
+}
+
+function dedupeDepreciationItems(items: TaxDepreciationItem[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const signature = getDepreciationSignature(item);
+    if (seen.has(signature)) return false;
+    seen.add(signature);
+    return true;
+  });
+}
+
+function getMaintenanceSignature(item: TaxMaintenanceDistributionItem) {
+  const transactionIds = (item.source_transaction_ids ?? []).filter(Boolean).slice().sort().join("|");
+  return [
+    item.property_id,
+    item.source_year,
+    String(item.label ?? "").trim().toLocaleLowerCase("de-DE"),
+    round2(Number(item.total_amount ?? 0)),
+    item.classification,
+    item.deduction_mode,
+    item.distribution_years,
+    item.current_year_share_override == null ? "" : round2(Number(item.current_year_share_override ?? 0)),
+    item.apply_rental_ratio ? "1" : "0",
+    transactionIds,
+  ].join("::");
+}
+
+function dedupeMaintenanceItems(items: TaxMaintenanceDistributionItem[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const signature = getMaintenanceSignature(item);
+    if (seen.has(signature)) return false;
+    seen.add(signature);
+    return true;
+  });
+}
+
 function computeTransactionDeductibleAmount(args: {
   tx: TaxCalculationTransaction;
   targetBlock: string;
@@ -418,8 +465,10 @@ export async function POST(request: Request) {
     supabase.from("tax_maintenance_distributions").select("*").eq("property_id", property_id).order("source_year", { ascending: true }),
   ]);
   const effectiveTaxSettings = taxSettings?.[0] ?? null;
+  const normalizedDepreciationItems = dedupeDepreciationItems((depreciationItems ?? []) as TaxDepreciationItem[]);
+  const normalizedMaintenanceItems = dedupeMaintenanceItems((maintenanceItems ?? []) as TaxMaintenanceDistributionItem[]);
   const excludedTransactionIds = Array.from(new Set(
-    (maintenanceItems ?? []).flatMap((item) => Array.isArray(item.source_transaction_ids) ? item.source_transaction_ids : []),
+    normalizedMaintenanceItems.flatMap((item) => Array.isArray(item.source_transaction_ids) ? item.source_transaction_ids : []),
   ));
 
   const calculated = calculateTaxFromTransactions(
@@ -434,7 +483,7 @@ export async function POST(request: Request) {
     transactions: processedTxData,
     taxYear: tax_year,
     categories: ((categories ?? []) as DbCategory[]),
-    maintenanceDistributions: (maintenanceItems ?? []) as TaxMaintenanceDistributionItem[],
+    maintenanceDistributions: normalizedMaintenanceItems,
   });
   calculated.maintenance_costs = maintenanceSourceResolution.immediateTotal;
 
@@ -460,8 +509,8 @@ export async function POST(request: Request) {
       taxData: baseData,
       taxYear: tax_year,
       rentalSharePct,
-      depreciationItems: (depreciationItems ?? []) as TaxDepreciationItem[],
-      maintenanceDistributions: (maintenanceItems ?? []) as TaxMaintenanceDistributionItem[],
+      depreciationItems: normalizedDepreciationItems,
+      maintenanceDistributions: normalizedMaintenanceItems,
     });
 
     // Nur Felder aus dem strukturierten Ergebnis schreiben, die tatsächlich berechnet wurden
@@ -529,7 +578,7 @@ export async function POST(request: Request) {
       return "other_expenses";
     };
 
-    const allDists = (maintenanceItems ?? []) as TaxMaintenanceDistributionItem[];
+    const allDists = normalizedMaintenanceItems;
     const dbCategoryMap = new Map((categories ?? []).map((category) => [category.label, category]));
     const transactionItems = ((txData ?? []) as TaxCalculationTransaction[])
       .filter((tx) => tx.date >= `${tax_year}-01-01` && tx.date <= `${tax_year}-12-31`)
@@ -668,8 +717,8 @@ export async function POST(request: Request) {
       taxData: finalData,
       gbrSettings: gbrSettings ?? null,
       taxSettings: effectiveTaxSettings,
-      depreciationItems: depreciationItems ?? [],
-      maintenanceDistributions: maintenanceItems ?? [],
+      depreciationItems: normalizedDepreciationItems,
+      maintenanceDistributions: normalizedMaintenanceItems,
       partnerTaxValues: [],
     });
     return NextResponse.json({
@@ -701,8 +750,8 @@ export async function POST(request: Request) {
     taxData: finalData,
     gbrSettings: gbrSettings ?? null,
     taxSettings: effectiveTaxSettings,
-    depreciationItems: depreciationItems ?? [],
-    maintenanceDistributions: maintenanceItems ?? [],
+    depreciationItems: normalizedDepreciationItems,
+    maintenanceDistributions: normalizedMaintenanceItems,
     partnerTaxValues: [],
   });
   return NextResponse.json({

@@ -49,6 +49,53 @@ export type StructuredTaxComputation = {
   warnings: StructuredTaxWarning[];
 };
 
+function getDistributionSignature(item: TaxMaintenanceDistributionItem) {
+  const transactionIds = (item.source_transaction_ids ?? []).filter(Boolean).slice().sort().join("|");
+  return [
+    item.property_id,
+    item.source_year,
+    item.label.trim().toLocaleLowerCase("de-DE"),
+    round2(num(item.total_amount)),
+    item.classification,
+    item.deduction_mode,
+    item.distribution_years,
+    item.current_year_share_override == null ? "" : round2(num(item.current_year_share_override)),
+    item.apply_rental_ratio ? "1" : "0",
+    transactionIds,
+  ].join("::");
+}
+
+function getDepreciationSignature(item: TaxDepreciationItem) {
+  return [
+    item.property_id,
+    item.tax_year,
+    item.item_type,
+    item.label.trim().toLocaleLowerCase("de-DE"),
+    round2(num(item.gross_annual_amount)),
+    item.apply_rental_ratio ? "1" : "0",
+  ].join("::");
+}
+
+function dedupeMaintenanceDistributions(items: TaxMaintenanceDistributionItem[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const signature = getDistributionSignature(item);
+    if (seen.has(signature)) return false;
+    seen.add(signature);
+    return true;
+  });
+}
+
+function dedupeDepreciationItems(items: TaxDepreciationItem[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const signature = getDepreciationSignature(item);
+    if (seen.has(signature)) return false;
+    seen.add(signature);
+    return true;
+  });
+}
+
 export function isDistributionActiveForYear(
   item: TaxMaintenanceDistributionItem,
   taxYear: number,
@@ -73,10 +120,12 @@ export function computeStructuredTaxData(args: {
     depreciationItems = [],
     maintenanceDistributions = [],
   } = args;
+  const normalizedDepreciationItems = dedupeDepreciationItems(depreciationItems);
+  const normalizedMaintenanceDistributions = dedupeMaintenanceDistributions(maintenanceDistributions);
 
   const rentalShareBasisPoints = ratioToBasisPoints(rentalSharePct);
   const warnings: StructuredTaxWarning[] = [];
-  const computedDepreciationItems: ComputedTaxDepreciationItem[] = depreciationItems.map((item) => ({
+  const computedDepreciationItems: ComputedTaxDepreciationItem[] = normalizedDepreciationItems.map((item) => ({
     ...item,
     tax_field: taxFieldForItemType[item.item_type],
     deductible_amount_elster: calcElsterEuroFromCents({
@@ -102,7 +151,7 @@ export function computeStructuredTaxData(args: {
   const buildingAfaRate = deriveBuildingAfaRate(taxData);
   const acquisitionRelatedTotals = new Map<number, number>();
 
-  for (const item of maintenanceDistributions) {
+  for (const item of normalizedMaintenanceDistributions) {
     if (acquisitionYear == null) continue;
     if (item.classification !== "maintenance_expense") continue;
     if (item.source_year < acquisitionYear || item.source_year > acquisitionYear + 2) continue;
@@ -121,7 +170,7 @@ export function computeStructuredTaxData(args: {
     });
   }
 
-  const computedMaintenanceDistributions = maintenanceDistributions.map((item) => {
+  const computedMaintenanceDistributions = normalizedMaintenanceDistributions.map((item) => {
     const affectsTaxYear = isDistributionActiveForYear(item, taxYear);
     const hasClassification = Boolean(item.classification);
     const hasDeductionMode = Boolean(item.deduction_mode);

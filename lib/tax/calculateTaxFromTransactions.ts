@@ -40,6 +40,23 @@ type DbCategory = {
   gruppe: string;
 };
 
+function normalizeDateOnly(value: string | null | undefined) {
+  if (!value) return undefined;
+  const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch && value.length <= 10) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  const deMatch = value.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (deMatch) return `${deMatch[3]}-${deMatch[2].padStart(2, "0")}-${deMatch[1].padStart(2, "0")}`;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return formatter.format(parsed);
+}
+
 export type TaxTargetBlock =
   | "income"
   | "allocated_costs"
@@ -390,7 +407,7 @@ export function calculateTaxFromTransactions(
 
     // Objekt-Stammdaten aus Property
     build_year: property.baujahr ?? undefined,
-    acquisition_date: property.kaufdatum ?? undefined,
+    acquisition_date: normalizeDateOnly(property.kaufdatum),
     acquisition_cost_building: deriveBuildingBasis(property) || undefined,
     property_type: property.type ?? undefined,
 

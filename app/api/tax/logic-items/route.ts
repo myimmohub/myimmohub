@@ -13,6 +13,54 @@ async function getSupabase() {
   });
 }
 
+function round2(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function getDepreciationSignature(item: {
+  property_id: string;
+  tax_year: number;
+  item_type: string;
+  label: string;
+  gross_annual_amount: number;
+  apply_rental_ratio: boolean;
+}) {
+  return [
+    item.property_id,
+    item.tax_year,
+    item.item_type,
+    String(item.label ?? "").trim().toLocaleLowerCase("de-DE"),
+    round2(Number(item.gross_annual_amount ?? 0)),
+    item.apply_rental_ratio ? "1" : "0",
+  ].join("::");
+}
+
+function getMaintenanceSignature(item: {
+  property_id: string;
+  source_year: number;
+  label: string;
+  total_amount: number;
+  classification: string;
+  deduction_mode: string;
+  distribution_years: number;
+  current_year_share_override: number | null;
+  apply_rental_ratio: boolean;
+  source_transaction_ids: string[];
+}) {
+  return [
+    item.property_id,
+    item.source_year,
+    String(item.label ?? "").trim().toLocaleLowerCase("de-DE"),
+    round2(Number(item.total_amount ?? 0)),
+    item.classification,
+    item.deduction_mode,
+    item.distribution_years,
+    item.current_year_share_override == null ? "" : round2(Number(item.current_year_share_override ?? 0)),
+    item.apply_rental_ratio ? "1" : "0",
+    (item.source_transaction_ids ?? []).filter(Boolean).slice().sort().join("|"),
+  ].join("::");
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const propertyId = searchParams.get("property_id");
@@ -43,7 +91,34 @@ export async function GET(request: Request) {
   if (depreciationError) return NextResponse.json({ error: depreciationError.message }, { status: 500 });
   if (maintenanceError) return NextResponse.json({ error: maintenanceError.message }, { status: 500 });
 
-  const activeMaintenanceItems = (maintenanceItems ?? []).filter((item) => isDistributionActiveForYear(item, taxYear));
+  const seenDepreciation = new Set<string>();
+  const normalizedDepreciationItems = (depreciationItems ?? []).filter((item) => {
+    const signature = getDepreciationSignature(item);
+    if (seenDepreciation.has(signature)) return false;
+    seenDepreciation.add(signature);
+    return true;
+  });
+
+  const seenMaintenance = new Set<string>();
+  const normalizedMaintenanceItems = (maintenanceItems ?? []).filter((item) => {
+    const signature = getMaintenanceSignature({
+      property_id: item.property_id,
+      source_year: item.source_year,
+      label: item.label,
+      total_amount: Number(item.total_amount ?? 0),
+      classification: item.classification,
+      deduction_mode: item.deduction_mode,
+      distribution_years: item.distribution_years,
+      current_year_share_override: item.current_year_share_override == null ? null : Number(item.current_year_share_override),
+      apply_rental_ratio: Boolean(item.apply_rental_ratio),
+      source_transaction_ids: Array.isArray(item.source_transaction_ids) ? item.source_transaction_ids.filter(Boolean) : [],
+    });
+    if (seenMaintenance.has(signature)) return false;
+    seenMaintenance.add(signature);
+    return true;
+  });
+
+  const activeMaintenanceItems = normalizedMaintenanceItems.filter((item) => isDistributionActiveForYear(item, taxYear));
   const linkedTransactionIds = Array.from(new Set(
     activeMaintenanceItems.flatMap((item) => Array.isArray(item.source_transaction_ids) ? item.source_transaction_ids : []),
   ));
@@ -73,7 +148,7 @@ export async function GET(request: Request) {
   if (linkedTransactionsError) return NextResponse.json({ error: linkedTransactionsError.message }, { status: 500 });
 
   return NextResponse.json({
-    depreciation_items: depreciationItems ?? [],
+    depreciation_items: normalizedDepreciationItems,
     maintenance_distributions: activeMaintenanceItems,
     candidate_transactions: candidateTransactions ?? [],
     linked_transactions: linkedTransactions ?? [],
@@ -109,8 +184,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unvollständige AfA-Position." }, { status: 400 });
     }
 
-    const { data, error } = payload.id
-      ? await supabase.from("tax_depreciation_items").update(payload).eq("id", payload.id).select().single()
+    const existingId = payload.id
+      ? payload.id
+      : (() => undefined)();
+    let targetId = existingId;
+    if (!targetId) {
+      const { data: existingRows } = await supabase
+        .from("tax_depreciation_items")
+        .select("*")
+        .eq("property_id", payload.property_id)
+        .eq("tax_year", payload.tax_year);
+      const signature = getDepreciationSignature(payload);
+      targetId = (existingRows ?? []).find((row) => getDepreciationSignature(row) === signature)?.id;
+    }
+
+    const { data, error } = targetId
+      ? await supabase.from("tax_depreciation_items").update(payload).eq("id", targetId).select().single()
       : await supabase.from("tax_depreciation_items").insert(payload).select().single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -153,8 +242,31 @@ export async function POST(request: Request) {
     payload.distribution_years = 1;
   }
 
-  const { data, error } = payload.id
-    ? await supabase.from("tax_maintenance_distributions").update(payload).eq("id", payload.id).select().single()
+  let targetId = payload.id;
+  if (!targetId) {
+    const { data: existingRows } = await supabase
+      .from("tax_maintenance_distributions")
+      .select("*")
+      .eq("property_id", payload.property_id);
+    const signature = getMaintenanceSignature(payload);
+    targetId = (existingRows ?? []).find((row) =>
+      getMaintenanceSignature({
+        property_id: row.property_id,
+        source_year: row.source_year,
+        label: row.label,
+        total_amount: Number(row.total_amount ?? 0),
+        classification: row.classification,
+        deduction_mode: row.deduction_mode,
+        distribution_years: row.distribution_years,
+        current_year_share_override: row.current_year_share_override == null ? null : Number(row.current_year_share_override),
+        apply_rental_ratio: Boolean(row.apply_rental_ratio),
+        source_transaction_ids: Array.isArray(row.source_transaction_ids) ? row.source_transaction_ids.filter(Boolean) : [],
+      }) === signature,
+    )?.id;
+  }
+
+  const { data, error } = targetId
+    ? await supabase.from("tax_maintenance_distributions").update(payload).eq("id", targetId).select().single()
     : await supabase.from("tax_maintenance_distributions").insert(payload).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
