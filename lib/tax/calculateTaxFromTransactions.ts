@@ -119,10 +119,10 @@ const CATEGORY_TO_FIELD: Record<string, keyof TaxData> = {
   // Verwaltung
   "Steuerberatung / Rechtskosten":    "other_expenses",
   "Verwaltungspauschale":             "property_management",
-  "Porto":                            "other_expenses",   // Sonstige Werbungskosten, nicht Hausverwaltungskosten
+  "Porto":                            "property_management",
   "Inserate & Vermarktung":           "other_expenses",
   "Fahrtkosten":                      "other_expenses",
-  "Bürokosten / Verwaltungsaufwand":  "other_expenses",
+  "Bürokosten / Verwaltungsaufwand":  "property_management",
 
   // Einrichtung
   "Einrichtung / Möbel":             "other_expenses",
@@ -224,8 +224,29 @@ function inferFieldFromText(
   // Kosten der Hausverwaltung (Z. 35): Verwaltungsgebühren an Hausverwaltungsgesellschaft
   if (containsAny(haystack, ["hausverwaltung", "immobilienverwaltung", "objektverwaltung", "ferienhausverwaltung", "verwaltungspauschale", "verwaltungskosten", "pauschale verwaltung"])) return "property_management";
   // Laufende Betriebskosten (Z. 48/sonstige) — KEIN WEG-Hausgeld und KEIN Erhaltungsaufwand
-  if (containsAny(haystack, ["hauswart", "hausmeister", "heizung", "warmwasser", "hausbeleuchtung", "allgemeinstrom", "schornstein", "treppenhausreinigung", "strassenreinigung", "strassen reinigung"])) return "other_expenses";
+  if (containsAny(haystack, [
+    "hauswart",
+    "hausmeister",
+    "heizung",
+    "warmwasser",
+    "hausbeleuchtung",
+    "allgemeinstrom",
+    "strom",
+    "energieversorgung",
+    "gas",
+    "fernwarme",
+    "fernwaerme",
+    "schornstein",
+    "treppenhausreinigung",
+    "strassenreinigung",
+    "strassen reinigung",
+    "gebaudereinigung",
+    "gebaeudereinigung",
+    "gartenpflege",
+    "winterdienst",
+  ])) return "other_expenses";
   if (containsAny(haystack, ["handwerker", "material", "instandhaltung", "instandsetzung", "reparatur", "wartung", "sanierung", "renovierung"])) return "maintenance_costs";
+  if (containsAny(haystack, ["porto", "burokosten", "burokosten", "verwaltungsaufwand"])) return "property_management";
   if (containsAny(haystack, ["nebenkostenerstattung", "umlage"])) return "operating_costs_income";
   if (containsAny(haystack, ["mieteinnahmen", "miete", "ferienvermietung"])) return "rent_income";
   if (containsAny(haystack, ["kaution"])) return "deposits_received";
