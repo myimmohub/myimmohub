@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/properties", label: "Immobilien", match: (pathname: string) => pathname.startsWith("/dashboard/properties"), icon: BuildingIcon },
   { href: "/dashboard/documents", label: "Dokumente", match: (pathname: string) => pathname.startsWith("/dashboard/documents") || pathname.startsWith("/dashboard/inbox"), icon: DocumentIcon },
   { href: "/dashboard/banking", label: "Banking", match: (pathname: string) => pathname.startsWith("/dashboard/banking"), icon: CardIcon },
+  { href: "/dashboard/nka", label: "Nebenkosten", match: (pathname: string) => pathname.startsWith("/dashboard/nka"), icon: ReceiptIcon },
   { href: "/tools", label: "Rechner", match: (pathname: string) => pathname.startsWith("/tools"), icon: CalculatorIcon },
 ];
 
@@ -244,6 +245,14 @@ function CalculatorIcon({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
       <path d="M5 2a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V4a2 2 0 00-2-2H5zm2 3a1 1 0 000 2h6a1 1 0 100-2H7zm0 4a1 1 0 100 2h1a1 1 0 100-2H7zm3 0a1 1 0 100 2h1a1 1 0 100-2h-1zm3 0a1 1 0 100 2h1a1 1 0 100-2h-1zM7 13a1 1 0 100 2h1a1 1 0 100-2H7zm3 0a1 1 0 100 2h4a1 1 0 100-2h-4z" />
+    </svg>
+  );
+}
+
+function ReceiptIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+      <path d="M5 2a1 1 0 00-1 1v14l2-1.5L8 17l2-1.5L12 17l2-1.5L16 17V3a1 1 0 00-1-1H5zm2 4h6a1 1 0 110 2H7a1 1 0 010-2zm0 4h6a1 1 0 110 2H7a1 1 0 010-2z" />
     </svg>
   );
 }
