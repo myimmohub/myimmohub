@@ -10,6 +10,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import {
   calculateTaxFromTransactions,
+  getSignedTaxFieldAmount,
   mapTaxFieldToTargetBlock,
   resolveField,
   type TaxCalculationTransaction,
@@ -208,26 +209,26 @@ function dedupeMaintenanceItems(items: TaxMaintenanceDistributionItem[]) {
 function computeTransactionDeductibleAmount(args: {
   tx: TaxCalculationTransaction;
   targetBlock: string;
-  grossAmount: number;
+  signedAmount: number;
   rentalSharePct: number;
 }) {
   const haystack = normalizeForMatching([args.tx.category, args.tx.counterpart, args.tx.description].filter(Boolean).join(" "));
   const fullDeductionKeywords = ["kurtaxe", "tourismusabgabe", "verpflegung arbeitseinsatz", "verpflegung"];
 
   if (args.targetBlock === "allocated_costs" || args.targetBlock === "non_allocated_costs") {
-    return round2(args.grossAmount * args.rentalSharePct);
+    return round2(args.signedAmount * args.rentalSharePct);
   }
 
   if (args.targetBlock === "other_expenses") {
     const applyFullDeduction = containsAny(haystack, fullDeductionKeywords);
-    return round2(args.grossAmount * (applyFullDeduction ? 1 : args.rentalSharePct));
+    return round2(args.signedAmount * (applyFullDeduction ? 1 : args.rentalSharePct));
   }
 
   if (args.targetBlock === "financing_costs") {
-    return round2(args.grossAmount * args.rentalSharePct);
+    return round2(args.signedAmount * args.rentalSharePct);
   }
 
-  return round2(args.grossAmount);
+  return round2(args.signedAmount);
 }
 
 function hasOwnManagementTransaction(
@@ -618,16 +619,30 @@ export async function POST(request: Request) {
 
     // Nur Felder aus dem strukturierten Ergebnis schreiben, die tatsächlich berechnet wurden
     const structuredPatch: Record<string, unknown> = {};
+    const assignIfChanged = (key: "depreciation_building" | "depreciation_outdoor" | "depreciation_fixtures") => {
+      const nextValue = structured.taxData[key];
+      const baseValue = baseData[key];
+      const normalizedNext = nextValue == null ? null : Number(nextValue);
+      const normalizedBase = baseValue == null ? null : Number(baseValue);
+      if (normalizedNext === normalizedBase) return;
+      structuredPatch[key] = normalizedNext;
+    };
     // maintenance_costs is NOT patched here: it must stay as the immediate-only transaction amount.
     // §82b distribution annual shares are computed on-the-fly by buildElsterLineSummary.
     if (structured.lineTotals.depreciation_building != null) {
       structuredPatch.depreciation_building = structured.taxData.depreciation_building;
+    } else {
+      assignIfChanged("depreciation_building");
     }
     if (structured.lineTotals.depreciation_outdoor != null) {
       structuredPatch.depreciation_outdoor = structured.taxData.depreciation_outdoor;
+    } else {
+      assignIfChanged("depreciation_outdoor");
     }
     if (structured.lineTotals.depreciation_fixtures != null) {
       structuredPatch.depreciation_fixtures = structured.taxData.depreciation_fixtures;
+    } else {
+      assignIfChanged("depreciation_fixtures");
     }
 
     let finalData = structured.taxData;
@@ -691,11 +706,17 @@ export async function POST(request: Request) {
       .map((tx) => {
         const fieldKey = resolveField(tx.category ?? "", tx.anlage_v_zeile, dbCategoryMap);
         const block = resolveTransactionTargetBlock(tx, fieldKey);
-        const absoluteAmount = Math.abs(Number(tx.amount ?? 0));
+        const dbCat = dbCategoryMap.get(tx.category ?? "");
+        const signedTaxAmount = getSignedTaxFieldAmount({
+          amount: Number(tx.amount ?? 0),
+          category: tx.category ?? null,
+          dbCategory: dbCat,
+        });
+        const absoluteAmount = Math.abs(signedTaxAmount);
         const deductibleAmount = computeTransactionDeductibleAmount({
           tx,
           targetBlock: block,
-          grossAmount: absoluteAmount,
+          signedAmount: signedTaxAmount,
           rentalSharePct,
         });
         return {
@@ -794,16 +815,14 @@ export async function POST(request: Request) {
   }
 
   if (existing) {
-    // Nur Felder updaten die noch null sind oder import_source = 'calculated'
-    const updates: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(calculated)) {
-      if (key === "tax_year" || key === "import_source") continue;
-      const existingVal = (existing as Record<string, unknown>)[key];
-      if (existingVal == null || existing.import_source === "calculated") {
-        updates[key] = value;
-      }
-    }
-    updates.updated_at = new Date().toISOString();
+    // Ein expliziter Recalculate soll den berechneten Snapshot vollständig erneuern,
+    // statt alte importierte/manuelle Feldwerte still mitzuschleppen.
+    const updates: Record<string, unknown> = {
+      ...calculated,
+      import_source: "calculated",
+      updated_at: new Date().toISOString(),
+    };
+    delete updates.tax_year;
 
     const { data, error } = await supabase
       .from("tax_data")

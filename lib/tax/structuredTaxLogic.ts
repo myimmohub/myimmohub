@@ -285,6 +285,15 @@ export function computeStructuredTaxData(args: {
       originalValue: taxData.depreciation_building,
       computedValue: depreciationLineTotals.depreciation_building,
     });
+  } else if (taxData.import_source === "calculated" && taxData.depreciation_building != null) {
+    // Calculated snapshots store the gross annual building AfA first.
+    // For the Anlage V line we must still apply the rental ratio even if no
+    // explicit depreciation item exists yet for the current year.
+    nextTaxData.depreciation_building = calcElsterEuroFromCents({
+      amountCents: toCents(num(taxData.depreciation_building)),
+      applyRentalRatio: true,
+      rentalShareBasisPoints,
+    });
   }
   if (depreciationLineTotals.depreciation_outdoor != null) {
     nextTaxData.depreciation_outdoor = preferImportedElsterLineValue({
@@ -292,12 +301,24 @@ export function computeStructuredTaxData(args: {
       originalValue: taxData.depreciation_outdoor,
       computedValue: depreciationLineTotals.depreciation_outdoor,
     });
+  } else if (taxData.import_source === "calculated" && taxData.depreciation_outdoor != null) {
+    nextTaxData.depreciation_outdoor = calcElsterEuroFromCents({
+      amountCents: toCents(num(taxData.depreciation_outdoor)),
+      applyRentalRatio: true,
+      rentalShareBasisPoints,
+    });
   }
   if (depreciationLineTotals.depreciation_fixtures != null) {
     nextTaxData.depreciation_fixtures = preferImportedElsterLineValue({
       importSource: taxData.import_source,
       originalValue: taxData.depreciation_fixtures,
       computedValue: depreciationLineTotals.depreciation_fixtures,
+    });
+  } else if (taxData.import_source === "calculated" && taxData.depreciation_fixtures != null) {
+    nextTaxData.depreciation_fixtures = calcElsterEuroFromCents({
+      amountCents: toCents(num(taxData.depreciation_fixtures)),
+      applyRentalRatio: true,
+      rentalShareBasisPoints,
     });
   }
   // NOTE: nextTaxData.maintenance_costs is intentionally NOT modified here.
