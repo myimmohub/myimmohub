@@ -295,22 +295,25 @@ function deriveBuildingBasis(property: PropertyForTax): number {
  * Berechnet AfA basierend auf Property-Daten.
  */
 export function calculateDepreciation(property: PropertyForTax): number {
+  const afaBasis = deriveBuildingBasis(property);
+  if (afaBasis > 0) {
+    let satz = property.afa_satz ?? 0;
+    if (satz === 0 && property.baujahr) {
+      if (property.baujahr < 1925) satz = 0.025;
+      else if (property.baujahr <= 2022) satz = 0.02;
+      else satz = 0.03;
+    }
+
+    if (satz > 0) {
+      return Math.round(afaBasis * satz * 100) / 100;
+    }
+  }
+
   if (property.afa_jahresbetrag != null && property.afa_jahresbetrag > 0) {
     return Math.round(Number(property.afa_jahresbetrag) * 100) / 100;
   }
 
-  const afaBasis = deriveBuildingBasis(property);
-
-  if (afaBasis <= 0) return 0;
-
-  let satz = property.afa_satz ?? 0;
-  if (satz === 0 && property.baujahr) {
-    if (property.baujahr < 1925) satz = 0.025;
-    else if (property.baujahr <= 2022) satz = 0.02;
-    else satz = 0.03;
-  }
-
-  return Math.round(afaBasis * satz * 100) / 100;
+  return 0;
 }
 
 /**

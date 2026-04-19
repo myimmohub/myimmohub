@@ -2109,10 +2109,10 @@ function buildDefaultDepreciationItems(args: {
   const hasPropertyBuildingAmount = Number(property.afa_jahresbetrag ?? 0) > 0;
   const hasDerivedBuildingAmount = derivedBuildingAmount > 0;
   const buildingAmountSource =
-    hasPropertyBuildingAmount
-      ? Number(property.afa_jahresbetrag)
-      : hasDerivedBuildingAmount
-        ? derivedBuildingAmount
+    hasDerivedBuildingAmount
+      ? derivedBuildingAmount
+      : hasPropertyBuildingAmount
+        ? Number(property.afa_jahresbetrag)
         : Number(taxData?.depreciation_building ?? 0);
   const buildingAmount = Math.max(0, Number(buildingAmountSource));
 
@@ -2124,7 +2124,7 @@ function buildDefaultDepreciationItems(args: {
       item_type: "building",
       label: `Gebäude · ${property.name}`,
       gross_annual_amount: round2(buildingAmount),
-      apply_rental_ratio: hasPropertyBuildingAmount || hasDerivedBuildingAmount,
+      apply_rental_ratio: hasDerivedBuildingAmount || hasPropertyBuildingAmount,
     });
   }
 
