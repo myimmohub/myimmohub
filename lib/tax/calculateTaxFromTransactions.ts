@@ -81,6 +81,21 @@ function containsAny(text: string, needles: string[]) {
   return needles.some((needle) => text.includes(needle));
 }
 
+export function getSignedTaxFieldAmount(args: {
+  amount: number;
+  category: string | null;
+  dbCategory?: DbCategory | null;
+}) {
+  const numericAmount = Number(args.amount ?? 0);
+  if (!Number.isFinite(numericAmount) || numericAmount === 0) return 0;
+
+  if (args.dbCategory) {
+    return args.dbCategory.typ === "einnahme" ? numericAmount : -numericAmount;
+  }
+
+  return numericAmount;
+}
+
 // ── Direktes Mapping: Kategorie-Label → tax_data-Feld ───────────────────────
 
 const CATEGORY_TO_FIELD: Record<string, keyof TaxData> = {
@@ -418,11 +433,14 @@ export function calculateTaxFromTransactions(
     const fieldKey = resolveField(cat, tx.anlage_v_zeile, dbCatMap);
     if (!fieldKey) continue; // nicht absetzbar oder nicht zuordbar
 
-    // Einnahme → positiv addieren, Ausgabe → abs addieren
     const dbCat = dbCatMap.get(cat);
-    const isEinnahme = dbCat ? dbCat.typ === "einnahme" : amount > 0;
+    const signedTaxAmount = getSignedTaxFieldAmount({
+      amount,
+      category: cat,
+      dbCategory: dbCat,
+    });
 
-    result[fieldKey] = (result[fieldKey] ?? 0) + (isEinnahme ? amount : Math.abs(amount));
+    result[fieldKey] = (result[fieldKey] ?? 0) + signedTaxAmount;
   }
 
   // AfA berechnen
