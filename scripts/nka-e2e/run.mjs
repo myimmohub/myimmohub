@@ -94,15 +94,7 @@ function base64UrlEncode(str) {
 }
 
 function buildCookieHeader(session) {
-  const json = JSON.stringify([
-    session.access_token,
-    session.refresh_token,
-    null,
-    null,
-    null,
-  ]);
   // @supabase/ssr stores the Session object JSON as base64url with base64- prefix.
-  // But the common current format stores a compressed array. Let's stringify the full session object instead.
   const full = JSON.stringify({
     access_token: session.access_token,
     token_type: session.token_type,
@@ -493,7 +485,7 @@ async function scenarioDelete(cookie, period) {
   ok(`Nach Löschung: ${afterRes.body.cost_items.length} Positionen, Summe umlagefähig=${afterRes.body.period.gesamtkosten_umlagefaehig}`);
 }
 
-async function scenarioAutofill(cookie, PERIOD_VON, PERIOD_BIS) {
+async function scenarioAutofill(cookie) {
   section("Szenario 3 – Autofill aus Transaktionen");
 
   // Seed some transactions in the test property
@@ -614,7 +606,7 @@ async function scenarioAutofill(cookie, PERIOD_VON, PERIOD_BIS) {
   expect("Nach 2. Autofill weiterhin 3 tx-Positionen (keine Duplikate)", tx_items2.length, 3);
 }
 
-async function scenarioDeadline(cookie) {
+async function scenarioDeadline() {
   section("Szenario 4 – Deadline-Status in der Liste");
 
   // Lege eine zweite Periode an, deren Deadline in der Vergangenheit liegt (2020er Periode)
@@ -719,6 +711,35 @@ async function scenarioValidation(cookie, periodId) {
     body: JSON.stringify({ bezeichnung: "Test", betr_kv_position: 99, betrag_brutto: 100, umlageschluessel: "wohnflaeche" }),
   });
   expect("cost-item mit BetrKV=99 → 400", r5.status, 400);
+
+  // Ungültiger Umlageschlüssel
+  const r6 = await apiFetch(cookie, `/api/nka/periods/${periodId}/cost-items`, {
+    method: "POST",
+    body: JSON.stringify({ bezeichnung: "Test", betr_kv_position: 13, betrag_brutto: 100, umlageschluessel: "hokuspokus" }),
+  });
+  expect("cost-item mit ungültigem Umlageschlüssel → 400", r6.status, 400);
+
+  // PATCH mit ungültigem Umlageschlüssel
+  // Erst eine valide Position anlegen, dann PATCH mit bad value
+  const created = await apiFetch(cookie, `/api/nka/periods/${periodId}/cost-items`, {
+    method: "POST",
+    body: JSON.stringify({ bezeichnung: "Validation-Target", betr_kv_position: 17, betrag_brutto: 10, umlageschluessel: "wohnflaeche" }),
+  });
+  if (created.status === 200 && created.body.item?.id) {
+    const itemId = created.body.item.id;
+    const patchBad = await apiFetch(cookie, `/api/nka/periods/${periodId}/cost-items/${itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ umlageschluessel: "quatsch" }),
+    });
+    expect("PATCH cost-item mit ungültigem Umlageschlüssel → 400", patchBad.status, 400);
+    // Cleanup
+    await apiFetch(cookie, `/api/nka/periods/${periodId}/cost-items/${itemId}`, { method: "DELETE" });
+  }
+
+  // DELETE nicht existierender cost-item
+  const fakeItemId = randomUUID();
+  const delMissing = await apiFetch(cookie, `/api/nka/periods/${periodId}/cost-items/${fakeItemId}`, { method: "DELETE" });
+  expect("DELETE nicht existierender cost-item → 404", delMissing.status, 404);
 }
 
 // ---------------------------------------------------------------------------
@@ -751,8 +772,8 @@ try {
   const cookie = await login(testEmail, testPassword);
   const period = await scenarioLifecycle(cookie, PERIOD_VON, PERIOD_BIS);
   await scenarioDelete(cookie, period);
-  await scenarioAutofill(cookie, PERIOD_VON, PERIOD_BIS);
-  await scenarioDeadline(cookie);
+  await scenarioAutofill(cookie);
+  await scenarioDeadline();
   await scenarioRls(period.id);
   await scenarioValidation(cookie, period.id);
 } catch (e) {

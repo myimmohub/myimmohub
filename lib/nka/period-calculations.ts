@@ -134,11 +134,12 @@ export function summarizePeriod(costItems: NkaCostItem[]) {
 }
 
 export function determineDeadlineStatus(period: Pick<NkaPeriod, "status" | "deadline_abrechnung">) {
-  if (!period.deadline_abrechnung) return "neutral";
-  const today = new Date();
-  const deadline = asDate(period.deadline_abrechnung);
-  const diffDays = Math.floor((deadline.getTime() - today.getTime()) / DAY_MS);
   if (period.status === "abgeschlossen") return "done";
+  if (!period.deadline_abrechnung) return "neutral";
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+  const deadline = asDate(period.deadline_abrechnung).getTime();
+  const diffDays = Math.floor((deadline - todayUtc) / DAY_MS);
   if (diffDays < 0) return "critical";
   if (diffDays <= 30) return "warning";
   if (diffDays <= 90) return "attention";

@@ -15,12 +15,7 @@ const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_RO
   auth: { persistSession: false },
 });
 
-// Introspect properties table columns
-const { data, error } = await admin.rpc("exec_sql", {
-  sql: "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'properties' ORDER BY ordinal_position;",
-}).maybeSingle?.() ?? { data: null, error: null };
-
-// Fallback: try fetching one row to infer columns
+// Fetch one row to infer columns
 const { data: sample, error: sampleErr } = await admin.from("properties").select("*").limit(1);
 if (sampleErr) {
   console.error("sample error:", sampleErr);

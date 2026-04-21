@@ -1,20 +1,20 @@
 # NKA E2E Test Report
 
-Datum: 2026-04-19T07:57:57.026Z
+Datum: 2026-04-21T07:42:09.606Z
 Project: aeeefaniknatnmcafqln
 
 
 ## Seed
 
-- ℹ️ Test-User: nka-e2e-1776585477026@immohub-test.invalid · id=51435112-e02d-43d1-a208-031a16822272
-- ℹ️ Stranger-User (für RLS-Check): nka-e2e-stranger-1776585477026@immohub-test.invalid · id=5bcbb116-fa46-426d-8022-e1d906a60825
-- ℹ️ Property: 0aeaa8f2-593e-4d18-94dc-880d88d1f2c0 · Gesamt-Wohnfläche 200 m² · 4 Einheiten
+- ℹ️ Test-User: nka-e2e-1776757329606@immohub-test.invalid · id=04363653-9f3d-4243-80a4-727170848350
+- ℹ️ Stranger-User (für RLS-Check): nka-e2e-stranger-1776757329606@immohub-test.invalid · id=b846a5e7-47fd-421a-a52a-06c52cb830bf
+- ℹ️ Property: 17f20c9c-b462-486e-a323-8b8d0d3afaa6 · Gesamt-Wohnfläche 200 m² · 4 Einheiten
 - ℹ️ Units: WE1=80m², WE2=60m², WE3=40m², WE4=20m² (Summe 200m²)
 - ℹ️ Tenants: Anna (WE1 voll, 2P, 150€ VZ) · Bernd (WE2 ab 1.7., 1P, 100€ VZ) · Carla (WE3 bis 30.6., 3P, 80€ VZ) · WE4 leer
 
 ## Szenario 1 – Periode anlegen, manuelle Kostenposition, Recalculate
 
-- ✅ Periode angelegt: id=8326cb29-cefc-4ab9-885a-7858e86d320b, status=offen, deadline=2026-12-31
+- ✅ Periode angelegt: id=0072f94b-854d-4058-a040-88d2939f12e7, status=offen, deadline=2026-12-31
 - ✅ Deadline-Generated-Column: "2026-12-31"
 - ✅ Überlappende Periode wird abgelehnt (409): 409.00 ≈ 409.00
 - ✅ Cost item 1 angelegt, Summe umlagefähig=1200
@@ -64,8 +64,8 @@ Project: aeeefaniknatnmcafqln
 ## Szenario 4 – Deadline-Status in der Liste
 
 - ℹ️ Alte Periode 2020: deadline=2021-12-31
-- ❌ **FAIL:** Alte Periode deadline_status=critical: actual=undefined vs expected="critical"
-- ❌ **FAIL:** 2025er Periode deadline_status=ok (>90 Tage): actual=undefined vs expected="ok"
+- ✅ Alte Periode deadline_status=critical: "critical"
+- ✅ 2025er Periode deadline_status=ok (>90 Tage): "ok"
 
 ## Szenario 5 – RLS: Fremd-User darf nicht zugreifen
 
@@ -81,9 +81,12 @@ Project: aeeefaniknatnmcafqln
 - ✅ cost-item ohne Bezeichnung → 400: 400.00 ≈ 400.00
 - ✅ cost-item mit negativem Betrag → 400: 400.00 ≈ 400.00
 - ✅ cost-item mit BetrKV=99 → 400: 400.00 ≈ 400.00
+- ✅ cost-item mit ungültigem Umlageschlüssel → 400: 400.00 ≈ 400.00
+- ✅ PATCH cost-item mit ungültigem Umlageschlüssel → 400: 400.00 ≈ 400.00
+- ✅ DELETE nicht existierender cost-item → 404: 404.00 ≈ 404.00
 
 ## Cleanup
 
 - ✅ 6 Transaktionen gelöscht
-- ✅ User 51435112-e02d-43d1-a208-031a16822272 gelöscht (CASCADE)
-- ✅ User 5bcbb116-fa46-426d-8022-e1d906a60825 gelöscht (CASCADE)
+- ✅ User 04363653-9f3d-4243-80a4-727170848350 gelöscht (CASCADE)
+- ✅ User b846a5e7-47fd-421a-a52a-06c52cb830bf gelöscht (CASCADE)

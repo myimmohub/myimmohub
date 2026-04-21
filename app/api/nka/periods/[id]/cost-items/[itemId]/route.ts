@@ -4,6 +4,12 @@ import { createServerClient } from "@supabase/ssr";
 import { syncNkaPeriodDerivedData } from "@/lib/nka/recalculate";
 import type { NkaUmlageschluessel } from "@/types/nka";
 
+const UMLAGESCHLUESSEL_VALUES: readonly NkaUmlageschluessel[] = ["wohnflaeche", "personen", "verbrauch", "einheiten", "mea"];
+
+function isUmlageschluessel(value: unknown): value is NkaUmlageschluessel {
+  return typeof value === "string" && (UMLAGESCHLUESSEL_VALUES as readonly string[]).includes(value);
+}
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
@@ -73,7 +79,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
     updates.betrag_brutto = Math.round(betrag * 100) / 100;
   }
-  if (body.umlageschluessel !== undefined) updates.umlageschluessel = body.umlageschluessel;
+  if (body.umlageschluessel !== undefined) {
+    if (!isUmlageschluessel(body.umlageschluessel)) {
+      return NextResponse.json({ error: "Ungültiger Umlageschlüssel." }, { status: 400 });
+    }
+    updates.umlageschluessel = body.umlageschluessel;
+  }
   if (body.ist_umlagefaehig !== undefined) updates.ist_umlagefaehig = Boolean(body.ist_umlagefaehig);
   if (body.notiz !== undefined) updates.notiz = body.notiz?.trim() || null;
 
@@ -106,6 +117,14 @@ export async function DELETE(_: Request, context: { params: Promise<{ id: string
 
   const period = await loadOwnedPeriod(supabase, id, user.id);
   if (!period) return NextResponse.json({ error: "Periode nicht gefunden." }, { status: 404 });
+
+  const { data: existingItem } = await supabase
+    .from("nka_cost_items")
+    .select("id")
+    .eq("id", itemId)
+    .eq("nka_periode_id", id)
+    .single();
+  if (!existingItem) return NextResponse.json({ error: "Kostenposition nicht gefunden." }, { status: 404 });
 
   const deleteResult = await supabase.from("nka_cost_items").delete().eq("id", itemId).eq("nka_periode_id", id);
   if (deleteResult.error) return NextResponse.json({ error: deleteResult.error.message }, { status: 500 });

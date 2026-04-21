@@ -24,6 +24,18 @@ const UMLAGESCHLUESSEL_OPTIONS = [
   { value: "mea", label: "MEA" },
 ] as const;
 
+function parseGermanNumber(raw: string | number): number {
+  if (typeof raw === "number") return raw;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return NaN;
+  // Strip thousand separators ("1.500,50" → "1500,50"); only drop dots when a comma decimal is present.
+  const hasComma = trimmed.includes(",");
+  const normalized = hasComma
+    ? trimmed.replace(/\./g, "").replace(",", ".")
+    : trimmed;
+  return Number(normalized);
+}
+
 function emptyItemDraft() {
   return {
     bezeichnung: "",
@@ -131,7 +143,7 @@ export default function NkaEditorPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...newItem,
-        betrag_brutto: Number(String(newItem.betrag_brutto).replace(",", ".")),
+        betrag_brutto: parseGermanNumber(newItem.betrag_brutto),
       }),
     });
     const json = await res.json().catch(() => null) as { error?: string } | null;
@@ -169,7 +181,7 @@ export default function NkaEditorPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...draft,
-        betrag_brutto: Number(String(draft.betrag_brutto).replace(",", ".")),
+        betrag_brutto: parseGermanNumber(draft.betrag_brutto),
       }),
     });
     const json = await res.json().catch(() => null) as { error?: string } | null;

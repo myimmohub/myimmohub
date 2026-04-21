@@ -30,12 +30,15 @@ function fmtEur(value: number | null | undefined) {
 
 function fmtDate(value: string | null | undefined) {
   if (!value) return "—";
-  return new Date(`${value}T00:00:00`).toLocaleDateString("de-DE");
+  const [y, m, d] = value.split("-").map(Number);
+  if (!y || !m || !d) return value;
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).toLocaleDateString("de-DE", { timeZone: "UTC" });
 }
 
 export default function NkaPdfPage() {
   const { id } = useParams<{ id: string }>();
   const [data, setData] = useState<NkaPdfResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +47,11 @@ export default function NkaPdfPage() {
       const res = await fetch(`/api/nka/periods/${id}`);
       const json = await res.json().catch(() => null) as NkaPdfResponse | { error?: string } | null;
       if (cancelled) return;
-      if (!res.ok || !isNkaPdfResponse(json)) return;
+      if (!res.ok || !isNkaPdfResponse(json)) {
+        setError((json as { error?: string } | null)?.error ?? "PDF konnte nicht geladen werden.");
+        return;
+      }
+      setError(null);
       setData(json);
     }
 
@@ -89,6 +96,19 @@ export default function NkaPdfPage() {
     () => (data?.tenant_shares ?? []).reduce((sum, share) => sum + Number(share.summe_vorauszahlungen ?? 0), 0),
     [data],
   );
+
+  if (error) {
+    return (
+      <main className="min-h-screen bg-white px-4 py-10 text-slate-900">
+        <section className="mx-auto max-w-4xl space-y-3">
+          <p className="text-sm font-medium text-red-600">{error}</p>
+          <Link href={`/dashboard/nka/${id}`} className="inline-flex rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            Zurück zur NKA
+          </Link>
+        </section>
+      </main>
+    );
+  }
 
   if (!data) {
     return (
@@ -244,7 +264,10 @@ export default function NkaPdfPage() {
                   const result = Number(share.nachzahlung_oder_guthaben ?? (Number(share.summe_anteile ?? 0) - Number(share.summe_vorauszahlungen ?? 0)));
                   return (
                     <tr key={share.id}>
-                      <td className="px-4 py-3 text-slate-900">{share.versandt_an_email ?? share.mieter_id}</td>
+                      <td className="px-4 py-3 text-slate-900">
+                        <div className="font-medium">{share.tenant_name ?? share.versandt_an_email ?? share.mieter_id}</div>
+                        {share.unit_label ? <div className="text-xs text-slate-500">{share.unit_label}</div> : null}
+                      </td>
                       <td className="px-4 py-3 text-slate-700">{fmtDate(share.bewohnt_von)} bis {fmtDate(share.bewohnt_bis)}</td>
                       <td className="px-4 py-3 text-slate-700">{share.tage_anteil}</td>
                       <td className="px-4 py-3 text-slate-900">{fmtEur(Number(share.summe_anteile ?? 0))}</td>

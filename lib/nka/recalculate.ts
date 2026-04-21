@@ -15,7 +15,11 @@ export async function syncNkaPeriodDerivedData(
   period: PeriodWithProperty,
 ) {
   const [{ data: costItems, error: costError }, { data: tenants, error: tenantError }] = await Promise.all([
-    supabase.from("nka_cost_items").select("*").eq("nka_periode_id", period.id).order?.("betr_kv_position") ?? supabase.from("nka_cost_items").select("*").eq("nka_periode_id", period.id),
+    supabase
+      .from("nka_cost_items")
+      .select("*")
+      .eq("nka_periode_id", period.id)
+      .order("betr_kv_position"),
     supabase
       .from("tenants")
       .select(`
@@ -29,8 +33,9 @@ export async function syncNkaPeriodDerivedData(
         additional_costs_cents,
         personen_anzahl,
         anteil_wohnflaeche_m2,
-        unit:units!tenants_unit_id_fkey(id, label, area_sqm, property_id)
-      `),
+        unit:units!tenants_unit_id_fkey!inner(id, label, area_sqm, property_id)
+      `)
+      .eq("unit.property_id", period.property_id),
   ]);
 
   if (costError) throw new Error(costError.message);

@@ -4,6 +4,12 @@ import { createServerClient } from "@supabase/ssr";
 import { syncNkaPeriodDerivedData } from "@/lib/nka/recalculate";
 import type { NkaUmlageschluessel } from "@/types/nka";
 
+const UMLAGESCHLUESSEL_VALUES: readonly NkaUmlageschluessel[] = ["wohnflaeche", "personen", "verbrauch", "einheiten", "mea"];
+
+function isUmlageschluessel(value: unknown): value is NkaUmlageschluessel {
+  return typeof value === "string" && (UMLAGESCHLUESSEL_VALUES as readonly string[]).includes(value);
+}
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
@@ -48,7 +54,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const bezeichnung = String(body.bezeichnung ?? "").trim();
   const betrKv = Number(body.betr_kv_position ?? 0);
   const betrag = Number(body.betrag_brutto ?? 0);
-  const umlageschluessel = (body.umlageschluessel ?? "wohnflaeche") as NkaUmlageschluessel;
+  const umlageschluesselInput = body.umlageschluessel ?? "wohnflaeche";
 
   if (!bezeichnung) return NextResponse.json({ error: "Bitte eine Bezeichnung angeben." }, { status: 400 });
   if (!Number.isFinite(betrKv) || betrKv < 1 || betrKv > 17) {
@@ -57,6 +63,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!Number.isFinite(betrag) || betrag <= 0) {
     return NextResponse.json({ error: "Bitte einen positiven Betrag angeben." }, { status: 400 });
   }
+  if (!isUmlageschluessel(umlageschluesselInput)) {
+    return NextResponse.json({ error: "Ungültiger Umlageschlüssel." }, { status: 400 });
+  }
+  const umlageschluessel = umlageschluesselInput;
 
   const insertResult = await supabase.from("nka_cost_items").insert({
     nka_periode_id: id,
