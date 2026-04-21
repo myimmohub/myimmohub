@@ -9,6 +9,7 @@ const ALL_TABS = [
   { label: "Steckbrief", href: (id: string) => `/dashboard/properties/${id}/overview`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/overview`), multiUnitOnly: false },
   { label: "Profitabilität", href: (id: string) => `/dashboard/properties/${id}/profitability`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/profitability`), multiUnitOnly: false },
   { label: "Steuerdaten", href: (id: string) => `/dashboard/properties/${id}/tax`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/tax`), multiUnitOnly: false },
+  { label: "Nebenkosten", href: (id: string) => `/dashboard/properties/${id}/nka`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/nka`), multiUnitOnly: false },
   { label: "Einheiten", href: (id: string) => `/dashboard/properties/${id}/units`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/units`), multiUnitOnly: true },
   { label: "Mieter", href: (id: string) => `/dashboard/properties/${id}/tenants`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/tenants`), multiUnitOnly: true },
   { label: "Zahlungen", href: (id: string) => `/dashboard/properties/${id}/payments`, match: (pathname: string, id: string) => pathname.startsWith(`/dashboard/properties/${id}/payments`), multiUnitOnly: true },

@@ -13,6 +13,7 @@ type NavUser = {
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", match: (pathname: string) => pathname === "/dashboard", icon: HomeIcon },
   { href: "/dashboard/properties", label: "Immobilien", match: (pathname: string) => pathname.startsWith("/dashboard/properties"), icon: BuildingIcon },
+  { href: "/dashboard/nka", label: "Nebenkosten", match: (pathname: string) => pathname.startsWith("/dashboard/nka"), icon: ReceiptIcon },
   { href: "/dashboard/documents", label: "Dokumente", match: (pathname: string) => pathname.startsWith("/dashboard/documents") || pathname.startsWith("/dashboard/inbox"), icon: DocumentIcon },
   { href: "/dashboard/banking", label: "Banking", match: (pathname: string) => pathname.startsWith("/dashboard/banking"), icon: CardIcon },
   { href: "/tools", label: "Rechner", match: (pathname: string) => pathname.startsWith("/tools"), icon: CalculatorIcon },
@@ -219,6 +220,14 @@ function BuildingIcon({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
       <path d="M3 18h14a1 1 0 100-2h-1V4a2 2 0 00-2-2H6a2 2 0 00-2 2v12H3a1 1 0 100 2zm3-4h2v2H6v-2zm0-4h2v2H6v-2zm0-4h2v2H6V6zm6 8h2v2h-2v-2zm0-4h2v2h-2v-2zm0-4h2v2h-2V6z" />
+    </svg>
+  );
+}
+
+function ReceiptIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+      <path d="M5 2a2 2 0 00-2 2v13l2-1 2 1 2-1 2 1 2-1 2 1V4a2 2 0 00-2-2H5zm2 4a1 1 0 100 2h6a1 1 0 100-2H7zm0 4a1 1 0 100 2h6a1 1 0 100-2H7z" />
     </svg>
   );
 }
