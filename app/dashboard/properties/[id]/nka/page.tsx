@@ -42,6 +42,7 @@ type PaymentMatchRow = {
   status: "auto_matched" | "confirmed" | "suggested" | "rejected";
   tenant_id: string | null;
   unit_id: string | null;
+  period_month?: string | null;
 };
 
 type StepState = "missing" | "partial" | "ready";
@@ -79,6 +80,7 @@ export default function PropertyNebenkostenPage() {
   const [paymentMatches, setPaymentMatches] = useState<PaymentMatchRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear() - 1);
 
   useEffect(() => {
     const loadFlowData = async () => {
@@ -170,6 +172,27 @@ export default function PropertyNebenkostenPage() {
     [paymentMatches],
   );
 
+  const matchedPaymentsForSelectedYear = useMemo(
+    () =>
+      matchedPayments.filter((match) =>
+        (match.period_month ?? "").startsWith(`${selectedYear}-`),
+      ),
+    [matchedPayments, selectedYear],
+  );
+
+  const suggestedPaymentsForSelectedYear = useMemo(
+    () =>
+      suggestedPayments.filter((match) =>
+        (match.period_month ?? "").startsWith(`${selectedYear}-`),
+      ),
+    [selectedYear, suggestedPayments],
+  );
+
+  const availableYears = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    return Array.from({ length: 6 }, (_, index) => currentYear - 4 + index).reverse();
+  }, []);
+
   const flowSteps = useMemo<FlowStep[]>(() => {
     const unitState: StepState =
       units.length === 0 ? "missing" : unitsWithArea.length === units.length ? "ready" : "partial";
@@ -184,9 +207,9 @@ export default function PropertyNebenkostenPage() {
 
     const paymentTargetCount = Math.max(activeTenants.length, 1);
     const paymentState: StepState =
-      matchedPayments.length === 0
+      matchedPaymentsForSelectedYear.length === 0
         ? "missing"
-        : matchedPayments.length >= paymentTargetCount
+        : matchedPaymentsForSelectedYear.length >= paymentTargetCount
           ? "ready"
           : "partial";
 
@@ -222,22 +245,23 @@ export default function PropertyNebenkostenPage() {
         state: paymentState,
         href: `/dashboard/properties/${id}/payments`,
         cta:
-          matchedPayments.length === 0
+          matchedPaymentsForSelectedYear.length === 0
             ? "Zahlungen zuordnen"
-            : suggestedPayments.length > 0
+            : suggestedPaymentsForSelectedYear.length > 0
               ? "Vorschläge prüfen"
               : "Zahlungen prüfen",
         detail:
-          matchedPayments.length === 0
-            ? "Noch keine bestätigten oder automatisch erkannten Zuordnungen vorhanden."
-            : `${matchedPayments.length} Zahlungen sind zugeordnet, ${suggestedPayments.length} Vorschläge warten noch auf Prüfung.`,
+          matchedPaymentsForSelectedYear.length === 0
+            ? `Für ${selectedYear} gibt es noch keine bestätigten oder automatisch erkannten Zuordnungen.`
+            : `${matchedPaymentsForSelectedYear.length} Zahlungen sind für ${selectedYear} zugeordnet, ${suggestedPaymentsForSelectedYear.length} Vorschläge warten noch auf Prüfung.`,
       },
     ];
   }, [
     activeTenants.length,
     id,
-    matchedPayments.length,
-    suggestedPayments.length,
+    matchedPaymentsForSelectedYear.length,
+    selectedYear,
+    suggestedPaymentsForSelectedYear.length,
     tenantsWithAdvance.length,
     tenantsWithReference.length,
     units.length,
@@ -284,6 +308,42 @@ export default function PropertyNebenkostenPage() {
             </header>
 
             <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div className="space-y-2">
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    Abrechnungsjahr wählen
+                  </h2>
+                  <p className="max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+                    Wähle das Jahr aus, für das du die Nebenkostenabrechnung
+                    vorbereiten oder erzeugen möchtest. Der Flow und die
+                    Zahlungsprüfung richten sich dann auf genau dieses Jahr aus.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <select
+                    value={selectedYear}
+                    onChange={(event) => setSelectedYear(Number(event.target.value))}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  >
+                    {availableYears.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+
+                  <Link
+                    href={`/dashboard/properties/${id}/nka/${selectedYear}`}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
+                  >
+                    Abrechnung erzeugen
+                  </Link>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="space-y-2">
                   <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
@@ -326,9 +386,9 @@ export default function PropertyNebenkostenPage() {
                 helper={`${tenantsWithAdvance.length} mit NK-Vorauszahlung`}
               />
               <MetricCard
-                label="Zahlungszuordnungen"
-                value={matchedPayments.length.toString()}
-                helper={`${suggestedPayments.length} offene Vorschläge`}
+                label={`Zuordnungen ${selectedYear}`}
+                value={matchedPaymentsForSelectedYear.length.toString()}
+                helper={`${suggestedPaymentsForSelectedYear.length} offene Vorschläge`}
               />
             </div>
 
