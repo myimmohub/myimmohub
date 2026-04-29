@@ -53,8 +53,9 @@ export default function NebenkostenOverviewPage() {
             Nebenkosten
           </h1>
           <p className="max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-            Wähle eine Immobilie, um in den Nebenkosten-Bereich zu springen und
-            Einheiten, Mieter, Zahlungen und die Abrechnung vorzubereiten.
+            Wähle eine Immobilie, um den Nebenkosten-Flow zu öffnen. Dort
+            führen wir dich Schritt für Schritt durch Einheiten, Mieter und
+            Zahlungen, bevor die Abrechnung sinnvoll vorbereitet ist.
           </p>
         </header>
 
@@ -111,7 +112,7 @@ export default function NebenkostenOverviewPage() {
                     ) : null}
                   </div>
                   <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition group-hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300">
-                    Öffnen
+                    Vorbereitung
                   </span>
                 </div>
 
