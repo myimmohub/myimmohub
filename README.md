@@ -20,6 +20,24 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Concurrency
+
+Der Recalculate-Endpoint `/api/tax/calculate` ist Multi-Instance-safe via
+`pg_try_advisory_lock`. Parallele Aufrufe für dieselbe (property, tax_year)-
+Kombination liefern HTTP 409, auch über Vercel-Worker-Instanzen hinweg
+(siehe `lib/tax/concurrencyLock.ts` + Migration
+`supabase/migrations/20260506_advisory_lock_helpers.sql`).
+
+## Testing
+
+Tests laufen mit Vitest. Eine Übersicht zu Goldstandard-Tests, Toleranzen und
+Diff-Reports findet sich in [`TESTING.md`](./TESTING.md).
+
+```bash
+npm test                    # alles
+npm run test:goldstandard   # nur Goldstandard
+```
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
