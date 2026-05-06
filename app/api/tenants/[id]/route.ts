@@ -24,6 +24,7 @@ async function verifyTenantOwnership(supabase: Awaited<ReturnType<typeof createC
       id,
       status,
       lease_end,
+      unit_id,
       units!tenants_unit_id_fkey (
         id,
         property_id,
@@ -106,6 +107,35 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     if (body.status === "ended" && !body.lease_end && !existing.lease_end) {
       const today = new Date().toISOString().slice(0, 10);
       body.lease_end = today;
+    }
+
+    // Constraint-Check: wenn das PATCH den Mieter in den Zustand
+    // (status=active, lease_end=null) versetzt, prüfen wir auf Kollisionen.
+    const willBeStatus = (body.status as string | undefined) ?? existing.status;
+    const willBeLeaseEnd =
+      "lease_end" in body
+        ? (body.lease_end as string | null | undefined) ?? null
+        : (existing.lease_end as string | null);
+    const wasActive = existing.status === "active" && existing.lease_end === null;
+    const willBeActive = willBeStatus === "active" && willBeLeaseEnd === null;
+
+    if (!wasActive && willBeActive) {
+      const { data: blocking } = await supabase
+        .from("tenants")
+        .select("id, first_name, last_name")
+        .eq("unit_id", existing.unit_id as string)
+        .eq("status", "active")
+        .is("lease_end", null)
+        .neq("id", id);
+      if (blocking && blocking.length > 0) {
+        const b = blocking[0] as { first_name: string; last_name: string };
+        return NextResponse.json(
+          {
+            error: `Diese Einheit hat bereits einen aktiven Mieter ohne lease_end (${b.first_name} ${b.last_name}). Bitte erst den vorigen Mieter beenden oder ein lease_end setzen.`,
+          },
+          { status: 409 },
+        );
+      }
     }
 
     const { data, error } = await supabase

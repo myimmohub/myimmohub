@@ -167,6 +167,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Kein Zugriff auf diese Einheit." }, { status: 403 });
     }
 
+    // Constraint-Check: Bei status=active && lease_end leer darf max. ein Mieter
+    // pro Einheit existieren. Wir prüfen das hier zusätzlich zur DB-Constraint
+    // für eine schöne 409-Fehlermeldung.
+    const newStatus = "active"; // POST ist immer aktiv
+    const newLeaseEnd = body.lease_end ?? null;
+    if (newStatus === "active" && newLeaseEnd === null) {
+      const { data: blocking } = await supabase
+        .from("tenants")
+        .select("id, first_name, last_name")
+        .eq("unit_id", unit_id)
+        .eq("status", "active")
+        .is("lease_end", null);
+      if (blocking && blocking.length > 0) {
+        const b = blocking[0] as { first_name: string; last_name: string };
+        return NextResponse.json(
+          {
+            error: `Diese Einheit hat bereits einen aktiven Mieter ohne lease_end (${b.first_name} ${b.last_name}). Bitte erst den vorigen Mieter beenden oder ein lease_end setzen.`,
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     // Auto-generate payment_reference if not provided
     let payment_reference = body.payment_reference;
     if (!payment_reference) {

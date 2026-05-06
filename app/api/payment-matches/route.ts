@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { counterpartMatchesLastName } from "@/lib/banking/nameMatch";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -240,8 +241,10 @@ export async function POST(request: Request) {
             continue;
           }
 
-          // 3. Last name in counterpart → 0.87
-          if (tenant.last_name && counterpart.includes(tenant.last_name.toLowerCase())) {
+          // 3. Last name in counterpart → 0.87 (Word-Boundary, kein Substring!)
+          //    Verhindert "Müller"-Mieter matched "Müllabfuhr"-Counterpart
+          //    und "Müll"-Mieter matched "Hans Müller"-Counterpart.
+          if (tenant.last_name && counterpartMatchesLastName(tx.counterpart, tenant.last_name)) {
             if (0.87 > bestConfidence) {
               bestConfidence = 0.87;
               bestTenant = tenant;
