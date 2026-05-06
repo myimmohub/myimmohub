@@ -1,0 +1,310 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [7 0 R 9 0 R 11 0 R 13 0 R 15 0 R] /Count 5 >>
+endobj
+3 0 obj
+<< >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Length 2915 >>
+stream
+BT /F2 9 Tf 0.35 g 54 807.89 Td (tax engine management zusammenfassung) Tj ET
+0.85 G 1 w 54 801.89 m 541.28 801.89 l S
+BT /F2 20 Tf 0 g 54 779.89 Td (Tax Engine Zusammenfassung fuer Management und) Tj ET
+BT /F2 20 Tf 0 g 54 754.89 Td (Abstimmung) Tj ET
+BT /F2 16 Tf 0.1 g 54 716.89 Td (Zweck) Tj ET
+BT /F1 11 Tf 0.15 g 54 682.89 Td (Diese Kurzfassung erklaert auf einer kompakten Ebene, wie die Tax Engine von) Tj ET
+BT /F1 11 Tf 0.15 g 54 666.89 Td (MyImmoHub aktuell arbeitet, wo ihre Staerken liegen und an welchen Stellen fachliche) Tj ET
+BT /F1 11 Tf 0.15 g 54 650.89 Td (Abstimmung mit einem Steuerberater sinnvoll ist.) Tj ET
+BT /F1 11 Tf 0.15 g 54 622.89 Td (Sie ist bewusst weniger technisch als das Hauptdokument und eignet sich fuer:) Tj ET
+BT /F2 11 Tf 0.15 g 54 594.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 594.89 Td (interne Abstimmung) Tj ET
+BT /F2 11 Tf 0.15 g 54 576.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 576.89 Td (Management-Review) Tj ET
+BT /F2 11 Tf 0.15 g 54 558.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 558.89 Td (Vorbereitung auf ein Steuerberatergespraech) Tj ET
+0.82 G 1 w 54 522.89 m 541.28 522.89 l S
+BT /F2 16 Tf 0.1 g 54 504.89 Td (1. Was die Engine heute leisten soll) Tj ET
+BT /F1 11 Tf 0.15 g 54 470.89 Td (Die Tax Engine soll steuerliche Werte fuer Vermietungsobjekte moeglichst konsistent) Tj ET
+BT /F1 11 Tf 0.15 g 54 454.89 Td (aus zwei Quellen ableiten:) Tj ET
+BT /F2 11 Tf 0.15 g 54 426.89 Td (1.) Tj ET
+BT /F1 11 Tf 0.15 g 76 426.89 Td (**berechnete Werte aus dem System**) Tj ET
+BT /F2 11 Tf 0.15 g 54 408.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 408.89 Td (kategorisierte Banktransaktionen) Tj ET
+BT /F2 11 Tf 0.15 g 54 390.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 390.89 Td (Objektstammdaten) Tj ET
+BT /F2 11 Tf 0.15 g 54 372.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 372.89 Td (jahresbezogene Einstellungen) Tj ET
+BT /F2 11 Tf 0.15 g 54 344.89 Td (2.) Tj ET
+BT /F1 11 Tf 0.15 g 76 344.89 Td (**importierte Werte aus bestehenden Steuerunterlagen**) Tj ET
+BT /F2 11 Tf 0.15 g 54 326.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 326.89 Td (insbesondere ELSTER-/Steuer-PDFs) Tj ET
+BT /F1 11 Tf 0.15 g 54 298.89 Td (Ziel ist, daraus eine nachvollziehbare Herleitung fuer:) Tj ET
+BT /F2 11 Tf 0.15 g 54 270.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 270.89 Td (Anlage V) Tj ET
+BT /F2 11 Tf 0.15 g 54 252.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 252.89 Td (AfA) Tj ET
+BT /F2 11 Tf 0.15 g 54 234.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 234.89 Td (Erhaltungsaufwand) Tj ET
+BT /F2 11 Tf 0.15 g 54 216.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 216.89 Td (GbR-/FE-FB-Auswertungen) Tj ET
+BT /F2 11 Tf 0.15 g 54 198.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 198.89 Td (spaeter auch steuerliche Reconciliation) Tj ET
+0.82 G 1 w 54 162.89 m 541.28 162.89 l S
+BT /F2 16 Tf 0.1 g 54 144.89 Td (2. Wie die Engine fachlich aufgebaut ist) Tj ET
+BT /F1 11 Tf 0.15 g 54 110.89 Td (Die Engine arbeitet in drei Ebenen:) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Length 3187 >>
+stream
+BT /F2 9 Tf 0.35 g 54 807.89 Td (tax engine management zusammenfassung) Tj ET
+0.85 G 1 w 54 801.89 m 541.28 801.89 l S
+BT /F2 13 Tf 0.1 g 54 779.89 Td (Ebene A: Rohdaten) Tj ET
+BT /F1 11 Tf 0.15 g 54 748.89 Td (Hier liegen die operativen Eingaben:) Tj ET
+BT /F2 11 Tf 0.15 g 54 720.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 720.89 Td (Transaktionen) Tj ET
+BT /F2 11 Tf 0.15 g 54 702.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 702.89 Td (Kategorien) Tj ET
+BT /F2 11 Tf 0.15 g 54 684.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 684.89 Td (Objektstammdaten) Tj ET
+BT /F2 11 Tf 0.15 g 54 666.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 666.89 Td (Eigennutzungstage / Vermietungsanteil) Tj ET
+BT /F2 11 Tf 0.15 g 54 648.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 648.89 Td (manuelle Steuerwerte) Tj ET
+BT /F2 11 Tf 0.15 g 54 630.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 630.89 Td (PDF-Importdaten) Tj ET
+BT /F2 13 Tf 0.1 g 54 602.89 Td (Ebene B: Strukturierte Steuerlogik) Tj ET
+BT /F1 11 Tf 0.15 g 54 571.89 Td (Diese Ebene ist die wichtigste fachliche Mitte.) Tj ET
+BT /F1 11 Tf 0.15 g 54 543.89 Td (Sie verwaltet insbesondere:) Tj ET
+BT /F2 11 Tf 0.15 g 54 515.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 515.89 Td (AfA-Komponenten) Tj ET
+BT /F2 11 Tf 0.15 g 54 497.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 497.89 Td (verteilte Erhaltungsaufwaende) Tj ET
+BT /F2 11 Tf 0.15 g 54 479.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 479.89 Td (Sonderfaelle wie 15%-Pruefung) Tj ET
+BT /F2 11 Tf 0.15 g 54 461.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 461.89 Td (Bereinigung von Duplikaten) Tj ET
+BT /F1 11 Tf 0.15 g 54 433.89 Td (Diese Ebene ist wichtig, weil sie die Logik stabiler macht als eine reine Summierung) Tj ET
+BT /F1 11 Tf 0.15 g 54 417.89 Td (aus Einzeltransaktionen.) Tj ET
+BT /F2 13 Tf 0.1 g 54 389.89 Td (Ebene C: Steuerliche Ausgabe) Tj ET
+BT /F1 11 Tf 0.15 g 54 358.89 Td (Aus der strukturierten Logik und den Rohdaten werden anschliessend die finalen) Tj ET
+BT /F1 11 Tf 0.15 g 54 342.89 Td (Bloecke erzeugt:) Tj ET
+BT /F2 11 Tf 0.15 g 54 314.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 314.89 Td (Anlage-V-Felder) Tj ET
+BT /F2 11 Tf 0.15 g 54 296.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 296.89 Td (ELSTER-nahe Kostenbloecke) Tj ET
+BT /F2 11 Tf 0.15 g 54 278.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 278.89 Td (GbR-/FE-FB-Ergebnis) Tj ET
+BT /F2 11 Tf 0.15 g 54 260.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 260.89 Td (Export- und PDF-Werte) Tj ET
+0.82 G 1 w 54 224.89 m 541.28 224.89 l S
+BT /F2 16 Tf 0.1 g 54 206.89 Td (3. Was aktuell schon gut funktioniert) Tj ET
+BT /F1 11 Tf 0.15 g 54 172.89 Td (Nach dem bisherigen Ausbau sind insbesondere diese Bereiche relativ weit:) Tj ET
+BT /F2 11 Tf 0.15 g 54 144.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 144.89 Td (Eigennutzungsquote und Vermietungsanteil) Tj ET
+BT /F2 11 Tf 0.15 g 54 126.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 126.89 Td (Trennung zwischen AfA, laufenden Werbungskosten und verteiltem Erhaltungsaufwand) Tj ET
+BT /F2 11 Tf 0.15 g 54 108.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 108.89 Td (Fortfuehrung von mehrjaehrigen Verteilungsbloeken) Tj ET
+BT /F2 11 Tf 0.15 g 54 90.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 90.89 Td (PDF-Import als strukturierte Datenquelle) Tj ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 8 0 R >>
+endobj
+10 0 obj
+<< /Length 2946 >>
+stream
+BT /F2 9 Tf 0.35 g 54 807.89 Td (tax engine management zusammenfassung) Tj ET
+0.85 G 1 w 54 801.89 m 541.28 801.89 l S
+BT /F2 11 Tf 0.15 g 54 779.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 779.89 Td (Zusammenfuehrung von Anlage V und FE/FB auf gemeinsamer Logikbasis) Tj ET
+BT /F1 11 Tf 0.15 g 54 751.89 Td (Das ist eine gute Grundlage, weil die Engine nicht nur Einzelwerte speichert, sondern) Tj ET
+BT /F1 11 Tf 0.15 g 54 735.89 Td (bereits versucht, steuerliche Sachverhalte logisch zu modellieren.) Tj ET
+0.82 G 1 w 54 699.89 m 541.28 699.89 l S
+BT /F2 16 Tf 0.1 g 54 681.89 Td (4. Wo die Engine fachlich sensibel ist) Tj ET
+BT /F1 11 Tf 0.15 g 54 647.89 Td (Die wichtigsten sensiblen Bereiche sind:) Tj ET
+BT /F2 13 Tf 0.1 g 54 619.89 Td (4.1 Mapping von Kosten auf Steuerbloecke) Tj ET
+BT /F1 11 Tf 0.15 g 54 588.89 Td (Die Engine muss laufende Kosten in passende Zielbloecke einordnen, z. B.:) Tj ET
+BT /F2 11 Tf 0.15 g 54 560.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 560.89 Td (umlagefaehige laufende Kosten) Tj ET
+BT /F2 11 Tf 0.15 g 54 542.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 542.89 Td (nicht umlegbare Objektkosten) Tj ET
+BT /F2 11 Tf 0.15 g 54 524.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 524.89 Td (sonstige Werbungskosten) Tj ET
+BT /F2 11 Tf 0.15 g 54 506.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 506.89 Td (Finanzierung) Tj ET
+BT /F2 11 Tf 0.15 g 54 488.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 488.89 Td (Erhaltungsaufwand) Tj ET
+BT /F1 11 Tf 0.15 g 54 460.89 Td (Hier gibt es zwangslaeufig Heuristiken, weil die Buchhaltungsrealitaet nicht immer) Tj ET
+BT /F1 11 Tf 0.15 g 54 444.89 Td (sauber kategorisiert ist.) Tj ET
+BT /F2 13 Tf 0.1 g 54 416.89 Td (4.2 AfA) Tj ET
+BT /F1 11 Tf 0.15 g 54 385.89 Td (Die Engine kennt mehrere AfA-Quellen:) Tj ET
+BT /F2 11 Tf 0.15 g 54 357.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 357.89 Td (Objektwerte) Tj ET
+BT /F2 11 Tf 0.15 g 54 339.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 339.89 Td (manuelle Jahreswerte) Tj ET
+BT /F2 11 Tf 0.15 g 54 321.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 321.89 Td (importierte ELSTER-Werte) Tj ET
+BT /F2 11 Tf 0.15 g 54 303.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 303.89 Td (strukturierte AfA-Komponenten) Tj ET
+BT /F1 11 Tf 0.15 g 54 275.89 Td (Hier muss fachlich geklaert werden, welcher Wert im Zweifel fuehrend sein soll.) Tj ET
+BT /F2 13 Tf 0.1 g 54 247.89 Td (4.3 Erhaltungsaufwand) Tj ET
+BT /F1 11 Tf 0.15 g 54 216.89 Td (Gerade steuerlich ist die Trennung wichtig zwischen:) Tj ET
+BT /F2 11 Tf 0.15 g 54 188.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 188.89 Td (sofort abzugsfaehig) Tj ET
+BT /F2 11 Tf 0.15 g 54 170.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 170.89 Td (verteilt ueber mehrere Jahre) Tj ET
+BT /F2 11 Tf 0.15 g 54 152.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 152.89 Td (anschaffungsnah / Herstellungskosten) Tj ET
+BT /F1 11 Tf 0.15 g 54 124.89 Td (Das ist fachlich einer der wichtigsten Pruefpunkte.) Tj ET
+BT /F2 13 Tf 0.1 g 54 96.89 Td (4.4 GbR-/FE-FB-Logik) Tj ET
+endstream
+endobj
+11 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 10 0 R >>
+endobj
+12 0 obj
+<< /Length 3770 >>
+stream
+BT /F2 9 Tf 0.35 g 54 807.89 Td (tax engine management zusammenfassung) Tj ET
+0.85 G 1 w 54 801.89 m 541.28 801.89 l S
+BT /F1 11 Tf 0.15 g 54 779.89 Td (Bei mehreren Beteiligten ist wichtig:) Tj ET
+BT /F2 11 Tf 0.15 g 54 751.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 751.89 Td (welcher Gesamtwert kollektiv auf Ebene der Immobilie entsteht) Tj ET
+BT /F2 11 Tf 0.15 g 54 733.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 733.89 Td (wie er auf Beteiligte verteilt wird) Tj ET
+BT /F2 11 Tf 0.15 g 54 715.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 715.89 Td (wann Sonderwerbungskosten separat behandelt werden) Tj ET
+0.82 G 1 w 54 679.89 m 541.28 679.89 l S
+BT /F2 16 Tf 0.1 g 54 661.89 Td (5. Was ein Steuerberater vor allem pruefen sollte) Tj ET
+BT /F1 11 Tf 0.15 g 54 627.89 Td (Ein Steuerberater sollte nicht primaer den Code reviewen, sondern die folgenden) Tj ET
+BT /F1 11 Tf 0.15 g 54 611.89 Td (fachlichen Entscheidungen bestaetigen oder korrigieren:) Tj ET
+BT /F2 11 Tf 0.15 g 54 583.89 Td (1.) Tj ET
+BT /F1 11 Tf 0.15 g 76 583.89 Td (Welche Kostenarten muessen in welche ELSTER-Bloecke?) Tj ET
+BT /F2 11 Tf 0.15 g 54 565.89 Td (2.) Tj ET
+BT /F1 11 Tf 0.15 g 76 565.89 Td (Welche Felder duerfen mit Vermietungsquote gequotelt werden und welche nicht?) Tj ET
+BT /F2 11 Tf 0.15 g 54 547.89 Td (3.) Tj ET
+BT /F1 11 Tf 0.15 g 76 547.89 Td (Wie soll AfA priorisiert werden:) Tj ET
+BT /F2 11 Tf 0.15 g 54 529.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 529.89 Td (Objektjahreswert) Tj ET
+BT /F2 11 Tf 0.15 g 54 511.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 511.89 Td (Komponentenlogik) Tj ET
+BT /F2 11 Tf 0.15 g 54 493.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 493.89 Td (importierter ELSTER-Wert) Tj ET
+BT /F2 11 Tf 0.15 g 54 475.89 Td (4.) Tj ET
+BT /F1 11 Tf 0.15 g 76 475.89 Td (Wann ist Erhaltungsaufwand sofort abzugsfaehig und wann verteilungspflichtig?) Tj ET
+BT /F2 11 Tf 0.15 g 54 457.89 Td (5.) Tj ET
+BT /F1 11 Tf 0.15 g 76 457.89 Td (Wie soll die 15%-Regel fachlich exakt umgesetzt werden?) Tj ET
+BT /F2 11 Tf 0.15 g 54 439.89 Td (6.) Tj ET
+BT /F1 11 Tf 0.15 g 76 439.89 Td (Welche GbR-/FE-FB-Logik ist fuer die Zielmandate gewuenscht?) Tj ET
+0.82 G 1 w 54 403.89 m 541.28 403.89 l S
+BT /F2 16 Tf 0.1 g 54 385.89 Td (6. Empfohlene Verbesserungsstrategie) Tj ET
+BT /F1 11 Tf 0.15 g 54 351.89 Td (Die Weiterentwicklung sollte idealerweise in dieser Reihenfolge stattfinden:) Tj ET
+BT /F2 11 Tf 0.15 g 54 323.89 Td (1.) Tj ET
+BT /F1 11 Tf 0.15 g 76 323.89 Td (**fachliche Zieldefinition mit Steuerberater**) Tj ET
+BT /F2 11 Tf 0.15 g 54 305.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 305.89 Td (Kostenmapping) Tj ET
+BT /F2 11 Tf 0.15 g 54 287.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 287.89 Td (AfA-Prioritaeten) Tj ET
+BT /F2 11 Tf 0.15 g 54 269.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 269.89 Td (Erhaltungsaufwand) Tj ET
+BT /F2 11 Tf 0.15 g 54 241.89 Td (2.) Tj ET
+BT /F1 11 Tf 0.15 g 76 241.89 Td (**Dokumentation der fachlichen Regeln**) Tj ET
+BT /F2 11 Tf 0.15 g 54 223.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 223.89 Td (nicht nur im Code, sondern in expliziten Regeltexten) Tj ET
+BT /F2 11 Tf 0.15 g 54 195.89 Td (3.) Tj ET
+BT /F1 11 Tf 0.15 g 76 195.89 Td (**Golden Cases definieren**) Tj ET
+BT /F2 11 Tf 0.15 g 54 177.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 177.89 Td (echte Referenzfaelle mit offizieller ELSTER-Abgabe) Tj ET
+BT /F2 11 Tf 0.15 g 54 159.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 159.89 Td (Sollwerte pro Steuerblock) Tj ET
+BT /F2 11 Tf 0.15 g 54 131.89 Td (4.) Tj ET
+BT /F1 11 Tf 0.15 g 76 131.89 Td (**Engine auf Referenzfaelle testen**) Tj ET
+BT /F2 11 Tf 0.15 g 54 113.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 113.89 Td (nicht nur Summen) Tj ET
+BT /F2 11 Tf 0.15 g 54 95.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 95.89 Td (sondern auch Blockzuordnungen und Reconciliation) Tj ET
+endstream
+endobj
+13 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 12 0 R >>
+endobj
+14 0 obj
+<< /Length 2189 >>
+stream
+BT /F2 9 Tf 0.35 g 54 807.89 Td (tax engine management zusammenfassung) Tj ET
+0.85 G 1 w 54 801.89 m 541.28 801.89 l S
+BT /F2 11 Tf 0.15 g 54 779.89 Td (5.) Tj ET
+BT /F1 11 Tf 0.15 g 76 779.89 Td (**erst danach weitere Automatisierung**) Tj ET
+BT /F2 11 Tf 0.15 g 54 761.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 761.89 Td (z. B. intelligentere Importe, Vorschlaege, OCR, KI-Mapping) Tj ET
+0.82 G 1 w 54 725.89 m 541.28 725.89 l S
+BT /F2 16 Tf 0.1 g 54 707.89 Td (7. Empfehlung fuer das Gespraech mit dem Steuerberater) Tj ET
+BT /F1 11 Tf 0.15 g 54 673.89 Td (Sinnvoll ist, nicht mit dem gesamten System zu starten, sondern mit einem konkreten) Tj ET
+BT /F1 11 Tf 0.15 g 54 657.89 Td (Referenzfall:) Tj ET
+BT /F2 11 Tf 0.15 g 54 629.89 Td (1.) Tj ET
+BT /F1 11 Tf 0.15 g 76 629.89 Td (echte ELSTER-Abgabe) Tj ET
+BT /F2 11 Tf 0.15 g 54 611.89 Td (2.) Tj ET
+BT /F1 11 Tf 0.15 g 76 611.89 Td (erzeugter MyImmoHub-Export) Tj ET
+BT /F2 11 Tf 0.15 g 54 593.89 Td (3.) Tj ET
+BT /F1 11 Tf 0.15 g 76 593.89 Td (dieses Briefing) Tj ET
+BT /F2 11 Tf 0.15 g 54 575.89 Td (4.) Tj ET
+BT /F1 11 Tf 0.15 g 76 575.89 Td (die Fragenliste) Tj ET
+BT /F1 11 Tf 0.15 g 54 547.89 Td (Damit kann der Steuerberater gezielt sagen:) Tj ET
+BT /F2 11 Tf 0.15 g 54 519.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 519.89 Td (welche Logik fachlich stimmt) Tj ET
+BT /F2 11 Tf 0.15 g 54 501.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 501.89 Td (welche Heuristik zu riskant ist) Tj ET
+BT /F2 11 Tf 0.15 g 54 483.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 483.89 Td (welche Vereinfachungen vertretbar sind) Tj ET
+BT /F2 11 Tf 0.15 g 54 465.89 Td (-) Tj ET
+BT /F1 11 Tf 0.15 g 76 465.89 Td (und welche Stellen fuer produktiven Einsatz zwingend abgesichert werden muessen) Tj ET
+0.82 G 1 w 54 429.89 m 541.28 429.89 l S
+BT /F2 16 Tf 0.1 g 54 411.89 Td (8. Ergebnis in einem Satz) Tj ET
+BT /F1 11 Tf 0.15 g 54 377.89 Td (Die Tax Engine ist heute bereits eine ernsthafte fachliche Grundlage, aber sie) Tj ET
+BT /F1 11 Tf 0.15 g 54 361.89 Td (braucht fuer den produktionsreifen Einsatz eine klar abgestimmte steuerliche) Tj ET
+BT /F1 11 Tf 0.15 g 54 345.89 Td (Regelbasis, vor allem bei Kostenmapping, AfA-Prioritaeten und Erhaltungsaufwand.) Tj ET
+endstream
+endobj
+15 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 14 0 R >>
+endobj
+xref
+0 16
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000148 00000 n 
+0000000169 00000 n 
+0000000239 00000 n 
+0000000314 00000 n 
+0000003281 00000 n 
+0000003423 00000 n 
+0000006662 00000 n 
+0000006804 00000 n 
+0000009803 00000 n 
+0000009947 00000 n 
+0000013770 00000 n 
+0000013914 00000 n 
+0000016156 00000 n 
+trailer
+<< /Size 16 /Root 1 0 R >>
+startxref
+16300
+%%EOF
