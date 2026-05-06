@@ -1,0 +1,38 @@
+name: Test
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    name: Tests, Lint & Type-Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Lint darf zunächst Warnings/Errors haben — wir wollen das CI-Gate nicht
+      # an Lint-Bestand hängen. Wenn Lint sauber ist, einfach `continue-on-error`
+      # entfernen.
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Run tests (Vitest)
+        run: npm test
+
+      - name: Type-check
+        run: npx tsc --noEmit

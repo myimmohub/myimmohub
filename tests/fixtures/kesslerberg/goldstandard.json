@@ -1,0 +1,164 @@
+{
+  "$schema": "./goldstandard.schema.json",
+  "_meta": {
+    "description": "Goldstandard-Sollwerte für Testnutzer 7 (Kesslerberg GbR, FeWo Hinterzarten) aus den real beim Finanzamt eingereichten ELSTER-Erklärungen. Quelle: 2023_ELSTER und 2024_ELSTER PDFs (s. /uploads). Vergleich Ist-vs-Soll erfolgt auf Anlage-V-Ebene (Summen je Bucket / Überschuss). Kategorisierungs-Abweichungen sind tolerierbar, das Gesamtergebnis nicht. Toleranz: ±2 EUR auf Summen wegen Rundung, ±1 EUR auf Einzelfelder.",
+    "tax_subject": "Kesslerberg GbR",
+    "object": {
+      "address": "Am Kesslerberg 7, 79856 Hinterzarten",
+      "type": "Ferienwohnung",
+      "wohnflaeche_m2": 73,
+      "angeschafft_am": "2022-08-11",
+      "kaufpreis_inventar_eur": 12000,
+      "afa_satz_gebaeude_pct": 5.56,
+      "afa_satz_inventar_pct": 20.0,
+      "afa_basis_gebaeude_eur": 225136.69,
+      "afa_jahresbetrag_gebaeude_eur": 12517.56,
+      "afa_jahresbetrag_inventar_eur": 2400.00
+    },
+    "gbr_partner": [
+      { "no": 1, "name": "Uta Hedwig Tacke", "anteil": "1/8" },
+      { "no": 2, "name": "Maurus Tacke", "anteil": "1/8" },
+      { "no": 3, "name": "Leo Tacke", "anteil": "3/4" }
+    ],
+    "tolerances": {
+      "summen_eur": 2,
+      "einzelfelder_eur": 1,
+      "ueberschuss_eur": 2
+    }
+  },
+
+  "years": {
+    "2023": {
+      "vermietungsquote_pct": 96.71,
+      "nutzungstage": {
+        "selbstnutzung": 12,
+        "vermietung": 145,
+        "ortsuebliche_vermietungstage": 111
+      },
+
+      "anlage_v": {
+        "z15_einnahmen_miete": 17152,
+        "z32_summe_einnahmen": 17152,
+
+        "z35_afa_gebaeude": 12106,
+        "z44_afa_inventar": 2322,
+
+        "z55_erhaltungsaufwand_sofort": 933,
+        "z59_erhaltungsaufwand_verteilt_aus_2023": 592,
+        "z71_erhaltungsaufwand_verteilt_aus_2022": 1223,
+
+        "z74_umgelegte_kosten_summe": 5607,
+        "z77_nicht_umgelegte_kosten_summe": 378,
+        "z81_sonstige_kosten_summe": 3644,
+
+        "z82_summe_werbungskosten": 26805,
+        "z84_ueberschuss": -9653
+      },
+
+      "fe_fb": {
+        "z54_laufende_einkuenfte_gbr_total": 17151.53,
+        "z57_sonderwerbungskosten_beteiligter_3_leo": -8014.59,
+        "z114_sonderwerbungskosten_beteiligter_3_leo": -8014.59,
+        "_kommentar": "Sonderwerbungskosten = Schuldzinsen Kredit Leo (allein finanziert)"
+      },
+
+      "umgelegte_kosten_einzeln": [
+        { "label": "Hausversicherungen", "brutto": 654.65, "wk": 633 },
+        { "label": "Heizung", "brutto": 1953.27, "wk": 1889 },
+        { "label": "Müllabfuhr", "brutto": 151.0, "wk": 146 },
+        { "label": "Wasserversorgung", "brutto": null, "wk": 79 },
+        { "label": "Grundsteuer", "brutto": 46.47, "wk": 45 },
+        { "label": "Schornsteinreinigung", "brutto": null, "wk": 66 },
+        { "label": "Hausbeleuchtung", "brutto": null, "wk": 2116 },
+        { "label": "Hauswart", "brutto": null, "wk": 633 }
+      ],
+
+      "nicht_umgelegte_kosten_einzeln": [
+        { "label": "Pauschale Verwaltungskosten", "brutto": 240.0, "wk": 233 },
+        { "label": "Porto", "brutto": 17.0, "wk": 17 },
+        { "label": "Kontoführungsgebühren", "brutto": null, "wk": 128 }
+      ]
+    },
+
+    "2024": {
+      "vermietungsquote_pct": 95.34,
+      "nutzungstage": {
+        "selbstnutzung": 17,
+        "vermietung": 114,
+        "leerstand": 234,
+        "ortsuebliche_vermietungstage": 111
+      },
+
+      "anlage_v": {
+        "z15_einnahmen_miete": 12625,
+        "z32_summe_einnahmen": 12625,
+
+        "z35_afa_gebaeude": 11935,
+        "z45_afa_inventar": 2289,
+
+        "z60_erhaltungsaufwand_verteilt_aus_2024": 799,
+        "z69_erhaltungsaufwand_verteilt_aus_2022": 1206,
+        "z72_erhaltungsaufwand_verteilt_aus_2023": 584,
+
+        "z75_umgelegte_kosten_summe": 4360,
+        "z78_nicht_umgelegte_kosten_summe": 413,
+        "z82_sonstige_kosten_summe": 5981,
+
+        "z83_summe_werbungskosten": 27567,
+        "z85_ueberschuss": -14942
+      },
+
+      "fe_fb": {
+        "z58_laufende_einkuenfte_gbr_total": 12625.00,
+        "z61_sonderwerbungskosten_beteiligter_3_leo": -7822.90,
+        "z122_sonderwerbungskosten_beteiligter_3_leo": -7822.90,
+        "_kommentar": "Sonderwerbungskosten = Schuldzinsen Kredit Leo (allein finanziert) lt. Zinsbestätigung 2024"
+      },
+
+      "erhaltungsaufwand_quellen": [
+        {
+          "rechnungsdatum": "2024-11-14",
+          "aussteller": "Walerij Mut Dienstleistungen",
+          "gesamtbetrag": 428.40,
+          "verteilt_auf_jahre": 3
+        },
+        {
+          "rechnungsdatum": "2024-07-15",
+          "aussteller": "Walerij Mut Dienstleistungen",
+          "gesamtbetrag": 2085.47,
+          "verteilt_auf_jahre": 3
+        }
+      ],
+
+      "umgelegte_kosten_einzeln": [
+        { "label": "Grundsteuer", "brutto": 46.47, "wk": 45 },
+        { "label": "Müllabfuhr", "brutto": 179.0, "wk": 171 },
+        { "label": "Wasserversorgung", "brutto": 264.0, "wk": 252 },
+        { "label": "Hausversicherungen", "brutto": 885.67, "wk": 845 },
+        { "label": "Hauswart", "brutto": 928.20, "wk": 885 },
+        { "label": "Schornsteinreinigung", "brutto": 66.26, "wk": 64 },
+        { "label": "Heizung", "brutto": 1742.68, "wk": 1662 },
+        { "label": "Hausbeleuchtung", "brutto": 457.21, "wk": 436 }
+      ],
+
+      "nicht_umgelegte_kosten_einzeln": [
+        { "label": "Pauschale Verwaltungskosten", "brutto": 240.0, "wk": 229 },
+        { "label": "Porto", "brutto": 17.0, "wk": 17 },
+        { "label": "Kontoführungsgebühren", "brutto": 174.85, "wk": 167 }
+      ],
+
+      "sonstige_kosten_einzeln": [
+        { "label": "Steuerberater", "brutto": 1169.18, "wk": 1115 },
+        { "label": "Kammerjäger", "brutto": 521.82, "wk": 498 },
+        { "label": "Internet", "brutto": 288.0, "wk": 275 },
+        { "label": "Kurtaxe Gemeinde Hinterzarten", "brutto": 810.02, "wk": 811, "_note": "100% abziehbar (Gast-Pflichtabgabe)" },
+        { "label": "Werkzeug und Materialien", "brutto": 1320.18, "wk": 1259 },
+        { "label": "Einrichtung diverse", "brutto": 1061.06, "wk": 1012 },
+        { "label": "Smart Home", "brutto": 58.43, "wk": 56 },
+        { "label": "Entfeuchtungsanlage Keller Maico AKE150", "brutto": 552.29, "wk": 527 },
+        { "label": "Schhlüssel", "brutto": 49.75, "wk": 48 },
+        { "label": "Verpflegung Arbeitseinsatz", "brutto": 380.0, "wk": 380, "_note": "100% abziehbar" }
+      ]
+    }
+  }
+}
