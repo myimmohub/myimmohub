@@ -8,6 +8,8 @@ import type {
   TaxMaintenanceDistributionItem,
 } from "@/types/tax";
 import { calcElsterEuroFromCents, fromCents, ratioToBasisPoints, toCents } from "@/lib/tax/elsterMath";
+import { ANSCHAFFUNGSNAHE_AUFWAND_QUOTE } from "@/lib/tax/constants";
+import { resolveBuildingAfaRate } from "@/lib/tax/afa";
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 const num = (value: number | null | undefined) => Number(value ?? 0);
@@ -162,11 +164,11 @@ export function computeStructuredTaxData(args: {
   }
 
   const acquisitionRelatedTotal3y = Array.from(acquisitionRelatedTotals.values()).reduce((sum, value) => sum + value, 0);
-  const exceeds15PctThreshold = buildingCost > 0 && acquisitionRelatedTotal3y > buildingCost * 0.15;
+  const exceeds15PctThreshold = buildingCost > 0 && acquisitionRelatedTotal3y > buildingCost * ANSCHAFFUNGSNAHE_AUFWAND_QUOTE;
   if (exceeds15PctThreshold) {
     warnings.push({
       code: "acquisition_related_costs",
-      message: `Anschaffungsnahe Aufwendungen innerhalb von 3 Jahren überschreiten 15 % der Gebäudekosten (${round2(acquisitionRelatedTotal3y).toLocaleString("de-DE")} € > ${(buildingCost * 0.15).toLocaleString("de-DE", { maximumFractionDigits: 2 })} €) und werden als AfA behandelt.`,
+      message: `Anschaffungsnahe Aufwendungen innerhalb von 3 Jahren überschreiten ${(ANSCHAFFUNGSNAHE_AUFWAND_QUOTE * 100).toFixed(0)} % der Gebäudekosten (${round2(acquisitionRelatedTotal3y).toLocaleString("de-DE")} € > ${(buildingCost * ANSCHAFFUNGSNAHE_AUFWAND_QUOTE).toLocaleString("de-DE", { maximumFractionDigits: 2 })} €) und werden als AfA behandelt.`,
     });
   }
 
@@ -356,11 +358,14 @@ function getNormalizedDistributionYears(item: TaxMaintenanceDistributionItem, ta
 }
 
 function deriveBuildingAfaRate(taxData: TaxData) {
-  if (taxData.build_year != null) {
-    if (taxData.build_year < 1925) return 0.025;
-    if (taxData.build_year >= 2023) return 0.03;
-  }
-  return 0.02;
+  // Konsolidiert in `lib/tax/afa.ts` (Auftrag C). Die alte Switch-Logik lebt
+  // jetzt zentral dort; dieser Wrapper bleibt nur, damit die bestehenden
+  // Aufrufer in dieser Datei kein Refactor brauchen.
+  return resolveBuildingAfaRate({
+    baujahr: taxData.build_year ?? null,
+    kaufdatum: taxData.acquisition_date ?? null,
+    propertyType: taxData.property_type ?? null,
+  });
 }
 
 function preferImportedElsterLineValue(args: {

@@ -79,11 +79,39 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: partnerTaxError.message }, { status: 500 });
   }
 
+  // Itemisierte Sondereinnahmen/-werbungskosten je Partner (neue Tabelle).
+  // Wenn die Tabelle (z.B. lokale Dev-DB ohne Migration) nicht existiert,
+  // fallen wir leise auf [] zurück, damit der Report weiterhin funktioniert.
+  const { data: partnerSpecialItemsRaw, error: partnerSpecialItemsError } = partnerIds.length > 0
+    ? await supabase
+        .from("gbr_partner_special_expenses")
+        .select("id, gbr_partner_id, tax_year, label, amount, classification, note")
+        .eq("property_id", propertyId)
+        .eq("tax_year", taxYear)
+        .in("gbr_partner_id", partnerIds)
+    : { data: [], error: null };
+
+  const partnerSpecialItems = partnerSpecialItemsError
+    ? [] // Fallback: Tabelle evtl. noch nicht migriert → Report zeigt nur Legacy-Aggregat.
+    : (partnerSpecialItemsRaw ?? []).map((row) => ({
+        id: row.id,
+        gbr_partner_id: row.gbr_partner_id,
+        tax_year: row.tax_year,
+        label: row.label,
+        amount: Number(row.amount),
+        classification: row.classification as
+          | "special_income"
+          | "special_expense_interest"
+          | "special_expense_other",
+        note: row.note,
+      }));
+
   const report = buildGbrTaxReport({
     property,
     taxData: taxData as TaxData,
     gbrSettings: (gbrSettings as GbrSettingsSummary | null) ?? null,
     partnerTaxValues: partnerTaxValues ?? [],
+    partnerSpecialItems,
     taxSettings: (taxSettingsRows?.[0] as TaxSettingsSummary | null) ?? null,
     depreciationItems: depreciationItems ?? [],
     maintenanceDistributions: (maintenanceItems ?? []).filter((item) => isDistributionActiveForYear(item, taxYear)),

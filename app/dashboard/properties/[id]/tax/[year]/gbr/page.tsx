@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import TaxYearNavigation from "@/components/tax/TaxYearNavigation";
+import SonderWkEditor, {
+  type SonderWkPartner as EditorPartner,
+} from "@/components/tax/SonderWkEditor";
 import { allocateElsterLineSummary, buildElsterLineSummary } from "@/lib/tax/elsterLineLogic";
 import { computeRentalShare } from "@/lib/tax/rentalShare";
 import type { GbrTaxReport } from "@/types/tax";
@@ -376,6 +379,15 @@ export default function GbrTaxYearPage() {
             </section>
           </div>
         )}
+
+        <SonderWkEditor
+          propertyId={id}
+          taxYear={taxYear}
+          partners={report.fb.map<EditorPartner>((partner) => ({
+            id: partner.partner_id,
+            name: partner.partner_name,
+          }))}
+        />
 
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">

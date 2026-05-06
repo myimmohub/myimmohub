@@ -42,6 +42,22 @@ export type TaxSettingsSummary = {
   rental_share_override_pct?: number | null;
 };
 
+export type GbrPartnerSpecialItemClassification =
+  | "special_income"
+  | "special_expense_interest"
+  | "special_expense_other";
+
+export type GbrPartnerSpecialItem = {
+  id?: string;
+  gbr_partner_id: string;
+  tax_year: number;
+  label: string;
+  /** Vorzeichenkonvention: > 0 = Sondereinnahme, < 0 = Sonderwerbungskosten. */
+  amount: number;
+  classification: GbrPartnerSpecialItemClassification;
+  note?: string | null;
+};
+
 export type GbrPartnerAllocation = {
   partner_id: string;
   partner_name: string;
@@ -59,6 +75,7 @@ export type GbrPartnerAllocation = {
   insurance: number;
   water_sewage: number;
   waste_disposal: number;
+  waste_disposal_v2?: number;
   property_management: number;
   bank_fees: number;
   maintenance_costs: number;
@@ -66,7 +83,20 @@ export type GbrPartnerAllocation = {
   total_expenses: number;
   depreciation_total: number;
   special_deductions_total: number;
+  /**
+   * Aggregat aus dem alten `gbr_partner_tax_data.special_expenses`-Feld.
+   * Wird (sofern gesetzt) als Fallback verwendet, wenn keine itemisierten
+   * `special_items` vorliegen.
+   */
   partner_special_expenses: number;
+  /** Itemisierte Sondereinnahmen/-werbungskosten (neue Tabelle gbr_partner_special_expenses). */
+  special_items: GbrPartnerSpecialItem[];
+  /** Summe aller `special_items.amount` mit `classification = 'special_income'`. */
+  special_income_total: number;
+  /** Summe aller `special_items.amount` mit `classification` ∈ {special_expense_*}. Stets ≤ 0. */
+  special_expense_total: number;
+  /** Saldo aus Sondereinnahmen und Sonderwerbungskosten = special_income_total + special_expense_total. */
+  special_balance: number;
   result_before_partner_adjustments: number;
   result: number;
 };
@@ -185,6 +215,8 @@ export function buildGbrTaxReport(args: {
   taxData: TaxData;
   gbrSettings: GbrSettingsSummary | null;
   partnerTaxValues?: GbrPartnerTaxValue[];
+  /** Itemisierte Sonderwerbungskosten/Sondereinnahmen je Partner (neue Tabelle). */
+  partnerSpecialItems?: GbrPartnerSpecialItem[];
   taxSettings?: TaxSettingsSummary | null;
   depreciationItems?: TaxDepreciationItem[];
   maintenanceDistributions?: TaxMaintenanceDistributionItem[];
@@ -194,6 +226,7 @@ export function buildGbrTaxReport(args: {
     taxData,
     gbrSettings,
     partnerTaxValues = [],
+    partnerSpecialItems = [],
     taxSettings,
     depreciationItems = [],
     maintenanceDistributions = [],
@@ -273,26 +306,57 @@ export function buildGbrTaxReport(args: {
   });
   warnings.push(...summarizeEngineWarnings(engineOutput));
 
+  // Itemisierte Sondereinnahmen/-werbungskosten gruppiert nach Partner.
+  const specialItemsByPartner = new Map<string, GbrPartnerSpecialItem[]>();
+  for (const item of partnerSpecialItems) {
+    if (!item?.gbr_partner_id) continue;
+    const list = specialItemsByPartner.get(item.gbr_partner_id) ?? [];
+    list.push(item);
+    specialItemsByPartner.set(item.gbr_partner_id, list);
+  }
+
   const fb = partners.map((partner) => {
     const factor = num(partner.anteil) / 100;
-    // Special expenses are stored as a positive amount (a further deduction from the partner's share).
-    // Take Math.abs to guard against sign inconsistencies in the stored value.
-    const partnerSpecialExpenses = Math.abs(round2(partnerTaxMap.get(normalizePartnerName(partner.name)) ?? 0));
+    // Legacy aggregate (positiv gespeichert) aus gbr_partner_tax_data.special_expenses.
+    const legacyAggregate = Math.abs(round2(partnerTaxMap.get(normalizePartnerName(partner.name)) ?? 0));
+
+    // Itemisierte Special-Items ermitteln (kann leer sein).
+    const items = specialItemsByPartner.get(partner.id) ?? [];
+    const specialIncomeTotal = round2(
+      items
+        .filter((item) => item.classification === "special_income")
+        .reduce((sum, item) => sum + num(item.amount), 0),
+    );
+    const specialExpenseTotalRaw = round2(
+      items
+        .filter((item) => item.classification !== "special_income")
+        .reduce((sum, item) => sum + num(item.amount), 0),
+    );
+    // Sonderwerbungskosten müssen negativ sein (Konvention der Tabelle), wir
+    // erzwingen das hier zur Defense-in-Depth.
+    const specialExpenseTotal = specialExpenseTotalRaw > 0 ? -specialExpenseTotalRaw : specialExpenseTotalRaw;
+    const specialBalance = round2(specialIncomeTotal + specialExpenseTotal);
+
+    // Falls itemisierte Daten vorliegen → nutze Saldo.
+    // Sonst → Fallback auf Legacy-Aggregat (negativ wirkend, wie bisher).
+    const hasItems = items.length > 0;
+    const partnerSpecialExpenses = hasItems
+      ? -specialBalance // negativ wirkend = Sonderwerbungskosten-Effekt; Saldo ist Income+Expense
+      : legacyAggregate;
 
     // FE lineSummary totals are the single source of truth for all FB partner allocations.
-    // Using engine allocations here would cause FE/FB mismatch because the engine computes
-    // expenses from raw taxData fields (property_tax + insurance + ...) which differ from
-    // lineSummary when imported expense blocks are present.
     const partnerIncome = round2(totals.totalIncome * factor);
     const partnerExpenses = round2(totals.totalExpenses * factor);
     const partnerDepreciation = round2(totals.depreciationTotal * factor);
     const resultBeforePartnerAdjustments = round2(totals.result * factor);
 
-    // Partner result = share of collective result − partner-specific Sonderwerbungskosten.
-    // Sonderwerbungskosten are an additional deduction, so they deepen the loss.
-    const result = round2(resultBeforePartnerAdjustments - partnerSpecialExpenses);
+    // Partner result = Anteil am Gemeinschaftsergebnis + (Sondereinnahmen − Sonderwerbungskosten).
+    // specialBalance ist bereits saldiert (≤ 0 bei reiner Sonder-WK).
+    const result = hasItems
+      ? round2(resultBeforePartnerAdjustments + specialBalance)
+      : round2(resultBeforePartnerAdjustments - legacyAggregate);
 
-    const allocation = {
+    const allocation: GbrPartnerAllocation = {
       partner_id: partner.id,
       partner_name: partner.name,
       email: partner.email,
@@ -317,6 +381,10 @@ export function buildGbrTaxReport(args: {
       depreciation_total: partnerDepreciation,
       special_deductions_total: round2(totals.specialDeductionsTotal * factor),
       partner_special_expenses: partnerSpecialExpenses,
+      special_items: items,
+      special_income_total: specialIncomeTotal,
+      special_expense_total: specialExpenseTotal,
+      special_balance: specialBalance,
       result_before_partner_adjustments: resultBeforePartnerAdjustments,
       result,
     };

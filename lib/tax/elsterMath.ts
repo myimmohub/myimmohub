@@ -1,5 +1,10 @@
 const EURO_CENTS = 100;
-const RATIO_SCALE = 10000;
+// RATIO_SCALE definiert die Auflösung der Vermietungsquote.
+// Mit 10.000 (4 Stellen / "Basispunkte") wurden Quoten wie 348/365 = 0,953424657...
+// auf 0,9534 (95,34 %) gekürzt → systematisch -1 EUR pro Position vs. ELSTER.
+// Mit 1.000.000 (6 Stellen) trifft die Engine die ELSTER-Sollwerte exakt.
+// Siehe tests/goldstandard/kesslerberg-2024-structured.test.ts für die Forensik.
+const RATIO_SCALE = 1_000_000;
 
 function normalizeNumberString(value: string) {
   return value.replace(/\s/g, "").replace(",", ".");

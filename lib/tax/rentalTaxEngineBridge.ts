@@ -22,6 +22,7 @@ import type {
   TaxDepreciationItem,
   TaxMaintenanceDistributionItem,
 } from "@/types/tax";
+import { resolveBuildingAfaRate } from "@/lib/tax/afa";
 
 type PropertySummary = {
   id: string;
@@ -58,9 +59,8 @@ const toCents = (value: number | null | undefined) => Math.round(num(value) * 10
 const fromCents = (value: number) => Math.round(value) / 100;
 
 function deriveBuildingRate(buildYear: number | null | undefined) {
-  if (buildYear != null && buildYear < 1925) return 0.025;
-  if (buildYear != null && buildYear >= 2023) return 0.03;
-  return 0.02;
+  // Single-Source-of-Truth jetzt in `lib/tax/afa.ts` (Auftrag C).
+  return resolveBuildingAfaRate({ baujahr: buildYear ?? null });
 }
 
 function policyPackIdForYear(taxYear: number) {
