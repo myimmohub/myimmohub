@@ -38,6 +38,15 @@ type PaymentMatchRow = {
   unit_id: string | null;
 };
 
+type NkaPeriodRow = {
+  id: string;
+  property_id: string;
+  tax_year: number;
+  period_start: string;
+  period_end: string;
+  status: "draft" | "distributed" | "sent" | "closed";
+};
+
 function formatEuro(cents: number) {
   return (cents / 100).toLocaleString("de-DE", {
     style: "currency",
@@ -61,6 +70,8 @@ export default function PropertyNkaYearPage() {
   const [units, setUnits] = useState<UnitRow[]>([]);
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [paymentMatches, setPaymentMatches] = useState<PaymentMatchRow[]>([]);
+  const [period, setPeriod] = useState<NkaPeriodRow | null>(null);
+  const [creatingPeriod, setCreatingPeriod] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,16 +93,18 @@ export default function PropertyNkaYearPage() {
 
         setProperty(data as PropertyDetail);
 
-        const [unitsRes, tenantsRes, matchesRes] = await Promise.all([
+        const [unitsRes, tenantsRes, matchesRes, periodsRes] = await Promise.all([
           fetch(`/api/units?property_id=${id}`),
           fetch(`/api/tenants?property_id=${id}`),
           fetch(`/api/payment-matches?property_id=${id}`),
+          fetch(`/api/nka/periods?property_id=${id}`),
         ]);
 
-        const [unitsJson, tenantsJson, matchesJson] = await Promise.all([
+        const [unitsJson, tenantsJson, matchesJson, periodsJson] = await Promise.all([
           unitsRes.json(),
           tenantsRes.json(),
           matchesRes.json(),
+          periodsRes.json(),
         ]);
 
         if (!unitsRes.ok) {
@@ -103,10 +116,19 @@ export default function PropertyNkaYearPage() {
         if (!matchesRes.ok) {
           throw new Error(matchesJson.error ?? "Zahlungszuordnungen konnten nicht geladen werden.");
         }
+        if (!periodsRes.ok) {
+          // Periode-Load-Fehler ist nicht-blockierend; Status-Seite weiterhin
+          // anzeigen, "Periode anlegen"-Button bleibt verborgen.
+          console.warn("[nka year]", periodsJson?.error ?? "Perioden konnten nicht geladen werden.");
+        }
 
         setUnits((unitsJson ?? []) as UnitRow[]);
         setTenants((tenantsJson ?? []) as TenantRow[]);
         setPaymentMatches((matchesJson ?? []) as PaymentMatchRow[]);
+        const matchedPeriod = ((periodsJson ?? []) as NkaPeriodRow[]).find(
+          (p) => Number(p.tax_year) === taxYear,
+        );
+        setPeriod(matchedPeriod ?? null);
       } catch (loadError) {
         setError(
           loadError instanceof Error
@@ -119,7 +141,33 @@ export default function PropertyNkaYearPage() {
     };
 
     void loadYearWorkspace();
-  }, [id]);
+  }, [id, taxYear]);
+
+  const createPeriod = async () => {
+    setCreatingPeriod(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/nka/periods", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          property_id: id,
+          tax_year: taxYear,
+          period_start: `${taxYear}-01-01`,
+          period_end: `${taxYear}-12-31`,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json?.error ?? "Periode konnte nicht angelegt werden.");
+      }
+      setPeriod(json as NkaPeriodRow);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Periode konnte nicht angelegt werden.");
+    } finally {
+      setCreatingPeriod(false);
+    }
+  };
 
   const activeTenants = useMemo(
     () => tenants.filter((tenant) => tenant.status === "active" || tenant.status === "notice_given"),
@@ -251,6 +299,23 @@ export default function PropertyNkaYearPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-3">
+                  {period ? (
+                    <Link
+                      href={`/dashboard/properties/${id}/nka/${taxYear}/edit`}
+                      className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+                    >
+                      Editor öffnen
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={createPeriod}
+                      disabled={creatingPeriod}
+                      className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+                    >
+                      {creatingPeriod ? "Lege an…" : "Periode anlegen"}
+                    </button>
+                  )}
                   <Link
                     href={`/dashboard/properties/${id}/nka`}
                     className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
