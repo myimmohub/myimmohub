@@ -4,7 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createHmac } from "node:crypto";
+import { Webhook } from "svix";
 
 const TENANT_A = "11111111-1111-4111-8111-111111111111";
 const TENANT_B = "22222222-2222-4222-8222-222222222222";
@@ -22,7 +22,8 @@ beforeEach(() => {
   process.env.CRON_SECRET = "secret-xyz";
   process.env.RESEND_API_KEY = "test-resend-key";
   process.env.RESEND_FROM_DOMAIN = "example.test";
-  process.env.RESEND_WEBHOOK_SECRET = "test-secret";
+  // svix-Format: whsec_<base64>. Hier base64("test-secret") = dGVzdC1zZWNyZXQ=
+  process.env.RESEND_WEBHOOK_SECRET = "whsec_dGVzdC1zZWNyZXQ=";
   vi.resetModules();
   vi.clearAllMocks();
 });
@@ -328,10 +329,15 @@ describe("POST /api/cron/rent-arrears-reminders", () => {
 
 // ─── Webhook-Update für rent_arrears_events ────────────────────────────────
 function signedHeaders(rawBody: string, secret: string): HeadersInit {
-  const sig = createHmac("sha256", secret).update(rawBody).digest("hex");
+  const id = "msg_test_" + Math.random().toString(36).slice(2);
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const wh = new Webhook(secret);
+  const signature = wh.sign(id, new Date(Number(timestamp) * 1000), rawBody);
   return {
     "Content-Type": "application/json",
-    "Resend-Signature": sig,
+    "svix-id": id,
+    "svix-timestamp": timestamp,
+    "svix-signature": signature,
   };
 }
 
@@ -352,7 +358,7 @@ describe("POST /api/webhooks/resend → Update auf rent_arrears_events", () => {
     });
     const req = new Request("http://x", {
       method: "POST",
-      headers: signedHeaders(body, "test-secret"),
+      headers: signedHeaders(body, "whsec_dGVzdC1zZWNyZXQ="),
       body,
     });
     const res = await POST(req);

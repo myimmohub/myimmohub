@@ -5,23 +5,28 @@
  * Wir mappen sie auf den `status`-Wert von `nka_versand` und aktualisieren
  * die zugehörigen `*_at`-Spalten.
  *
- * Signatur-Validierung: HMAC-SHA256 über den Raw-Body mit
- * `RESEND_WEBHOOK_SECRET`. Resend signiert (Stand 2026) im Standard-Schema
- * `Resend-Signature`. In dieser pragmatischen Variante akzeptieren wir den
- * Header `Resend-Signature` (oder als Fallback `X-Resend-Signature`) als
- * Hex-encoded HMAC-SHA256 des Raw-Bodies und vergleichen timing-safe.
+ * Signatur-Validierung: Svix-Schema (Resend-Default seit 2024).
+ * Drei Header werden erwartet:
+ *   - svix-id          eindeutige Message-ID
+ *   - svix-timestamp   Unix-Zeit (Sekunden)
+ *   - svix-signature   space-separated Liste "v1,<base64sig>"
  *
- * Fehlt das Secret → wir lehnen JEDE Anfrage mit 401 ab. Damit ist die Route
- * "fail closed" und kann nicht versehentlich Updates fremder Daten triggern.
+ * Die `Webhook.verify()`-Methode der svix-Lib prüft Signatur, Timestamp-Drift
+ * (max 5 min) und Replay-Schutz in einem Schritt. Bei Fehler wirft sie eine
+ * `WebhookVerificationError` → wir antworten mit 401.
  *
- * Idempotenz: 200 OK auch dann, wenn keine passende `nka_versand`-Zeile zur
- * `resend_message_id` gefunden wird — Resend retried sonst ewig.
+ * `RESEND_WEBHOOK_SECRET` muss exakt das `whsec_...`-Secret aus dem
+ * Resend-Dashboard sein. Fehlt es → 401 (fail-closed).
+ *
+ * Idempotenz: 200 OK auch dann, wenn keine passende `nka_versand`- oder
+ * `rent_arrears_events`-Zeile zur `resend_message_id` gefunden wird — Resend
+ * retried sonst ewig.
  */
 
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { Webhook, WebhookVerificationError } from "svix";
 import { z } from "zod";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -43,21 +48,29 @@ const webhookSchema = z.object({
   }).passthrough(),
 });
 
-function verifySignature(rawBody: string, headerSig: string | null): boolean {
+/**
+ * Verifiziert einen Svix-Webhook (Resend-Default). Wirft NICHT, sondern
+ * liefert das verifizierte Payload-Objekt oder `null`, wenn die Signatur
+ * ungültig oder das Secret nicht gesetzt ist.
+ */
+function verifySvixSignature(
+  rawBody: string,
+  headers: { id: string | null; timestamp: string | null; signature: string | null },
+): unknown | null {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
-  if (!secret) return false;
-  if (!headerSig) return false;
-  const computed = createHmac("sha256", secret).update(rawBody).digest("hex");
-  // headerSig kann mit `sha256=` Präfix kommen — beide Varianten akzeptieren.
-  const cleanedHeaderSig = headerSig.replace(/^sha256=/i, "").trim();
-  if (cleanedHeaderSig.length !== computed.length) return false;
+  if (!secret) return null;
+  if (!headers.id || !headers.timestamp || !headers.signature) return null;
   try {
-    return timingSafeEqual(
-      Buffer.from(cleanedHeaderSig, "hex"),
-      Buffer.from(computed, "hex"),
-    );
-  } catch {
-    return false;
+    const wh = new Webhook(secret);
+    return wh.verify(rawBody, {
+      "svix-id": headers.id,
+      "svix-timestamp": headers.timestamp,
+      "svix-signature": headers.signature,
+    });
+  } catch (err) {
+    // Sowohl WebhookVerificationError als auch generische Errors hier eingefangen.
+    if (err instanceof WebhookVerificationError) return null;
+    return null;
   }
 }
 
@@ -85,24 +98,30 @@ async function getSupabase() {
 }
 
 export async function POST(request: Request) {
-  // Raw body lesen (Signatur muss über exakten Bytes des Requests berechnet werden)
+  // Raw body lesen (Signatur muss über exakte Bytes des Requests berechnet werden)
   const rawBody = await request.text();
 
-  const sigHeader =
-    request.headers.get("resend-signature") ??
-    request.headers.get("x-resend-signature");
+  const verifiedPayload = verifySvixSignature(rawBody, {
+    id: request.headers.get("svix-id"),
+    timestamp: request.headers.get("svix-timestamp"),
+    signature: request.headers.get("svix-signature"),
+  });
 
-  if (!verifySignature(rawBody, sigHeader)) {
+  if (verifiedPayload === null) {
     return NextResponse.json(
       { error: "Ungültige Signatur." },
       { status: 401 },
     );
   }
 
-  let body: unknown;
-  try {
-    body = JSON.parse(rawBody);
-  } catch {
+  // svix.verify() liefert bereits den geparsten JSON-Body. Falls die Lib das
+  // mal nicht tut (z. B. ältere Versionen), fallen wir auf Re-Parse zurück.
+  const body = typeof verifiedPayload === "object" && verifiedPayload !== null
+    ? verifiedPayload
+    : (() => {
+        try { return JSON.parse(rawBody); } catch { return null; }
+      })();
+  if (body === null) {
     return NextResponse.json(
       { error: "Ungültiges JSON im Request-Body." },
       { status: 400 },
